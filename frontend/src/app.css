@@ -611,7 +611,9 @@ body.science .summary .streams td {
 }
 
 @media (max-width: 900px) {
-    .row {
+    /* with the summary open too (that rule's six columns would push the actions out of a phone's width) */
+    .row,
+    .library.with-summary .row {
         grid-template-columns: 96px minmax(0, 1fr) auto;
     }
     .row > :nth-child(3),
