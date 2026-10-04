@@ -1,0 +1,167 @@
+title: Recordings
+dimos-desktop-api: ">=2 <3"
+caches:
+    - url: "https://dimos-desktop.cachix.org"
+      key: "dimos-desktop.cachix.org-1:A4P35aGJGmCan92LWyamtSFXMqaVE+VRFYnrJ8QMTeQ="
+agent:
+    description: >-
+        Recordings: the robot recordings in Desktop's recordings folder (.db memory2 SQLite, .mcap, and the .rrd files made
+        from them): list and sort them, inspect their streams and tf tree, keep notes, preview their main camera, rename,
+        delete, duplicate, convert between formats, open them (Replayer, Map Editor, Foxglove, Rerun) and upload them to the
+        Dimensional cloud. GET api/recordings is the overview.
+    endpoints:
+        - method: GET
+          path: api/recordings
+          description: >-
+              The recordings folder: each .db/.mcap recording (name, size, duration, when recorded, a stream summary, note,
+              preview state, what can open it, the .rrd files made from it) and standalone .rrd files, sorted and in date
+              sections (Today, Yesterday, This week, Last week, This month, then by month) when sorted by date
+          params:
+              sort:
+                  type: string
+                  description: date (default) | size | duration | name
+              order:
+                  type: string
+                  description: desc (default) | asc
+              tz:
+                  type: number
+                  description: the viewer's Date.getTimezoneOffset() in minutes (for Today/Yesterday)
+          role: context
+        - method: GET
+          path: "api/recordings/{id}"
+          description: >-
+              One recording in full: the list fields plus its inspection: every stream's type, encoding, count, rate (hz), p99
+              and largest gap, and the tf frame tree (edges, roots, frames with two parents) — what `dtk data summary` prints
+          params: &ref_0
+              id: &ref_1
+                  type: string
+                  required: true
+                  description: "recording id: its path inside the recordings folder"
+        - method: GET
+          path: "api/recordings/{id}/thumbnail"
+          description: 'The preview sprite: its frames side by side (a jpeg; frame count and size in the list''s `thumbnail`)'
+          params: *ref_0
+        - method: PUT
+          path: "api/recordings/{id}/note"
+          description: 'Set the recording''s note (kept in this app''s data, not in the file; empty text clears it)'
+          params:
+              id: *ref_1
+              text:
+                  type: string
+                  required: true
+                  description: the note
+        - method: POST
+          path: "api/recordings/{id}/rename"
+          description: "Rename a recording (the extension stays; its SQLite sidecars and same-name .rrd follow it, and so does its note)"
+          params:
+              id: *ref_1
+              name:
+                  type: string
+                  required: true
+                  description: "the new name, with or without extension"
+        - method: DELETE
+          path: "api/recordings/{id}"
+          description: >-
+              Delete a recording file (permanent; the page asks first). A symlinked recording loses only the link. Its .rrd
+              files stay
+          params: *ref_0
+        - method: POST
+          path: "api/recordings/{id}/duplicate"
+          description: 'Copy a recording next to itself ("<name> copy.db", or `name`)'
+          params:
+              id: *ref_1
+              name:
+                  type: string
+                  description: 'the copy''s name (default: "<name> copy")'
+        - method: POST
+          path: "api/recordings/{id}/convert"
+          description: >-
+              Convert a .db or .mcap to another format with dtk (to = db | mcap | rrd); the new file lands next to it (an .rrd
+              under the same name, so it lists with it). Returns a job; follow it with GET api/jobs/{job}
+          params:
+              id: *ref_1
+              to:
+                  type: string
+                  required: true
+                  description: db | mcap | rrd
+        - method: GET
+          path: api/jobs
+          description: 'Conversion jobs, newest first: state, progress (0..1), the converter''s last line, the result''s path'
+        - method: GET
+          path: "api/jobs/{job}"
+          description: One conversion job
+          params:
+              job:
+                  type: string
+                  required: true
+                  description: job id
+        - method: DELETE
+          path: "api/jobs/{job}"
+          description: Cancel a running conversion (its partial output is removed)
+          params:
+              job:
+                  type: string
+                  required: true
+                  description: job id
+        - method: POST
+          path: "api/recordings/{id}/open"
+          description: >-
+              Open a recording: target = replayer (this app's player), map-editor (the dim-map-builder app, when installed),
+              foxglove (when installed, for an .mcap whose image/point cloud/camera_info channels are CDR), rerun (an .rrd:
+              the Rerun app, else the rerun viewer). The list's `opens` says which are available and why not
+          params:
+              id: *ref_1
+              target:
+                  type: string
+                  required: true
+                  description: replayer | map-editor | foxglove | rerun
+        - method: POST
+          path: "api/recordings/{id}/reveal"
+          description: "Show the file in Finder (macOS) or the file manager (Linux), on the machine running Desktop"
+          params: *ref_0
+        - method: GET
+          path: "api/recordings/{id}/path"
+          description: The recording's absolute path (what the page's Copy path copies)
+          params: *ref_0
+        - method: POST
+          path: "api/recordings/{id}/upload"
+          description: >-
+              Upload a recording to the Dimensional cloud (Desktop's /dimos/uploads; queues until logged in). Follow it with
+              GET api/uploads; when done the row carries `uploaded.link`
+          params: *ref_0
+        - method: GET
+          path: api/uploads
+          description: >-
+              The uploads tray: each upload's state, phase, bytes, rate and ETA, link when done; whether it waits for login;
+              the cloud account
+        - method: DELETE
+          path: "api/uploads/{upload}"
+          description: "Cancel a queued or running upload, or remove a finished one from the tray"
+          params:
+              upload:
+                  type: string
+                  required: true
+                  description: upload id
+        - method: POST
+          path: "api/uploads/{upload}/retry"
+          description: Retry a failed or cancelled upload
+          params:
+              upload:
+                  type: string
+                  required: true
+                  description: upload id
+        - method: POST
+          path: api/cloud/login
+          description: "Start logging in to the Dimensional cloud: returns the device code and the URL the user opens to approve it"
+        - method: GET
+          path: api/thumbnails
+          description: >-
+              The preview job: which recording it's working on, and the last results with their wall and CPU time (it runs one
+              recording at a time under nice -n 19, pausing between frames)
+nix:
+    cache:
+        aarch64-linux:
+            - packages.aarch64-darwin.dimosApp-aarch64-linux
+            - packages.x86_64-linux.dimosApp-aarch64-linux
+        x86_64-linux:
+            - packages.aarch64-darwin.dimosApp-x86_64-linux

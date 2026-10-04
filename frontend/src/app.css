@@ -1,0 +1,583 @@
+/* Recordings. Colors, fonts and radii are dim-app theme variables only (Portal: square, hairlines, one accent; Research:
+   paper, white hairline cards, gently rounded), so a theme fix in dim-app reaches this page with a re-vendor. */
+
+html,
+body,
+#root {
+    height: 100%;
+}
+body.science {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    font-size: 13px;
+    overflow: hidden;
+}
+
+.mono {
+    font-family: var(--mono);
+}
+.muted {
+    color: var(--muted-fg);
+}
+.small {
+    font-size: 11.5px;
+}
+.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.warn {
+    color: var(--warn);
+}
+.error {
+    color: var(--danger);
+}
+.section-head {
+    margin: 0;
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--fg);
+}
+
+/* ── top bar ── */
+.library,
+.replay {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+.bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--hair);
+    flex-shrink: 0;
+}
+.bar-title {
+    font-family: var(--display);
+    font-size: 13px;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+}
+.bar .dir {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+.spacer {
+    flex: 1;
+}
+.sorts {
+    display: flex;
+    gap: 4px;
+}
+.dim-btn.sm {
+    padding: 5px 10px;
+    font-size: 11.5px;
+    white-space: nowrap;
+}
+a.dim-btn {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+.dim-btn.on {
+    border-color: var(--primary);
+}
+.dim-btn.ghost.danger,
+.menu-item.danger {
+    color: var(--danger);
+}
+.banner {
+    margin: 0;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--hair);
+}
+
+/* ── the list ── */
+.table {
+    flex: 1;
+    overflow: auto;
+    padding: 0 20px 80px;
+}
+.library.with-summary .table {
+    padding-right: 480px;
+}
+.row {
+    display: grid;
+    grid-template-columns: 136px minmax(180px, 1.6fr) 76px 84px 150px minmax(140px, 1.2fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--hair);
+}
+.row.head {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--bg);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-fg);
+    padding-top: 10px;
+    padding-bottom: 8px;
+}
+.row:not(.head):hover,
+.row.active {
+    background: var(--accent);
+}
+.group-head {
+    margin: 0;
+    padding: 28px 6px 10px;
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 11px;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--muted-fg);
+    border-bottom: 1px solid var(--border);
+}
+.group:first-of-type .group-head {
+    padding-top: 14px;
+}
+.name-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+.name {
+    font-size: 12.5px;
+    color: var(--fg);
+    overflow-wrap: anywhere;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.note-line {
+    color: var(--muted-fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.streams-cell {
+    color: var(--secondary-fg);
+}
+.row-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: flex-end;
+}
+.rrd {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-top: 4px;
+}
+.rrd .row-actions {
+    margin-left: auto;
+}
+.job {
+    display: grid;
+    grid-template-columns: auto 90px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+.job-phase {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dim-progress.indeterminate > span {
+    animation: slide 1.2s linear infinite;
+}
+@keyframes slide {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(330%);
+    }
+}
+.dim-progress {
+    overflow: hidden;
+}
+
+/* ── previews ── */
+.thumb {
+    width: 128px;
+    max-height: 96px;
+    aspect-ratio: 16 / 9;
+    background-color: var(--muted);
+    background-repeat: no-repeat;
+    border: 1px solid var(--hair);
+    border-radius: var(--radius-sm);
+    position: relative;
+    cursor: ew-resize;
+    overflow: hidden;
+}
+.thumb-bar {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--primary);
+    opacity: 0.8;
+}
+.thumb.placeholder {
+    cursor: default;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--muted-fg);
+    font-family: var(--mono);
+    font-size: 9.5px;
+}
+.thumb.placeholder svg {
+    width: 34px;
+    opacity: 0.55;
+}
+.thumb.placeholder.pending svg {
+    animation: breathe 1.6s ease-in-out infinite;
+}
+@keyframes breathe {
+    50% {
+        opacity: 0.2;
+    }
+}
+
+/* ── menus ── */
+.menu-wrap {
+    position: relative;
+}
+.menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    z-index: 20;
+    min-width: 200px;
+    padding: 4px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+}
+.menu.right {
+    right: 0;
+}
+.menu.left {
+    left: 0;
+}
+.menu-wrap.open::after {
+    /* a bridge over the gap, so moving from the button into the menu keeps it open */
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 6px;
+}
+.menu-item {
+    appearance: none;
+    border: 0;
+    background: none;
+    color: var(--fg);
+    font: inherit;
+    font-size: 12.5px;
+    text-align: left;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.menu-item:hover:not(:disabled) {
+    background: var(--primary-soft);
+}
+.menu-item:disabled {
+    cursor: not-allowed;
+    color: var(--muted-fg);
+}
+.menu-hint {
+    font-size: 10.5px;
+    color: var(--muted-fg);
+    max-width: 280px;
+    white-space: normal;
+}
+.menu-sep {
+    height: 1px;
+    background: var(--hair);
+    margin: 4px 0;
+}
+.menu-heading {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-fg);
+    padding: 6px 10px 2px;
+}
+
+/* ── the summary panel ── */
+.summary,
+.tray {
+    position: fixed;
+    right: 12px;
+    top: 58px;
+    bottom: 12px;
+    width: 460px;
+    z-index: 10;
+    overflow: auto;
+    padding: 16px 18px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.summary header,
+.tray header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+.summary-name {
+    margin: 6px 0 0;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+.facts {
+    display: grid;
+    grid-template-columns: 76px 1fr;
+    gap: 4px 10px;
+    margin: 0;
+    font-size: 12px;
+}
+.facts dt {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted-fg);
+    padding-top: 2px;
+}
+.facts dd {
+    margin: 0;
+}
+.facts .path {
+    overflow-wrap: anywhere;
+    font-size: 11px;
+}
+.note {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.note textarea {
+    min-height: 64px;
+    resize: vertical;
+    font-family: var(--sans);
+}
+.summary > .dim-label {
+    margin: 8px 0 0;
+}
+.streams {
+    width: 100%;
+    font-size: 11.5px;
+}
+.streams th,
+.streams td {
+    padding: 4px 6px;
+}
+.streams td.num {
+    position: relative;
+}
+.count-bar {
+    position: absolute;
+    right: 0;
+    top: 3px;
+    bottom: 3px;
+    background: var(--primary-soft);
+    z-index: -1;
+}
+.streams tbody {
+    isolation: isolate;
+}
+.empty-stream td {
+    opacity: 0.45;
+}
+.enc {
+    margin-left: 6px;
+    font-size: 9.5px;
+    padding: 0 4px;
+    border: 1px solid var(--hair);
+    color: var(--muted-fg);
+    border-radius: var(--radius-sm);
+}
+.enc.cdr {
+    color: var(--ok);
+}
+.tree {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.5;
+    padding: 8px 10px;
+    background: var(--muted);
+    border: 1px solid var(--hair);
+    border-radius: var(--radius-sm);
+    overflow: auto;
+}
+.tree .root {
+    color: var(--primary);
+}
+
+/* ── uploads ── */
+.tray {
+    top: auto;
+    height: auto;
+    max-height: 70vh;
+    width: 400px;
+}
+.upload {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 0;
+    border-top: 1px solid var(--hair);
+}
+.upload-top,
+.upload-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.upload-actions {
+    display: flex;
+    gap: 6px;
+}
+.login {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.login iframe {
+    width: 100%;
+    height: 220px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+}
+
+/* ── dialogs ── */
+.scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.dialog {
+    width: min(440px, calc(100vw - 32px));
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+}
+.dialog-body p {
+    margin: 0;
+    line-height: 1.5;
+}
+.dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+.rename-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.rename-field input {
+    flex: 1;
+}
+
+/* ── empty states, the replay slot ── */
+.empty {
+    padding: 60px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+}
+.replay-slot {
+    flex: 1;
+    overflow: auto;
+}
+
+@media (max-width: 900px) {
+    .row {
+        grid-template-columns: 96px minmax(0, 1fr) auto;
+    }
+    .row > :nth-child(3),
+    .row > :nth-child(4),
+    .row > :nth-child(6) {
+        display: none;
+    }
+    .row > :nth-child(5) {
+        display: none;
+    }
+    .row-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+    .thumb {
+        width: 96px;
+    }
+    .library.with-summary .table {
+        padding-right: 20px;
+    }
+    .summary,
+    .tray {
+        left: 8px;
+        right: 8px;
+        width: auto;
+    }
+    .bar {
+        flex-wrap: wrap;
+        padding: 10px 12px;
+    }
+    .table {
+        padding: 0 12px 80px;
+    }
+}
+
+/* Portal: "Square corners, everywhere. No rounding." (dim-app ≥ v0.9 does this itself; kept until it's vendored) */
+body.science.dark *,
+body.science.dark *::before,
+body.science.dark *::after {
+    border-radius: 0 !important;
+}

@@ -1,0 +1,67 @@
+<svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="5.5 5.5 53 53"
+    width="64"
+    height="64"
+    role="img"
+    aria-label="Recordings"
+>
+    <!-- dimOS app icon set v6: neon gradient glyph with a soft bloom, the logo's scan lines and a white-hot core; a cassette tape -->
+    <defs>
+        <filter id="bloom" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.4" /></filter>
+        <linearGradient id="a" gradientUnits="userSpaceOnUse" x1="0" y1="14" x2="0" y2="50"><stop
+                offset="0"
+                stop-color="#e6d4ff"
+            /><stop offset="1" stop-color="#8b5cff" /></linearGradient>
+        <g id="glyph">
+            <rect x="11" y="17" width="42" height="30" rx="2.5" fill="none" stroke="url(#a)" stroke-width="3" />
+            <rect x="18" y="22.5" width="28" height="11.5" rx="1" fill="none" stroke="url(#a)" stroke-width="2.2" />
+            <circle cx="24.5" cy="28.25" r="3.2" fill="none" stroke="url(#a)" stroke-width="2.4" />
+            <circle cx="39.5" cy="28.25" r="3.2" fill="none" stroke="url(#a)" stroke-width="2.4" />
+            <path d="M27.7 28.25H36.3" fill="none" stroke="url(#a)" stroke-width="1.6" />
+            <path
+                d="M19 47L22.5 40H41.5L45 47"
+                fill="none"
+                stroke="url(#a)"
+                stroke-width="2.6"
+                stroke-linejoin="round"
+            />
+            <circle cx="26.5" cy="43.6" r="1.3" fill="url(#a)" />
+            <circle cx="37.5" cy="43.6" r="1.3" fill="url(#a)" />
+        </g>
+        <linearGradient id="scanrow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" /><stop
+                offset=".25"
+                stop-color="#e2e2e2"
+            /><stop offset=".5" stop-color="#c2c2c2" /><stop offset=".75" stop-color="#e2e2e2" /><stop
+                offset="1"
+                stop-color="#fff"
+            /></linearGradient>
+        <pattern id="scan" width="64" height="3.6" patternUnits="userSpaceOnUse"><rect
+                width="64"
+                height="3.6"
+                fill="url(#scanrow)"
+            /></pattern>
+        <mask id="scanlines" maskUnits="userSpaceOnUse" x="-16" y="-16" width="96" height="96"><rect
+                x="-16"
+                y="-16"
+                width="96"
+                height="96"
+                fill="url(#scan)"
+            /></mask>
+        <filter id="core" x="-20%" y="-20%" width="140%" height="140%"><feMorphology
+                in="SourceAlpha"
+                operator="erode"
+                radius="0.9"
+                result="e"
+            /><feGaussianBlur in="e" stdDeviation="0.45" result="eb" /><feFlood
+                flood-color="#fffaf0"
+                flood-opacity=".78"
+            /><feComposite in2="eb" operator="in" result="c" /><feMerge><feMergeNode in="SourceGraphic" /><feMergeNode
+                    in="c"
+                /></feMerge></filter>
+    </defs>
+    <g transform="translate(32 32) scale(1.12) translate(-32 -32)">
+        <use href="#glyph" filter="url(#bloom)" />
+        <g mask="url(#scanlines)"><use href="#glyph" filter="url(#core)" /></g>
+    </g>
+</svg>
