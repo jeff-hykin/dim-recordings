@@ -197,7 +197,7 @@ const scenarios: Record<string, [string, Scenario, ("dark" | "light")?]> = {
         await hover(page, row(page, id).locator(".menu-item", { hasText: "Duplicate" }))
         await row(page, id).locator(".menu-item", { hasText: "Duplicate" }).click()
         await page.waitForTimeout(2500)
-        const copy = "go2_short_clip_today copy.mcap"
+        const copy = "go2_short_clip_today_copy.mcap"
         // rename the copy
         await row(page, copy).scrollIntoViewIfNeeded()
         await hover(page, more(copy))
@@ -252,7 +252,7 @@ const scenarios: Record<string, [string, Scenario, ("dark" | "light")?]> = {
     open_rrd: [`${desktop}/?app=dim-recordings`, async (page, frame) => {
         await page.waitForTimeout(2500)
         const f = frame()
-        const rrd = f.locator(`.rrd[data-id="mid360_athens_stairs.rrd"]`)
+        const rrd = f.locator(`.rrd[data-id="mid360_athens_stairs.rrd"]`).first()
         await rrd.scrollIntoViewIfNeeded()
         await page.waitForTimeout(1200)
         await rrd.locator("button", { hasText: "Open" }).hover()

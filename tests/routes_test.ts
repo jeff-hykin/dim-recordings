@@ -50,8 +50,8 @@ Deno.test("api: list → summary → note → rename → duplicate → delete", 
         list.body.sections.flatMap((s: { recordings: { note: string }[] }) => s.recordings.map((r) => r.note)),
         ["hello"],
     )
-    assertEquals((await call("POST", "api/recordings/b.db/duplicate", {})).body.id, "b copy.db")
-    assertEquals((await call("DELETE", "api/recordings/b%20copy.db")).status, 200)
+    assertEquals((await call("POST", "api/recordings/b.db/duplicate", {})).body.id, "b_copy.db")
+    assertEquals((await call("DELETE", "api/recordings/b_copy.db")).status, 200)
     assertEquals((await call("GET", "api/recordings/a.db")).status, 404)
     assertEquals((await call("POST", "api/recordings/b.db/convert", { to: "zip" })).status, 400)
     assertEquals((await call("POST", "api/recordings/..%2Fx.db/rename", { name: "y" })).status, 404)

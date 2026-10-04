@@ -106,9 +106,9 @@ for (const name of ["walk.db", "drive.mcap"]) {
         assertThrows(() => renameRecording(renamed, `taken${extension}`), Error, "already exists")
 
         const copy = await duplicateRecording(renamed)
-        assertEquals(copy, join(dir, `renamed copy${extension}`))
+        assertEquals(copy, join(dir, `renamed_copy${extension}`))
         assertEquals((await Deno.stat(copy)).size, (await Deno.stat(renamed)).size)
-        assertEquals(await duplicateRecording(renamed), join(dir, `renamed copy 2${extension}`))
+        assertEquals(await duplicateRecording(renamed), join(dir, `renamed_copy_2${extension}`))
         assertEquals((await inspect(copy)).messages, (await inspect(renamed)).messages)
 
         deleteRecording(renamed)
