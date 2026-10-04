@@ -86,8 +86,21 @@ export function Timeline({ app, overview, expanded, onExpanded, onEdited }: {
                 connection.seek(overview.end)
             }
         }
+        // a focused button would also take the space as a click (on keyup): space is play / pause only
+        const onKeyUp = (event: KeyboardEvent) => {
+            if (
+                event.code === "Space" &&
+                !(event.target as HTMLElement).closest("input, select, textarea, [contenteditable]")
+            ) {
+                event.preventDefault()
+            }
+        }
         addEventListener("keydown", onKey)
-        return () => removeEventListener("keydown", onKey)
+        addEventListener("keyup", onKeyUp)
+        return () => {
+            removeEventListener("keydown", onKey)
+            removeEventListener("keyup", onKeyUp)
+        }
     }, [connection, overview.start, overview.end])
 
     const timeAt = (lane: HTMLElement, clientX: number) => {

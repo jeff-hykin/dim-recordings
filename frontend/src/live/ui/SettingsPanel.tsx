@@ -15,7 +15,7 @@ export function SettingsPanel({ app }: { app: ViewerApp }) {
         <div className="settings-panel">
             <Field
                 label="Robot"
-                hint="key bindings, drive topics, speeds and extra controls (src/profile)"
+                hint="which frame is the robot and which camera opens first (src/live/profile)"
             >
                 <select
                     className="dim-select"

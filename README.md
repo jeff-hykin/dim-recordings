@@ -27,18 +27,30 @@ dimos-desktop install https://github.com/jeff-hykin/dim-recordings
   cloud through Desktop's `/dimos/uploads` (a tray with progress and ETA; once a file is uploaded, its button becomes a
   link).
 
-Each of these is an HTTP endpoint (`backend/recordings/routes.ts`, listed in dimos.yaml's `agent:`), so Desktop's agent
-can do anything the page does.
+- **Replayer** (`#/replay/<id>`): the Controller's live view (dim-controller's frontend: 3D with point clouds, poses and
+  the odometry route, camera panels, the tf tree, layers) playing the recording, with no drive / WASD / arm controls. A
+  timeline docked at the bottom plays, pauses, changes speed and scrubs; expanded, it has a row per stream with a tick
+  per message (scroll to zoom), a switch to draw or hide it, and rename / duplicate / delete, which edit the `.db` or
+  `.mcap` in place. Nothing is loaded up front: the backend reads a stream's message times when it's first needed and a
+  message when the playhead reaches it. While scrubbing, cameras show 192-px thumbnails (made in the background for
+  jpeg/png streams, thinned on the fly for raw ones) and clouds are thinned to 6k points; playing or paused, everything
+  is full resolution.
+
+Each of these is an HTTP endpoint (`backend/recordings/routes.ts`, `backend/replay/routes.ts`, listed in dimos.yaml's
+`agent:`), so Desktop's agent can do anything the page does.
 
 ## Layout
 
-| path                              | what                                                                                                                                              |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend/recordings/`             | scan + rrd pairing, inspection (`dtk data summary`'s logic), sorting and date sections, actions, conversion jobs, previews, open targets, uploads |
-| `backend/replay/`                 | the Replayer's routes (empty so far)                                                                                                              |
-| `frontend/src/views/`             | `Library.tsx` (the list), `SummaryPanel.tsx`, `Uploads.tsx`, `Replay.tsx` (the `#/replay/<id>` slot)                                              |
-| `frontend/src/dim-app/`           | the dim-app theme (Portal dark / Research light), vendored at the tag in `VERSION`                                                                |
-| `scripts/make_test_recordings.ts` | short clips with shifted times (for the date sections) and a raw-LCM `.mcap` (which Foxglove can't draw)                                          |
+| path                              | what                                                                                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/recordings/`             | scan + rrd pairing, inspection (`dtk data summary`'s logic), sorting and date sections, actions, conversion jobs, previews, open targets, uploads                   |
+| `backend/replay/`                 | the Replayer: lazy sources over a .db / .mcap (`source.ts`), the playback websocket (`player.ts`), thumbnails, in-place stream edits (`edit_db.ts`, `edit_mcap.ts`) |
+| `frontend/src/views/`             | `Library.tsx` (the list), `SummaryPanel.tsx`, `Uploads.tsx`, `Replay.tsx` (the Replayer)                                                                            |
+| `frontend/src/live/`              | dim-controller's frontend (cbcd274), its bridge connection swapped for the playback websocket (`core/transport.ts`, `core/video.ts`)                                |
+| `frontend/src/replay/`            | the Replayer's timeline                                                                                                                                             |
+| `frontend/src/dim-app/`           | the dim-app theme (Portal dark / Research light), vendored at the tag in `VERSION`                                                                                  |
+| `scripts/replay_rss.ts`           | the backend's peak memory while a recording is opened, scrubbed end to end and played                                                                               |
+| `scripts/make_test_recordings.ts` | short clips with shifted times (for the date sections) and a raw-LCM `.mcap` (which Foxglove can't draw)                                                            |
 
 ## Development
 
