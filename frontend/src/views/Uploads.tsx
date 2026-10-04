@@ -1,6 +1,6 @@
 // Uploads to the Dimensional cloud: the tray (progress, phase, ETA, cancel/retry) and the login panel, which is
 // Desktop's own page in an iframe (`/dimos/cloud/login/page`, NosyPuma upload_api.md).
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { api, bytes, desktopPath, type Tray, type Upload } from "../api.ts"
 import { isDark } from "../dim-app/theme.js"
 
@@ -62,13 +62,46 @@ export function LoginPanel(
         addEventListener("message", onMessage)
         return () => removeEventListener("message", onMessage)
     }, [onDone])
+    // The page is same-origin (Desktop serves both), so the frame follows its content's height in every state
+    const frame = useRef<HTMLIFrameElement>(null)
+    const [height, setHeight] = useState<number | null>(null)
+    useEffect(() => {
+        const element = frame.current
+        if (!element) {
+            return
+        }
+        let observer: ResizeObserver | null = null
+        const follow = () => {
+            observer?.disconnect()
+            try {
+                const root = element.contentDocument?.documentElement
+                if (!root) {
+                    return
+                }
+                observer = new ResizeObserver(() => setHeight(Math.ceil(root.getBoundingClientRect().height)))
+                observer.observe(root)
+            } catch {
+                // not same-origin: keep the CSS height
+            }
+        }
+        element.addEventListener("load", follow)
+        if (element.contentDocument?.readyState === "complete" && element.contentDocument.URL !== "about:blank") {
+            follow()
+        }
+        return () => {
+            element.removeEventListener("load", follow)
+            observer?.disconnect()
+        }
+    }, [])
     return (
         <div className="login">
             <p className="small muted">
                 Log in to the Dimensional cloud to upload. The upload waits until you do.
             </p>
             <iframe
+                ref={frame}
                 title="Dimensional login"
+                style={height ? { height: height + 2 } : undefined}
                 src={desktopPath(
                     `dimos/cloud/login/page?theme=${isDark() ? "dark" : "light"}`,
                 )}
@@ -80,7 +113,9 @@ export function LoginPanel(
     )
 }
 
-function Row({ upload, onChange }: { upload: Upload; onChange: () => void }) {
+function Row(
+    { upload, waitingForLogin, onChange }: { upload: Upload; waitingForLogin: boolean; onChange: () => void },
+) {
     const running = upload.state === "uploading" || upload.state === "queued"
     const fraction = upload.bytesTotal > 0 ? upload.bytesDone / upload.bytesTotal : null
     return (
@@ -104,6 +139,8 @@ function Row({ upload, onChange }: { upload: Upload; onChange: () => void }) {
                         }`
                         : upload.state === "failed"
                         ? upload.error ?? "failed"
+                        : upload.state === "queued" && waitingForLogin
+                        ? "waiting for login"
                         : upload.state}
                     {upload.state === "uploading" && upload.rateBps ? ` · ${bytes(upload.rateBps)}/s` : ""}
                     {upload.state === "uploading" && upload.etaSeconds !== null ? ` · ${eta(upload.etaSeconds)}` : ""}
@@ -193,6 +230,7 @@ export function UploadTray(
                 <Row
                     key={upload.id}
                     upload={upload}
+                    waitingForLogin={!!tray && (tray.waitingForLogin || !tray.account.loggedIn)}
                     onChange={onChange}
                 />
             ))}

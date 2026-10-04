@@ -372,8 +372,11 @@ export function Library() {
                                         liveUpload.state === "uploading")}
                                 onClick={() => upload(recording)}
                             >
-                                {liveUpload?.state === "uploading" ||
-                                        liveUpload?.state === "queued"
+                                {liveUpload?.state === "queued" && tray &&
+                                        (tray.waitingForLogin || !tray.account.loggedIn)
+                                    ? "Waiting for login"
+                                    : liveUpload?.state === "uploading" ||
+                                            liveUpload?.state === "queued"
                                     ? "Uploading…"
                                     : "Upload"}
                             </button>
