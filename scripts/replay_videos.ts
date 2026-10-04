@@ -270,6 +270,58 @@ const scenarios: Record<string, () => Promise<[string, (page: Page) => Promise<v
             await page.waitForTimeout(6000)
         }]
     },
+    replayer_stream_edits_db: async () => {
+        // a fresh copy (147 MB) of a .db in the recordings folder: the edits change this copy only
+        const id = "replay_edit_demo.db"
+        await Deno.copyFile(`${recordingsDir}/alfred_stereo_short.db`, `${recordingsDir}/${id}`)
+        return [replay(id), async (page) => {
+            const menu = async (stream: string, item: string) => {
+                await hover(page, `.tl-row[data-stream="${stream}"] .tl-menu`)
+                await page.locator(`.tl-row[data-stream="${stream}"] .tl-menu`).click()
+                await page.waitForTimeout(500)
+                await hover(page, `.menu-item:has-text("${item}")`)
+                await page.locator(`.menu-item:has-text("${item}")`).click()
+                await page.waitForTimeout(600)
+            }
+            await caption(page, `${id}: a copy of a memory2 .db (a stereo camera)`)
+            await page.locator('[data-testid="expand"][aria-expanded="false"]').click({ timeout: 1500 }).catch(() => {})
+            await page.waitForTimeout(1800)
+            const streams = await page.locator(".tl-row").evaluateAll((rows) =>
+                rows.map((row) => row.getAttribute("data-stream"))
+            )
+            const first = streams.find((name) => name && /infra|image|left/.test(name)) ?? streams[0]!
+            const other = streams.find((name) => name && name !== first && /info|right/.test(name)) ?? streams[1]!
+            await caption(page, `rename ${first} → camera_left (ALTER TABLE, in place)`)
+            await menu(first, "Rename")
+            await page.locator(".dialog input").fill("")
+            await page.locator(".dialog input").pressSequentially("camera_left", { delay: 60 })
+            await page.locator('.dialog button:has-text("Rename")').click()
+            await page.waitForTimeout(3000)
+            await caption(page, "duplicate tf → tf_copy")
+            await menu("tf", "Duplicate")
+            await page.locator(".dialog input").fill("tf_copy")
+            await page.locator('.dialog button:has-text("Duplicate")').click()
+            await page.waitForTimeout(3000)
+            await caption(page, `delete ${other}`)
+            await menu(other, "Delete")
+            await page.locator('.dialog button:has-text("Delete stream")').click()
+            await page.waitForTimeout(3000)
+            await caption(page, "the edited recording plays")
+            await page.locator('[data-testid="play"]').click()
+            await page.waitForTimeout(3000)
+            await caption(page, "")
+            const files = (await run("ls", ["-la", recordingsDir])).split("\n").filter((line) =>
+                line.includes("replay_edit_demo.db")
+            ).join("\n")
+            const summary = await run("dtk", ["data", "summary", `${recordingsDir}/${id}`])
+            await terminal(
+                page,
+                `ls ${recordingsDir} | grep replay_edit_demo.db\n\ndtk data summary ${id}`,
+                `${files}\n\n${summary}`,
+            )
+            await page.waitForTimeout(6000)
+        }]
+    },
     replayer_rss: async () => {
         const pid = (await run("pgrep", ["-f", "dim-recordings-backend.*server.js"])).trim().split("\n")[0]
         if (!pid) {

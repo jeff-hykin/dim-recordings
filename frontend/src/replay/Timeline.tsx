@@ -455,6 +455,7 @@ function StreamRow(
                     title={dialog === "rename" ? `Rename ${stream.name}` : `Duplicate ${stream.name}`}
                     action={dialog === "rename" ? "Rename" : "Duplicate"}
                     initial={dialog === "rename" ? stream.name : `${stream.name}_copy`}
+                    taken={overview.streams.map((other) => other.name)}
                     note={overview.format === "mcap"
                         ? "Edits the .mcap in place: it's rewritten beside itself and swapped in, no copy is left."
                         : "Edits the .db in place."}
@@ -491,10 +492,12 @@ function StreamRow(
     )
 }
 
-function NameDialog({ title, action, initial, note, onSubmit, onClose }: {
+function NameDialog({ title, action, initial, taken, note, onSubmit, onClose }: {
     title: string
     action: string
     initial: string
+    /** names already in the recording (a new name can't be one) */
+    taken: string[]
     note: string
     onSubmit: (name: string) => void
     onClose: () => void
@@ -502,11 +505,10 @@ function NameDialog({ title, action, initial, note, onSubmit, onClose }: {
     const [value, setValue] = useState(initial)
     const input = useRef<HTMLInputElement>(null)
     useEffect(() => input.current?.select(), [])
-    const valid = useMemo(() => /^[A-Za-z_][A-Za-z0-9_]*$/.test(value.trim()), [
-        value,
-    ])
+    const valid = useMemo(() => /^[A-Za-z_][A-Za-z0-9_]*$/.test(value.trim()), [value])
+    const exists = taken.includes(value.trim())
     const submit = () => {
-        if (valid && value.trim() !== initial) {
+        if (valid && !exists) {
             onSubmit(value.trim())
             onClose()
         }
@@ -533,7 +535,7 @@ function NameDialog({ title, action, initial, note, onSubmit, onClose }: {
                 <button
                     type="button"
                     className="dim-btn primary"
-                    disabled={!valid || value.trim() === initial}
+                    disabled={!valid || exists}
                     onClick={submit}
                 >
                     {action}
