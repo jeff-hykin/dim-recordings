@@ -747,3 +747,23 @@ body.dark .lv .scene-slot {
 .lv.mobile .theme-toggle {
     display: none;
 }
+
+/* a layer's color picker: a theme control around the color it previews (the swatch is the 3D color, not chrome) */
+.lv input[type="color"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 44px;
+    height: 26px;
+    padding: 3px;
+    background: var(--input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+.lv input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+.lv input[type="color"]::-webkit-color-swatch {
+    border: 0;
+    border-radius: var(--radius-sm);
+}

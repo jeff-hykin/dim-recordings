@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 // Screen captures of the Replayer working, against a running Desktop (headless Chrome video → mp4):
 //   deno run -A scripts/replay_videos.ts <desktop url> <out dir> [names...]
 // playing, scrubbing (thumbnails → full frames), the per-stream timeline, stream edits (on copies made here in the
@@ -7,6 +8,10 @@ import { type Browser, chromium, type Page } from "playwright-core"
 const [desktop = "http://127.0.0.1:7341", out = "videos", ...only] = Deno.args
 const app = `${desktop}/apps/dim-recordings/`
 const recordingsDir = Deno.env.get("RECORDINGS_DIR") ?? "/tmp/dd_gb1/recordings"
+const executablePath = Deno.env.get("CHROME") ??
+    `${
+        Deno.env.get("HOME")
+    }/Library/Caches/ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-mac-arm64/chrome-headless-shell`
 await Deno.mkdir(out, { recursive: true })
 
 const POINTER = `
@@ -315,7 +320,9 @@ const scenarios: Record<string, () => Promise<[string, (page: Page) => Promise<v
     },
 }
 
+// the GPU (Metal) even headless, so the 3D view records at its real frame rate
 const browser = await chromium.launch({
+    executablePath,
     headless: true,
     args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"],
 })

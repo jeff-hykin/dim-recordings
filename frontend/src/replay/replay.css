@@ -264,7 +264,7 @@
 
 @media (max-width: 720px) {
     .timeline {
-        --tl-names: 150px;
+        --tl-names: 176px;
     }
     .tl-speed,
     .tl-loop,

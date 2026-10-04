@@ -7,7 +7,8 @@ import type { ViewerApp } from "../live/core/app.ts"
 import { useStore } from "../live/core/store.ts"
 import { dimosKey, type StreamInfo } from "../live/core/transport.ts"
 import { Icon } from "../live/ui/icons.tsx"
-import { ConfirmDialog, Dialog, HoverMenu, toast } from "../ui.tsx"
+import { createPortal } from "react-dom"
+import { ConfirmDialog, Dialog, type MenuItem, toast } from "../ui.tsx"
 import { clock, type Overview, replayApi, type Timeline as TimelineData } from "./api.ts"
 
 const SPEEDS = [0.1, 0.25, 0.5, 1, 2, 4, 8, 16]
@@ -418,10 +419,7 @@ function StreamRow(
                 <span className="tl-count dim-mono muted" title={hz}>
                     {stream.count.toLocaleString()}
                 </span>
-                <HoverMenu
-                    label={<Icon name="more-horizontal" size={14} />}
-                    className="ghost icon tl-menu"
-                    align="left"
+                <RowMenu
                     testId={`stream-menu-${stream.name}`}
                     items={[
                         { heading: stream.name },
@@ -542,5 +540,83 @@ function NameDialog({ title, action, initial, note, onSubmit, onClose }: {
                 </button>
             </div>
         </Dialog>
+    )
+}
+
+/** A stream row's menu. It opens upward over everything (the rows scroll, which would clip a dropdown inside them). */
+function RowMenu({ items, testId }: { items: MenuItem[]; testId?: string }) {
+    const [at, setAt] = useState<{ left: number; bottom: number } | null>(null)
+    const button = useRef<HTMLButtonElement>(null)
+    useEffect(() => {
+        if (!at) {
+            return
+        }
+        const close = (event: Event) => {
+            if (!(event.target as HTMLElement).closest?.(".row-menu, .tl-menu")) {
+                setAt(null)
+            }
+        }
+        const onKey = (event: KeyboardEvent) => event.key === "Escape" && setAt(null)
+        addEventListener("pointerdown", close, true)
+        addEventListener("keydown", onKey)
+        return () => {
+            removeEventListener("pointerdown", close, true)
+            removeEventListener("keydown", onKey)
+        }
+    }, [at])
+    return (
+        <>
+            <button
+                ref={button}
+                type="button"
+                className="dim-btn sm ghost icon tl-menu"
+                aria-haspopup="menu"
+                aria-expanded={!!at}
+                title="Rename, duplicate or delete this stream"
+                data-testid={testId}
+                onClick={() => {
+                    if (at) {
+                        setAt(null)
+                        return
+                    }
+                    const box = button.current!.getBoundingClientRect()
+                    setAt({ left: box.left, bottom: innerHeight - box.top + 4 })
+                }}
+            >
+                <Icon name="more-horizontal" size={14} />
+            </button>
+            {at && createPortal(
+                <div
+                    className="menu dim-card row-menu"
+                    role="menu"
+                    style={{ position: "fixed", left: at.left, bottom: at.bottom, top: "auto", zIndex: 60 }}
+                >
+                    {items.map((item, index) =>
+                        "separator" in item
+                            ? <div key={index} className="menu-sep" />
+                            : "heading" in item
+                            ? <div key={index} className="menu-heading">{item.heading}</div>
+                            : (
+                                <button
+                                    key={index}
+                                    type="button"
+                                    role="menuitem"
+                                    className={`menu-item ${item.danger ? "danger" : ""}`}
+                                    disabled={item.disabled}
+                                    title={item.hint}
+                                    onClick={() => {
+                                        setAt(null)
+                                        item.onSelect()
+                                    }}
+                                >
+                                    <span>{item.label}</span>
+                                    {item.hint && <span className="menu-hint">{item.hint}</span>}
+                                </button>
+                            )
+                    )}
+                </div>,
+                document.body,
+            )}
+        </>
     )
 }
