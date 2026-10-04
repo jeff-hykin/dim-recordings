@@ -9,7 +9,7 @@ import { inspect } from "../backend/recordings/inspect.ts"
 import { openMcap } from "../backend/recordings/mcap.ts"
 import { editDb } from "../backend/replay/edit_db.ts"
 import { editMcap } from "../backend/replay/edit_mcap.ts"
-import { acquire, closeAll, Session, TfIndex } from "../backend/replay/player.ts"
+import { acquire, closeAll, closeNow, Session, TfIndex } from "../backend/replay/player.ts"
 import { atOrBefore, openSource } from "../backend/replay/source.ts"
 import { handle } from "../backend/http.ts"
 import { buildRoutes, DESCRIPTION } from "../backend/routes.ts"
@@ -492,6 +492,33 @@ Deno.test("player: a file replaced at the same path is opened afresh, not served
     const second = await acquire(path)
     assertEquals(second.source.streams.map((s) => s.name), ["other"])
     second.release()
+    await closeAll()
+    await Deno.remove(dir, { recursive: true })
+})
+
+Deno.test("player: an edit while a page is playing the file: the page is told to reload, nothing crashes on close", async () => {
+    const { dir, path } = await sampleDb()
+    const opened = await acquire(path)
+    const texts: string[] = []
+    const player = new Session(
+        path,
+        opened.source,
+        opened.tf,
+        null,
+        (data) => typeof data === "string" && texts.push(data),
+    )
+    player.onText(JSON.stringify({ op: "sub", id: 1, stream: "odom", as: "lcm" }))
+    await closeNow(path) // what an edit does first
+    editDb(path, { op: "rename", stream: "odom", to: "pose" })
+    player.onText(JSON.stringify({ op: "at", t: T0 + 1, mode: "pause", seq: 1 }))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    player.close()
+    opened.release() // the websocket closing after the edit
+    assert(texts.some((text) => JSON.parse(text).op === "reload"))
+    assert(!texts.some((text) => JSON.parse(text).op === "error"), texts.join("\n"))
+    const again = await acquire(path)
+    assertEquals(again.source.streams.map((s) => s.name), ["camera", "pose", "tf"])
+    again.release()
     await closeAll()
     await Deno.remove(dir, { recursive: true })
 })

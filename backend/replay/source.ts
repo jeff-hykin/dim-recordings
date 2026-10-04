@@ -174,8 +174,12 @@ class DbSource implements Source {
         return new Uint8Array(row.data)
     }
 
+    #closed = false
     close() {
-        this.#db.close()
+        if (!this.#closed) {
+            this.#closed = true
+            this.#db.close()
+        }
     }
 }
 
@@ -387,8 +391,12 @@ class McapSource implements Source {
         return records.subarray(dataStart, offset + 9 + length)
     }
 
+    #closed = false
     close() {
-        this.#cache.clear()
-        this.mcap.close()
+        if (!this.#closed) {
+            this.#closed = true
+            this.#cache.clear()
+            this.mcap.close()
+        }
     }
 }

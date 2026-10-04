@@ -230,6 +230,9 @@ export class Session {
 
     /** the file is about to change: the page reconnects (and re-reads the stream list) */
     reload() {
+        // the file is about to be rewritten under this session: it stops reading it, the page reconnects
+        this.#closed = true
+        this.#subs.clear()
         this.send(JSON.stringify({ op: "reload" }))
     }
 
