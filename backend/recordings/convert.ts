@@ -2,7 +2,6 @@
 // progress from the converter's own output, the output's tail, the result's path. The new file lands next to the
 // original (an .rrd keeps the original's base name, so it lists paired with it).
 import { dirname, join } from "node:path"
-import { which } from "./foxglove.ts"
 import { stem } from "./scan.ts"
 
 export type Target = "db" | "mcap" | "rrd"
@@ -24,28 +23,28 @@ export type Job = {
     finished: number | null
 }
 
-/** The dtk command: $DIM_RECORDINGS_DTK (e.g. "deno run -A ~/repos/dtk/main.js"), else `dtk` on PATH. */
-export function dtkCommand(): string[] | null {
+/** The dtk commit conversions run (jeff/fix/data_conversions): pinned so the app doesn't depend on whatever `dtk` is installed. */
+export const DTK_COMMIT = "e7ab39c4c12df78f11cbe71bb572e449958fff19"
+export const DTK_URL = `https://raw.githubusercontent.com/jeff-hykin/dtk/${DTK_COMMIT}/main.js`
+
+/** The dtk command: $DIM_RECORDINGS_DTK (e.g. "deno run -A ~/repos/dtk/main.js"), else the pinned commit on this deno. */
+export function dtkCommand(): string[] {
     const override = Deno.env.get("DIM_RECORDINGS_DTK")
     if (override) {
         return override.split(/\s+/).filter(Boolean).map((part) => part.replace(/^~/, Deno.env.get("HOME") ?? "~"))
     }
-    const found = which("dtk")
-    return found ? [found] : null
+    return [Deno.execPath(), "run", "-A", "--no-config", DTK_URL]
 }
 
-export const DTK_MISSING =
-    "converting needs dtk: curl -fsSL https://raw.githubusercontent.com/jeff-hykin/dtk/master/install.sh | sh"
-
 /** What a .db or .mcap can become, with the reason when it can't. */
-export function conversions(format: string, hasDtk: boolean): { to: Target; ok: boolean; reason: string }[] {
+export function conversions(format: string): { to: Target; ok: boolean; reason: string }[] {
     if (format === "rrd") {
         return []
     }
     return (["db", "mcap", "rrd"] as Target[]).filter((to) => to !== format).map((to) => ({
         to,
-        ok: hasDtk,
-        reason: hasDtk ? `dtk data to_${to}` : DTK_MISSING,
+        ok: true,
+        reason: `dtk data to_${to}`,
     }))
 }
 
@@ -135,9 +134,6 @@ export class Jobs {
         to: Target,
     ): Job {
         const command = dtkCommand()
-        if (!command) {
-            throw new Error(DTK_MISSING)
-        }
         if (recording.format === to || recording.format === "rrd") {
             throw new Error(`can't convert a .${recording.format} to .${to}`)
         }

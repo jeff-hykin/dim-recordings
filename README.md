@@ -62,7 +62,7 @@ nix build .#dimosApp                  # what Desktop builds: bin/dimos-app-serve
 cd backend/bundle && npm install && node build.mjs   # the one-file backend the nix build runs (no downloads at run time)
 ```
 
-Converting needs `dtk` on PATH (or `DIM_RECORDINGS_DTK="deno run -A <checkout>/main.js"`); previews need ffmpeg (the nix
-build brings it).
+Converting runs dtk at a pinned commit (`DTK_COMMIT` in `backend/recordings/convert.ts`, fetched by deno on first use;
+`DIM_RECORDINGS_DTK="deno run -A <checkout>/main.js"` overrides it); previews need ffmpeg (the nix build brings it).
 
 Licensed under Apache-2.0.

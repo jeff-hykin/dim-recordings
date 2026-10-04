@@ -2,7 +2,7 @@
 import { dirname } from "node:path"
 import { HttpError, type Route } from "../http.ts"
 import { deleteRecording, duplicateRecording, renameRecording } from "./actions.ts"
-import { conversions, dtkCommand, Jobs, type Target } from "./convert.ts"
+import { conversions, Jobs, type Target } from "./convert.ts"
 import { which } from "./foxglove.ts"
 import { Library, NotFound, type Recording } from "./library.ts"
 import { environment, openIn, type OpenTarget, openTargets, reveal } from "./open.ts"
@@ -38,7 +38,7 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             error: inspection?.error ?? null,
             thumbnail: await thumbnails.stateOf(recording),
             opens: openTargets(recording.format, inspection, env),
-            conversions: conversions(recording.format, !!dtkCommand()),
+            conversions: conversions(recording.format),
             uploaded: uploaded[recording.path] ?? null,
             rrds: recording.rrds.map((rrd) => ({
                 ...rrd,
@@ -78,7 +78,7 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
                     order: direction,
                     sections: grouped.map(({ label, items }) => ({ label, recordings: items })),
                     tools: {
-                        dtk: !!dtkCommand(),
+                        dtk: true,
                         ffmpeg: !!ffmpeg(),
                         rerun: env.rerunCli,
                         foxglove: env.foxglove,

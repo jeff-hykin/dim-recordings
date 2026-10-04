@@ -2,6 +2,7 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert"
 import { join } from "node:path"
 import { deleteRecording, duplicateRecording, renameRecording } from "../backend/recordings/actions.ts"
+import { conversions, DTK_COMMIT, DTK_URL, dtkCommand } from "../backend/recordings/convert.ts"
 import { inspect, shortType, streamSummary } from "../backend/recordings/inspect.ts"
 import { Library } from "../backend/recordings/library.ts"
 import { pairRrds, resolveId, scanFiles } from "../backend/recordings/scan.ts"
@@ -177,3 +178,22 @@ async function exists(path: string) {
         return false
     }
 }
+
+Deno.test("conversions run the pinned dtk commit on this deno, unless DIM_RECORDINGS_DTK overrides it", () => {
+    const saved = Deno.env.get("DIM_RECORDINGS_DTK")
+    try {
+        Deno.env.delete("DIM_RECORDINGS_DTK")
+        assertEquals(dtkCommand(), [Deno.execPath(), "run", "-A", "--no-config", DTK_URL])
+        assert(/^[0-9a-f]{40}$/.test(DTK_COMMIT))
+        assert(DTK_URL.includes(`/jeff-hykin/dtk/${DTK_COMMIT}/main.js`))
+        Deno.env.set("DIM_RECORDINGS_DTK", "deno run -A ~/repos/dtk/main.js")
+        assertEquals(dtkCommand().at(-1), `${Deno.env.get("HOME")}/repos/dtk/main.js`)
+        assertEquals(conversions("db").map((each) => [each.to, each.ok]), [["mcap", true], ["rrd", true]])
+    } finally {
+        if (saved === undefined) {
+            Deno.env.delete("DIM_RECORDINGS_DTK")
+        } else {
+            Deno.env.set("DIM_RECORDINGS_DTK", saved)
+        }
+    }
+})
