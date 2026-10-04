@@ -31,7 +31,7 @@ function Tree({ tf }: { tf: TfTree }) {
         depth: number,
     ) => {
         lines.push({
-            prefix: depth === 0 ? "" : prefix + (last ? "└─ " : "├─ "),
+            prefix: depth === 0 ? "" : prefix + (last ? "`- " : "|- "),
             frame,
         })
         if (path.has(frame)) {
@@ -41,7 +41,7 @@ function Tree({ tf }: { tf: TfTree }) {
         kids.forEach((kid, i) =>
             walk(
                 kid,
-                depth === 0 ? "" : prefix + (last ? "   " : "│  "),
+                depth === 0 ? "" : prefix + (last ? "   " : "|  "),
                 i === kids.length - 1,
                 new Set(path).add(frame),
                 depth + 1,

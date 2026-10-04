@@ -20,7 +20,7 @@ export function Replay({ id }: { id: string }) {
                 >
                     ← Recordings
                 </button>
-                <span className="bar-title">Replayer</span>
+                <span className="dim-title">Replayer</span>
                 <span className="mono muted">{recording?.name ?? id}</span>
             </header>
             <main className="replay-slot" data-replay-slot={id}>

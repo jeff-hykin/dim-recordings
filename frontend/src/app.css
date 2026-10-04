@@ -31,7 +31,7 @@ body.science {
     color: var(--warn);
 }
 .error {
-    color: var(--danger);
+    color: var(--warn);
 }
 .section-head {
     margin: 0;
@@ -86,12 +86,16 @@ a.dim-btn {
     display: inline-flex;
     align-items: center;
 }
-.dim-btn.on {
+.dim-btn.on,
+.dim-btn.on:hover {
     border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--fg);
 }
+/* destructive: the docs give status colors only (ok / warn), so warn marks it */
 .dim-btn.ghost.delete,
 .menu-item.danger {
-    color: var(--danger);
+    color: var(--warn);
 }
 .banner {
     margin: 0;
@@ -131,6 +135,7 @@ a.dim-btn {
     gap: 14px;
     padding: 8px 6px;
     border-bottom: 1px solid var(--hair);
+    border-radius: var(--radius-sm);
 }
 .row.head {
     position: sticky;
@@ -189,7 +194,10 @@ a.dim-btn {
     white-space: nowrap;
 }
 .streams-cell {
-    color: var(--secondary-fg);
+    color: var(--muted-fg);
+}
+.name .dim-badge {
+    color: var(--muted-fg);
 }
 .row-actions {
     display: flex;
@@ -616,11 +624,4 @@ a.dim-btn {
     .table {
         padding: 0 12px 80px;
     }
-}
-
-/* Portal: "Square corners, everywhere. No rounding." (dim-app ≥ v0.9 does this itself; kept until it's vendored) */
-body.science.dark *,
-body.science.dark *::before,
-body.science.dark *::after {
-    border-radius: 0 !important;
 }

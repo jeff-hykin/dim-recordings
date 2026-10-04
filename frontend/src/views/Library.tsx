@@ -392,7 +392,7 @@ export function Library() {
     return (
         <div className={`library ${summaryRecording ? "with-summary" : ""}`}>
             <header className="bar">
-                <span className="bar-title">Recordings</span>
+                <span className="dim-title">Recordings</span>
                 <span className="mono muted small dir" title="the recordings folder">
                     {data?.dir}
                 </span>
@@ -402,7 +402,7 @@ export function Library() {
                         <button
                             key={s.key}
                             type="button"
-                            className={`dim-btn sm ${sort === s.key ? "primary on" : "ghost"}`}
+                            className={`dim-btn sm ${sort === s.key ? "on" : "ghost"}`}
                             aria-pressed={sort === s.key}
                             onClick={() => {
                                 if (sort === s.key) {
