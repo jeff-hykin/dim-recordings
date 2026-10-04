@@ -77,12 +77,12 @@ export function deleteRecording(path: string) {
     }
 }
 
-/** "go2_copy.db", then "go2_copy_2.db", ... (no spaces: recording names are shell- and URL-friendly) */
+/** "go2 copy.db", then "go2 copy 2.db", ... */
 export function copyName(folder: string, name: string): string {
     const extension = name.slice(name.lastIndexOf("."))
-    const base = stem(name).replace(/_copy(_\d+)?$/, "")
+    const base = stem(name).replace(/ copy( \d+)?$/, "")
     for (let n = 1;; n++) {
-        const candidate = `${base}_copy${n === 1 ? "" : `_${n}`}${extension}`
+        const candidate = `${base} copy${n === 1 ? "" : ` ${n}`}${extension}`
         if (!exists(join(folder, candidate))) {
             return candidate
         }

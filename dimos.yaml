@@ -1,5 +1,16 @@
 title: Recordings
 dimos-desktop-api: ">=2 <3"
+# Desktop's dimos-server endpoints the uploads go through (the app's own api/uploads relays them; the login panel
+# frames /dimos/cloud/login/page)
+dimos-api:
+    - GET /dimos/uploads
+    - POST /dimos/uploads
+    - DELETE /dimos/uploads/{id}
+    - POST /dimos/uploads/{id}/retry
+    - GET /dimos/uploads/uploaded
+    - GET /dimos/cloud/account
+    - POST /dimos/cloud/login
+    - GET /dimos/cloud/login/page
 caches:
     - url: "https://dimos-desktop.cachix.org"
       key: "dimos-desktop.cachix.org-1:A4P35aGJGmCan92LWyamtSFXMqaVE+VRFYnrJ8QMTeQ="

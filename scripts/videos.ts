@@ -198,7 +198,7 @@ const scenarios: Record<string, [string, Scenario, ("dark" | "light")?]> = {
         await hover(page, row(page, id).locator(".menu-item", { hasText: "Duplicate" }))
         await row(page, id).locator(".menu-item", { hasText: "Duplicate" }).click()
         await page.waitForTimeout(2500)
-        const copy = "go2_short_clip_today_copy.mcap"
+        const copy = "go2_short_clip_today copy.mcap"
         // rename the copy
         await row(page, copy).scrollIntoViewIfNeeded()
         await hover(page, more(copy))

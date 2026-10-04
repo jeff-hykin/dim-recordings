@@ -134,41 +134,12 @@ export async function openIn(
             return { ok: true, opened: `Foxglove on ${recording.name}` }
         case "rerun":
             if (env.apps.includes(RERUN_APP)) {
-                await ensureRerunViewer(config)
                 await desktop(config, `/apps/${RERUN_APP}/api/open`, { path: recording.path })
                 await desktop(config, "/api/open-app", { app: RERUN_APP })
                 return { ok: true, opened: `the Rerun app on ${recording.name}` }
             }
             spawn([which("rerun")!, recording.path])
             return { ok: true, opened: `rerun on ${recording.name}` }
-    }
-}
-
-/**
- * The Rerun app frames a web viewer (`rerun --serve-web`, :9090) it doesn't start itself. When it says that viewer
- * isn't reachable and the rerun CLI is here, start one, then wait (up to 10 s) for the app to see it.
- */
-async function ensureRerunViewer(config: Config) {
-    const state = async () => {
-        const response = await fetch(`${config.desktopUrl}/apps/${RERUN_APP}/api/state`)
-        return await response.json() as { reachable?: boolean; viewer?: { port?: string } }
-    }
-    try {
-        const before = await state()
-        const rerun = which("rerun")
-        if (before.reachable || !rerun) {
-            return
-        }
-        spawn([rerun, "--serve-web", "--web-viewer-port", before.viewer?.port ?? "9090"])
-        for (let i = 0; i < 20; i++) {
-            await new Promise((resolve) => setTimeout(resolve, 500))
-            await desktop(config, `/apps/${RERUN_APP}/api/reconnect`, {}).catch(() => {})
-            if ((await state()).reachable) {
-                return
-            }
-        }
-    } catch {
-        // the app answers its own way; opening still goes ahead
     }
 }
 

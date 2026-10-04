@@ -168,8 +168,8 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
         {
             method: "POST",
             path: "api/recordings/{id}/duplicate",
-            description: 'Copy a recording next to itself ("<name>_copy.db", or `name`)',
-            params: { ...ID, name: { type: "string", description: 'the copy\'s name (default: "<name>_copy")' } },
+            description: 'Copy a recording next to itself ("<name> copy.db", or `name`)',
+            params: { ...ID, name: { type: "string", description: 'the copy\'s name (default: "<name> copy")' } },
             handler: async ({ id, name }) => {
                 const recording = await find(String(id))
                 const target = await duplicateRecording(recording.path, name ? String(name) : undefined)
