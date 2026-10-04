@@ -522,3 +522,108 @@ Deno.test("player: an edit while a page is playing the file: the page is told to
     await closeAll()
     await Deno.remove(dir, { recursive: true })
 })
+
+/** a .db whose stream has the whole family dimos writes: a pose r-tree and a sqlite-vec embedding index */
+function addIndexes(path: string, stream: string, vecPath: string) {
+    const db = new DatabaseSync(path, { readOnly: false, allowExtension: true })
+    db.loadExtension(vecPath)
+    db.exec(`CREATE VIRTUAL TABLE "${stream}_rtree" USING rtree(id, x_min, x_max, y_min, y_max, z_min, z_max)`)
+    db.exec(`CREATE VIRTUAL TABLE "${stream}_vec" USING vec0(embedding float[4] distance_metric=cosine)`)
+    const ids = (db.prepare(`SELECT id FROM "${stream}"`).all() as { id: number }[]).map((row) => row.id)
+    for (const id of ids) {
+        db.prepare(`INSERT INTO "${stream}_rtree" VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, id, id, 0, 0, 0, 0)
+        db.prepare(`INSERT INTO "${stream}_vec" (rowid, embedding) VALUES (?, ?)`)
+            .run(BigInt(id), new Uint8Array(new Float32Array([id, 1, 0, 0]).buffer))
+    }
+    db.close()
+    return ids.length
+}
+
+const vecPath = Deno.env.get("DIM_RECORDINGS_SQLITE_VEC")
+if (!vecPath && Deno.env.get("CI")) {
+    throw new Error(
+        "CI must set DIM_RECORDINGS_SQLITE_VEC (nix build .#sqliteVec) so the embedding-index edits are tested",
+    )
+}
+
+Deno.test({
+    name:
+        "edit .db: a stream with a pose r-tree and an embedding index (sqlite-vec) duplicates whole, renames, deletes",
+    ignore: !vecPath,
+    fn: async () => {
+        const { path } = await sampleDb()
+        const count = addIndexes(path, "camera", vecPath!)
+        const counts = (stream: string) => {
+            const db = new DatabaseSync(path, { readOnly: false, allowExtension: true })
+            db.loadExtension(vecPath!)
+            try {
+                const n = (table: string) =>
+                    (db.prepare(`SELECT COUNT(*) AS n FROM "${table}"`).get() as { n: number }).n
+                const nearest = db.prepare(
+                    `SELECT rowid FROM "${stream}_vec" WHERE embedding MATCH ? ORDER BY distance LIMIT 1`,
+                ).get(new Uint8Array(new Float32Array([5, 1, 0, 0]).buffer)) as { rowid: number }
+                const boxed = db.prepare(`SELECT id FROM "${stream}_rtree" WHERE x_min >= 3 AND x_max <= 3`).all()
+                return [
+                    n(stream),
+                    n(`${stream}_blob`),
+                    n(`${stream}_rtree`),
+                    n(`${stream}_vec`),
+                    Number(nearest.rowid),
+                    boxed.length,
+                ]
+            } finally {
+                db.close()
+            }
+        }
+        const tableNames = () => {
+            const db = new DatabaseSync(path)
+            try {
+                return (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as {
+                    name: string
+                }[])
+                    .map((row) => row.name)
+            } finally {
+                db.close()
+            }
+        }
+        assertEquals(counts("camera"), [count, count, count, count, 5, 1])
+
+        // duplicate: the copy has every table, filled, and its indexes answer queries
+        editDb(path, { op: "duplicate", stream: "camera", to: "camera_copy" })
+        assertEquals(counts("camera_copy"), [count, count, count, count, 5, 1])
+        assertEquals(counts("camera"), [count, count, count, count, 5, 1])
+
+        // rename: the vec0 index is rebuilt under the new name, no table keeps the old one
+        editDb(path, { op: "rename", stream: "camera", to: "embedded" })
+        assertEquals(counts("embedded"), [count, count, count, count, 5, 1])
+        assertEquals(
+            tableNames().filter((name) =>
+                name === "camera" || name.startsWith("camera_") && !name.startsWith("camera_copy")
+            ),
+            [],
+        )
+
+        // delete: the stream, its blobs, both indexes and all their shadow tables go
+        editDb(path, { op: "delete", stream: "embedded" })
+        assertEquals(tableNames().filter((name) => name.startsWith("embedded")), [])
+        const after = await inspect(path)
+        assertEquals(after.streams.map((s) => s.name), ["camera_copy", "odom", "tf"])
+        assertEquals(counts("camera_copy"), [count, count, count, count, 5, 1])
+    },
+})
+
+Deno.test("edit .db: without sqlite-vec, a stream with an embedding index refuses clearly and changes nothing", async () => {
+    if (!vecPath) {
+        return // making the fixture needs sqlite-vec
+    }
+    const { path } = await sampleDb()
+    addIndexes(path, "camera", vecPath)
+    const saved = Deno.env.get("DIM_RECORDINGS_SQLITE_VEC")!
+    Deno.env.delete("DIM_RECORDINGS_SQLITE_VEC")
+    try {
+        assertThrows(() => editDb(path, { op: "rename", stream: "camera", to: "x" }), Error, "sqlite-vec")
+    } finally {
+        Deno.env.set("DIM_RECORDINGS_SQLITE_VEC", saved)
+    }
+    assertEquals((await inspect(path)).streams.map((s) => s.name), ["camera", "odom", "tf"])
+})

@@ -25,6 +25,8 @@ jobs:
             - uses: denoland/setup-deno@v2
               with:
                   deno-version: v2.5.0 # the formatter changes between releases: pin the one `deno fmt` runs with locally
+            # the stream-edit tests load sqlite-vec (an embedding index), the same one the server uses
+            - run: echo "DIM_RECORDINGS_SQLITE_VEC=$(nix build --no-link --print-out-paths .#sqliteVec)/lib/vec0" >> "$GITHUB_ENV"
             - run: deno task test
             - run: deno task check
             - run: cd frontend && npm ci && npm run typecheck
