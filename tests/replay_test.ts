@@ -9,7 +9,7 @@ import { inspect } from "../backend/recordings/inspect.ts"
 import { openMcap } from "../backend/recordings/mcap.ts"
 import { editDb } from "../backend/replay/edit_db.ts"
 import { editMcap } from "../backend/replay/edit_mcap.ts"
-import { closeAll, Session, TfIndex } from "../backend/replay/player.ts"
+import { acquire, closeAll, Session, TfIndex } from "../backend/replay/player.ts"
 import { atOrBefore, openSource } from "../backend/replay/source.ts"
 import { handle } from "../backend/http.ts"
 import { buildRoutes, DESCRIPTION } from "../backend/routes.ts"
@@ -475,4 +475,23 @@ Deno.test("api: stream edits over HTTP refuse a symlinked recording and edit a r
     assertEquals(route.body.frame, "world")
     assertEquals(route.body.points.length, 10)
     await closeAll()
+})
+
+Deno.test("player: a file replaced at the same path is opened afresh, not served from the old one", async () => {
+    const { dir, path } = await sampleDb()
+    const first = await acquire(path)
+    assertEquals(first.source.streams.map((s) => s.name), ["camera", "odom", "tf"])
+    first.release()
+    await Deno.remove(path)
+    writeDb(path, [{
+        name: "other",
+        payload: "dimos.msgs.geometry_msgs.PoseStamped.PoseStamped",
+        times: [T0],
+        blob: () => pose(1),
+    }])
+    const second = await acquire(path)
+    assertEquals(second.source.streams.map((s) => s.name), ["other"])
+    second.release()
+    await closeAll()
+    await Deno.remove(dir, { recursive: true })
 })

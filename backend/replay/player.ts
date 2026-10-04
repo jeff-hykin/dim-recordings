@@ -39,8 +39,15 @@ type Open = {
     users: number
     timer?: number
     tf: Map<string, Promise<TfIndex>>
+    /** the file it opened (inode, size, mtime): a different file at the same path is opened afresh */
+    identity: string
 }
 const open = new Map<string, Open>()
+
+async function identityOf(path: string): Promise<string> {
+    const stat = await Deno.stat(path)
+    return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtime?.getTime()}`
+}
 const IDLE_CLOSE_MS = 60_000
 
 /** A recording's source, opened once and closed a minute after its last user lets go. */
@@ -53,9 +60,21 @@ export async function acquire(
         tf: (stream: string) => Promise<TfIndex>
     }
 > {
+    const identity = await identityOf(path)
     let entry = open.get(path)
+    if (entry && entry.identity !== identity) {
+        // replaced or changed since it was opened (deleted and copied again, edited by another program): let the old
+        // one close when its users are done, and open the file that's there now
+        const stale = entry
+        open.delete(path)
+        if (stale.users === 0) {
+            clearTimeout(stale.timer)
+            stale.source.then((source) => source.close(), () => {})
+        }
+        entry = undefined
+    }
     if (!entry) {
-        entry = { source: openSource(path), users: 0, tf: new Map() }
+        entry = { source: openSource(path), users: 0, tf: new Map(), identity }
         open.set(path, entry)
         entry.source.catch(() => open.delete(path))
     }
@@ -71,7 +90,9 @@ export async function acquire(
                 return
             }
             released = true
-            if (--mine.users === 0) {
+            if (--mine.users === 0 && open.get(path) !== mine) {
+                source.close() // a replaced file's last user: nothing will open it again
+            } else if (mine.users === 0) {
                 mine.timer = setTimeout(() => {
                     if (mine.users === 0 && open.get(path) === mine) {
                         open.delete(path)

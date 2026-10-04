@@ -273,6 +273,10 @@ const scenarios: Record<string, () => Promise<[string, (page: Page) => Promise<v
     replayer_stream_edits_db: async () => {
         // a fresh copy (147 MB) of a .db in the recordings folder: the edits change this copy only
         const id = "replay_edit_demo.db"
+        for (const suffix of ["", "-wal", "-shm"]) {
+            await Deno.remove(`${recordingsDir}/${id}${suffix}`).catch(() => {})
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500)) // the app notices the folder change
         await Deno.copyFile(`${recordingsDir}/alfred_stereo_short.db`, `${recordingsDir}/${id}`)
         return [replay(id), async (page) => {
             const menu = async (stream: string, item: string) => {
@@ -289,7 +293,7 @@ const scenarios: Record<string, () => Promise<[string, (page: Page) => Promise<v
             const streams = await page.locator(".tl-row").evaluateAll((rows) =>
                 rows.map((row) => row.getAttribute("data-stream"))
             )
-            const first = streams.find((name) => name && /infra|image|left/.test(name)) ?? streams[0]!
+            const first = streams.find((name) => name === "infrared_left") ?? streams[0]!
             const other = streams.find((name) => name && name !== first && /info|right/.test(name)) ?? streams[1]!
             await caption(page, `rename ${first} → camera_left (ALTER TABLE, in place)`)
             await menu(first, "Rename")
