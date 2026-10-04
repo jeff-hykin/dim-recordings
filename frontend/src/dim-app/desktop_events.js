@@ -2,7 +2,7 @@
 // object per `data:` line, typed by its `type`: apps, endpoints, blueprints, runs, notification, notifications,
 // ui-settings, dimos, job, recordings, agent).
 //
-//     import { onDesktopEvent } from "https://esm.sh/gh/jeff-hykin/dim-app@v0.9.2/desktop_events.js"
+//     import { onDesktopEvent } from "https://esm.sh/gh/jeff-hykin/dim-app@v0.9.5/desktop_events.js"
 //     const off = onDesktopEvent("endpoints", (event) => refreshTools())   // or "*" for every event
 //     off()                                                                // unsubscribe
 //
