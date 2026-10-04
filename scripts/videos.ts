@@ -137,7 +137,14 @@ const scenarios: Record<string, [string, Scenario, ("dark" | "light")?]> = {
         await page.waitForTimeout(2500)
     }],
     open_menu: [app, async (page) => {
-        for (const id of ["go2_short.db", "go2_short.mcap", "alfred_stereo_short_lcm.mcap"]) {
+        for (
+            const id of [
+                "go2_short.db",
+                "go2_short.mcap",
+                "alfred_stereo_short_lcm.mcap",
+                "alfred_stereo_short_cdr.mcap",
+            ]
+        ) {
             await row(page, id).scrollIntoViewIfNeeded()
             await hover(page, row(page, id).locator(".menu-wrap button", { hasText: "Open" }))
             await page.waitForTimeout(700)
@@ -239,7 +246,7 @@ const scenarios: Record<string, [string, Scenario, ("dark" | "light")?]> = {
         }
     }],
     upload: [app, async (page) => {
-        const id = "go2_short_clip_upload.mcap"
+        const id = Deno.env.get("UPLOAD_ID") ?? "go2_short_clip_upload.mcap"
         await row(page, id).scrollIntoViewIfNeeded()
         await hover(page, row(page, id).locator("button", { hasText: "Upload" }))
         await row(page, id).locator("button", { hasText: "Upload" }).click()

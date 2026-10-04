@@ -129,9 +129,13 @@ async function lcmFromDb(source: string, target: string, startsAgo: number) {
 
 const base = sourceMcap.split("/").pop()!.replace(/\.mcap$/, "")
 if (Deno.env.get("UPLOAD_CLIP")) {
-    // a small one (2 s) to upload for real: go2_short_clip_upload.mcap
+    // a small one (2 s) to upload for real: UPLOAD_CLIP=1 → go2_short_clip_upload.mcap, else UPLOAD_CLIP=<name> → <name>.mcap
     SECONDS = 2
-    await clip(sourceMcap, `${out}/${base}_clip_upload.mcap`, 600)
+    await clip(
+        sourceMcap,
+        `${out}/${Deno.env.get("UPLOAD_CLIP") === "1" ? `${base}_clip_upload` : Deno.env.get("UPLOAD_CLIP")}.mcap`,
+        600,
+    )
     Deno.exit(0)
 }
 const HOUR = 3600
