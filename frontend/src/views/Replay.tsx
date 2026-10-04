@@ -235,7 +235,19 @@ function LiveReplay({ overview, initial, expanded, onExpanded, onReload }: {
                     overview={overview}
                     expanded={expanded}
                     onExpanded={onExpanded}
-                    onEdited={() => {
+                    onEdited={(renamed) => {
+                        // a camera panel showing a renamed stream follows the new name
+                        if (renamed) {
+                            const from = `dimos/${renamed.from}/`
+                            cameraLayout.update({
+                                panels: cameraLayout.get().panels.map((panel) => ({
+                                    ...panel,
+                                    key: panel.key.startsWith(from)
+                                        ? `dimos/${renamed.to}/${panel.key.slice(from.length)}`
+                                        : panel.key,
+                                })),
+                            })
+                        }
                         const { t, speed, loop } = app.connection.playhead.get()
                         onReload({ t, speed, loop })
                     }}

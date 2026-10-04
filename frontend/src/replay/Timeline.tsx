@@ -29,7 +29,7 @@ export function Timeline({ app, overview, expanded, onExpanded, onEdited }: {
     expanded: boolean
     onExpanded: (expanded: boolean) => void
     /** a stream edit finished: the page reloads the recording */
-    onEdited: () => void
+    onEdited: (renamed?: { from: string; to: string }) => void
 }) {
     const head = useStore(app.connection.playhead)
     const span = Math.max(1e-6, overview.end - overview.start)
@@ -299,7 +299,7 @@ function StreamRow(
         view: View
         playhead: string | null
         scrubProps: Record<string, unknown>
-        onEdited: () => void
+        onEdited: (renamed?: { from: string; to: string }) => void
     },
 ) {
     const canvas = useRef<HTMLCanvasElement>(null)
@@ -369,12 +369,13 @@ function StreamRow(
     const run = async (
         label: string,
         action: () => Promise<{ seconds: number }>,
+        renamed?: { from: string; to: string },
     ) => {
         setBusy(true)
         try {
             const result = await action()
             toast(`${label} (${result.seconds.toFixed(1)} s)`, "ok")
-            onEdited()
+            onEdited(renamed)
         } catch (error) {
             toast(String((error as Error).message ?? error), "danger")
         } finally {
@@ -465,6 +466,7 @@ function StreamRow(
                             ? run(
                                 `Renamed ${stream.name} → ${name}`,
                                 () => replayApi.renameStream(overview.id, stream.name, name),
+                                { from: stream.name, to: name },
                             )
                             : run(
                                 `Duplicated ${stream.name} → ${name}`,
