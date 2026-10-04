@@ -121,13 +121,16 @@ async function run(command: string, args: string[]) {
     return new TextDecoder().decode(stdout) + new TextDecoder().decode(stderr)
 }
 
+/** terminal color codes (ESC [ … m) */
+const ANSI_COLOR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
+
 /** Shows a terminal's output as a page (the end card of a video). */
 async function terminal(page: Page, title: string, text: string) {
     await page.setContent(
         `<body style="margin:0;background:#05070d;color:#ece8f0;font:12.5px/1.45 'IBM Plex Mono',Menlo,monospace">` +
             `<div style="padding:22px 28px"><div style="font:600 12px Inter,system-ui;letter-spacing:.12em;color:#7cc8ec;margin-bottom:12px">${title}</div>` +
             `<pre style="margin:0;white-space:pre-wrap">${
-                text.replace(/\x1b\[[0-9;]*m/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                text.replace(ANSI_COLOR, "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
             }</pre></div></body>`,
     )
 }
