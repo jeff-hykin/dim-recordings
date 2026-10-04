@@ -89,7 +89,7 @@ a.dim-btn {
 .dim-btn.on {
     border-color: var(--primary);
 }
-.dim-btn.ghost.danger,
+.dim-btn.ghost.delete,
 .menu-item.danger {
     color: var(--danger);
 }
@@ -116,7 +116,7 @@ a.dim-btn {
 }
 /* with the summary open, the streams column gives way to it */
 .library.with-summary .row {
-    grid-template-columns: 112px minmax(140px, 1fr) 68px 70px 128px auto;
+    grid-template-columns: 112px minmax(140px, 1fr) 68px 70px 150px auto;
 }
 .library.with-summary .row > :nth-child(6) {
     display: none;
@@ -126,7 +126,7 @@ a.dim-btn {
 }
 .row {
     display: grid;
-    grid-template-columns: 136px minmax(180px, 1.6fr) 76px 84px 150px minmax(140px, 1.2fr) auto;
+    grid-template-columns: 136px minmax(180px, 1.6fr) 76px 84px 172px minmax(140px, 1.2fr) auto;
     align-items: center;
     gap: 14px;
     padding: 8px 6px;
@@ -202,6 +202,12 @@ a.dim-btn {
     align-items: center;
     gap: 10px;
     padding-top: 4px;
+    white-space: nowrap;
+    min-width: 0;
+}
+.rrd > .mono:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .rrd .row-actions {
     margin-left: auto;

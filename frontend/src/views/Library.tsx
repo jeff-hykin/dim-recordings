@@ -239,7 +239,7 @@ export function Library() {
                 </button>
                 <button
                     type="button"
-                    className="dim-btn sm ghost danger"
+                    className="dim-btn sm ghost delete"
                     onClick={() => setDialog({ kind: "delete", recording: rrd })}
                 >
                     Delete
