@@ -45,7 +45,13 @@ export type OpenTarget = {
 }
 
 export type Thumb =
-    | { state: "ready"; frames: number; width: number; height: number; stream: string }
+    | {
+        state: "ready"
+        frames: number
+        width: number
+        height: number
+        stream: string
+    }
     | { state: "none"; reason: string }
     | { state: "pending" }
 
@@ -60,7 +66,13 @@ export type RrdFile = {
     opens: OpenTarget[]
 }
 
-export type Uploaded = { path: string; uploadId: string; link: string | null; changed: boolean; uploadedAt: number }
+export type Uploaded = {
+    path: string
+    uploadId: string
+    link: string | null
+    changed: boolean
+    uploadedAt: number
+}
 
 export type Recording = {
     id: string
@@ -91,7 +103,13 @@ export type ListResponse = {
     sort: SortKey
     order: Order
     sections: { label: string | null; recordings: Recording[] }[]
-    tools: { dtk: boolean; ffmpeg: boolean; rerun: boolean; foxglove: boolean; apps: string[] }
+    tools: {
+        dtk: boolean
+        ffmpeg: boolean
+        rerun: boolean
+        foxglove: boolean
+        apps: string[]
+    }
     thumbnails: { working: string | null }
 }
 
@@ -133,7 +151,11 @@ export type Tray = {
     account: { loggedIn: boolean; email?: string | null; error?: string | null }
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function call<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+): Promise<T> {
     const response = await fetch(path, {
         method,
         headers: body === undefined ? {} : { "content-type": "application/json" },
@@ -147,7 +169,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
         parsed = { error: text }
     }
     if (!response.ok) {
-        throw new Error((parsed as { error?: string })?.error ?? `${response.status}`)
+        throw new Error(
+            (parsed as { error?: string })?.error ?? `${response.status}`,
+        )
     }
     return parsed as T
 }
@@ -156,8 +180,15 @@ const enc = encodeURIComponent
 
 export const api = {
     list: (sort: SortKey, order: Order) =>
-        call<ListResponse>("GET", `api/recordings?sort=${sort}&order=${order}&tz=${new Date().getTimezoneOffset()}`),
-    get: (id: string) => call<Recording & { inspection: Inspection | null }>("GET", `api/recordings/${enc(id)}`),
+        call<ListResponse>(
+            "GET",
+            `api/recordings?sort=${sort}&order=${order}&tz=${new Date().getTimezoneOffset()}`,
+        ),
+    get: (id: string) =>
+        call<Recording & { inspection: Inspection | null }>(
+            "GET",
+            `api/recordings/${enc(id)}`,
+        ),
     thumbnailUrl: (id: string, version: number) => `api/recordings/${enc(id)}/thumbnail?v=${version}`,
     setNote: (id: string, text: string) => call("PUT", `api/recordings/${enc(id)}/note`, { text }),
     rename: (id: string, name: string) => call<{ id: string }>("POST", `api/recordings/${enc(id)}/rename`, { name }),
@@ -167,7 +198,9 @@ export const api = {
     jobs: () => call<{ jobs: Job[] }>("GET", "api/jobs"),
     cancelJob: (id: string) => call("DELETE", `api/jobs/${enc(id)}`),
     open: (id: string, target: string) =>
-        call<{ opened: string }>("POST", `api/recordings/${enc(id)}/open`, { target }),
+        call<{ opened: string }>("POST", `api/recordings/${enc(id)}/open`, {
+            target,
+        }),
     reveal: (id: string) => call("POST", `api/recordings/${enc(id)}/reveal`, {}),
     upload: (id: string) => call<Upload>("POST", `api/recordings/${enc(id)}/upload`, {}),
     tray: () => call<Tray>("GET", "api/uploads"),
@@ -209,7 +242,10 @@ export function duration(seconds: number | null): string {
 
 export function when(seconds: number, section: string | null): string {
     const date = new Date(seconds * 1000)
-    const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    const time = date.toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+    })
     if (section === "Today" || section === "Yesterday") {
         return time
     }

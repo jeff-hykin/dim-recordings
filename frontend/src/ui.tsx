@@ -3,7 +3,11 @@ import { type ReactNode, useEffect, useRef, useState } from "react"
 import { api, type Thumb } from "./api.ts"
 
 // ── toasts ──
-type Toast = { id: number; text: string; kind: "ok" | "warn" | "danger" | "info" }
+type Toast = {
+    id: number
+    text: string
+    kind: "ok" | "warn" | "danger" | "info"
+}
 let pushToast: (toast: Omit<Toast, "id">) => void = () => {}
 export function toast(text: string, kind: Toast["kind"] = "info") {
     pushToast({ text, kind })
@@ -29,14 +33,23 @@ export function Toasts() {
 }
 
 // ── dialogs ──
-export function Dialog({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export function Dialog(
+    { title, children, onClose }: {
+        title: string
+        children: ReactNode
+        onClose: () => void
+    },
+) {
     useEffect(() => {
         const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose()
         addEventListener("keydown", onKey)
         return () => removeEventListener("keydown", onKey)
     }, [onClose])
     return (
-        <div className="scrim" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+        <div
+            className="scrim"
+            onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+        >
             <div className="dialog dim-card" role="dialog" aria-label={title}>
                 <p className="section-head">{title}</p>
                 {children}
@@ -59,7 +72,9 @@ export function ConfirmDialog(
         <Dialog title={title} onClose={onClose}>
             <div className="dialog-body">{body}</div>
             <div className="dialog-actions">
-                <button type="button" className="dim-btn ghost" onClick={onClose}>Cancel</button>
+                <button type="button" className="dim-btn ghost" onClick={onClose}>
+                    Cancel
+                </button>
                 <button
                     type="button"
                     autoFocus
@@ -77,7 +92,11 @@ export function ConfirmDialog(
 }
 
 export function RenameDialog(
-    { name, onRename, onClose }: { name: string; onRename: (name: string) => void; onClose: () => void },
+    { name, onRename, onClose }: {
+        name: string
+        onRename: (name: string) => void
+        onClose: () => void
+    },
 ) {
     const extension = name.slice(name.lastIndexOf("."))
     const [value, setValue] = useState(name.slice(0, name.lastIndexOf(".")))
@@ -103,8 +122,12 @@ export function RenameDialog(
                 <span className="mono muted">{extension}</span>
             </div>
             <div className="dialog-actions">
-                <button type="button" className="dim-btn ghost" onClick={onClose}>Cancel</button>
-                <button type="button" className="dim-btn primary" onClick={submit}>Rename</button>
+                <button type="button" className="dim-btn ghost" onClick={onClose}>
+                    Cancel
+                </button>
+                <button type="button" className="dim-btn primary" onClick={submit}>
+                    Rename
+                </button>
             </div>
         </Dialog>
     )
@@ -112,7 +135,13 @@ export function RenameDialog(
 
 // ── a dropdown that opens on hover (and on click, for touch) ──
 export type MenuItem =
-    | { label: string; hint?: string; disabled?: boolean; danger?: boolean; onSelect: () => void }
+    | {
+        label: string
+        hint?: string
+        disabled?: boolean
+        danger?: boolean
+        onSelect: () => void
+    }
     | { separator: true }
     | { heading: string }
 
@@ -136,14 +165,18 @@ export function HoverMenu(
         timer.current = setTimeout(() => setOpen(false), 180)
     }
     return (
-        <div className={`menu-wrap ${open ? "open" : ""}`} onMouseEnter={show} onMouseLeave={hide} data-testid={testId}>
+        <div
+            className={`menu-wrap ${open ? "open" : ""}`}
+            onMouseEnter={show}
+            onMouseLeave={hide}
+            data-testid={testId}
+        >
             <button
                 type="button"
                 className={`dim-btn sm ${className}`}
                 aria-haspopup="menu"
                 aria-expanded={open}
-                onClick={() =>
-                    setOpen(!open)}
+                onClick={() => setOpen(!open)}
             >
                 {label}
             </button>
@@ -179,7 +212,9 @@ export function HoverMenu(
 }
 
 // ── the preview: plays by itself while on screen; the pointer's x scrubs it ──
-export function Thumbnail({ id, thumb, version }: { id: string; thumb: Thumb; version: number }) {
+export function Thumbnail(
+    { id, thumb, version }: { id: string; thumb: Thumb; version: number },
+) {
     const box = useRef<HTMLDivElement>(null)
     const [frame, setFrame] = useState(0)
     const [visible, setVisible] = useState(false)
@@ -189,7 +224,10 @@ export function Thumbnail({ id, thumb, version }: { id: string; thumb: Thumb; ve
         if (!box.current) {
             return
         }
-        const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { threshold: 0.4 })
+        const observer = new IntersectionObserver(
+            ([entry]) => setVisible(entry.isIntersecting),
+            { threshold: 0.4 },
+        )
         observer.observe(box.current)
         return () => observer.disconnect()
     }, [])
@@ -197,7 +235,10 @@ export function Thumbnail({ id, thumb, version }: { id: string; thumb: Thumb; ve
         if (!frames || !visible || scrubbing) {
             return
         }
-        const timer = setInterval(() => setFrame((current) => (current + 1) % frames), 420)
+        const timer = setInterval(
+            () => setFrame((current) => (current + 1) % frames),
+            420,
+        )
         return () => clearInterval(timer)
     }, [frames, visible, scrubbing])
     if (thumb.state !== "ready") {
@@ -208,9 +249,31 @@ export function Thumbnail({ id, thumb, version }: { id: string; thumb: Thumb; ve
                 title={thumb.state === "none" ? thumb.reason : "making a preview…"}
             >
                 <svg viewBox="0 0 64 40" aria-hidden="true">
-                    <rect x="6" y="5" width="52" height="30" fill="none" stroke="currentColor" strokeWidth="2" />
-                    <circle cx="22" cy="20" r="5" fill="none" stroke="currentColor" strokeWidth="2" />
-                    <circle cx="42" cy="20" r="5" fill="none" stroke="currentColor" strokeWidth="2" />
+                    <rect
+                        x="6"
+                        y="5"
+                        width="52"
+                        height="30"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                    />
+                    <circle
+                        cx="22"
+                        cy="20"
+                        r="5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                    />
+                    <circle
+                        cx="42"
+                        cy="20"
+                        r="5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                    />
                 </svg>
                 <span>{thumb.state === "none" ? "no camera" : "preview…"}</span>
             </div>
@@ -232,12 +295,21 @@ export function Thumbnail({ id, thumb, version }: { id: string; thumb: Thumb; ve
                 const rect = event.currentTarget.getBoundingClientRect()
                 setScrubbing(true)
                 setFrame(
-                    Math.min(frames - 1, Math.max(0, Math.floor(((event.clientX - rect.left) / rect.width) * frames))),
+                    Math.min(
+                        frames - 1,
+                        Math.max(
+                            0,
+                            Math.floor(((event.clientX - rect.left) / rect.width) * frames),
+                        ),
+                    ),
                 )
             }}
             onPointerLeave={() => setScrubbing(false)}
         >
-            <span className="thumb-bar" style={{ width: `${((frame + 1) / frames) * 100}%` }} />
+            <span
+                className="thumb-bar"
+                style={{ width: `${((frame + 1) / frames) * 100}%` }}
+            />
         </div>
     )
 }

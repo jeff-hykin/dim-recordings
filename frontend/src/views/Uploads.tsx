@@ -40,14 +40,22 @@ export function useTray() {
             stopped = true
             clearInterval(timer)
         }
-    }, [tick, tray?.uploads.some((u) => u.state === "queued" || u.state === "uploading")])
+    }, [
+        tick,
+        tray?.uploads.some((u) => u.state === "queued" || u.state === "uploading"),
+    ])
     return { tray, error, refresh: () => setTick((n) => n + 1) }
 }
 
-export function LoginPanel({ onDone, onClose }: { onDone: () => void; onClose: () => void }) {
+export function LoginPanel(
+    { onDone, onClose }: { onDone: () => void; onClose: () => void },
+) {
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {
-            if (event.data?.type === "dimos-cloud-login" && ["approved", "loggedIn"].includes(event.data.state)) {
+            if (
+                event.data?.type === "dimos-cloud-login" &&
+                ["approved", "loggedIn"].includes(event.data.state)
+            ) {
                 onDone()
             }
         }
@@ -56,12 +64,18 @@ export function LoginPanel({ onDone, onClose }: { onDone: () => void; onClose: (
     }, [onDone])
     return (
         <div className="login">
-            <p className="small muted">Log in to the Dimensional cloud to upload. The upload waits until you do.</p>
+            <p className="small muted">
+                Log in to the Dimensional cloud to upload. The upload waits until you do.
+            </p>
             <iframe
                 title="Dimensional login"
-                src={desktopPath(`dimos/cloud/login/page?theme=${isDark() ? "dark" : "light"}`)}
+                src={desktopPath(
+                    `dimos/cloud/login/page?theme=${isDark() ? "dark" : "light"}`,
+                )}
             />
-            <button type="button" className="dim-btn ghost sm" onClick={onClose}>Close</button>
+            <button type="button" className="dim-btn ghost sm" onClick={onClose}>
+                Close
+            </button>
         </div>
     )
 }
@@ -76,7 +90,9 @@ function Row({ upload, onChange }: { upload: Upload; onChange: () => void }) {
                 <span className="mono muted small">{bytes(upload.size)}</span>
             </div>
             {running && (
-                <div className={`dim-progress ${fraction === null ? "indeterminate" : ""}`}>
+                <div
+                    className={`dim-progress ${fraction === null ? "indeterminate" : ""}`}
+                >
                     <span style={{ width: `${(fraction ?? 0.3) * 100}%` }} />
                 </div>
             )}
@@ -94,7 +110,14 @@ function Row({ upload, onChange }: { upload: Upload; onChange: () => void }) {
                 </span>
                 <span className="upload-actions">
                     {upload.state === "done" && upload.link && (
-                        <a className="dim-btn sm primary" href={upload.link} target="_blank" rel="noreferrer">View ↗</a>
+                        <a
+                            className="dim-btn sm primary"
+                            href={upload.link}
+                            target="_blank"
+                            rel="noreferrer"
+                        >
+                            View ↗
+                        </a>
                     )}
                     {(upload.state === "failed" || upload.state === "cancelled") && (
                         <button
@@ -137,7 +160,14 @@ export function UploadTray(
                 <span className="small muted">
                     {tray?.account.loggedIn ? tray.account.email ?? "logged in" : "not logged in"}
                 </span>
-                <button type="button" className="dim-btn ghost sm" onClick={onClose} aria-label="close">✕</button>
+                <button
+                    type="button"
+                    className="dim-btn ghost sm"
+                    onClick={onClose}
+                    aria-label="close"
+                >
+                    ✕
+                </button>
             </header>
             {error && <p className="error small">{error}</p>}
             {(login || tray?.waitingForLogin) && (
@@ -150,9 +180,15 @@ export function UploadTray(
                 />
             )}
             {tray && !tray.account.loggedIn && !login && !tray.waitingForLogin && (
-                <button type="button" className="dim-btn sm" onClick={onLogin}>Log in</button>
+                <button type="button" className="dim-btn sm" onClick={onLogin}>
+                    Log in
+                </button>
             )}
-            {!tray?.uploads.length && <p className="muted small">Nothing uploading. Use a row's Upload button.</p>}
+            {!tray?.uploads.length && (
+                <p className="muted small">
+                    Nothing uploading. Use a row's Upload button.
+                </p>
+            )}
             {tray?.uploads.slice().reverse().map((upload) => (
                 <Row
                     key={upload.id}

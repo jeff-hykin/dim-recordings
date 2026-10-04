@@ -13,7 +13,11 @@ export function Replay({ id }: { id: string }) {
     return (
         <div className="replay">
             <header className="bar">
-                <button type="button" className="dim-btn ghost sm" onClick={() => go({ view: "library" })}>
+                <button
+                    type="button"
+                    className="dim-btn ghost sm"
+                    onClick={() => go({ view: "library" })}
+                >
                     ← Recordings
                 </button>
                 <span className="bar-title">Replayer</span>

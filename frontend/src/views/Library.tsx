@@ -55,7 +55,9 @@ export function Library() {
     const [error, setError] = useState<string | null>(null)
     const [jobs, setJobs] = useState<Record<string, Job>>({})
     const [dialog, setDialog] = useState<DialogState>(null)
-    const [summary, setSummary] = useState<{ id: string; pinned: boolean } | null>(null)
+    const [summary, setSummary] = useState<
+        { id: string; pinned: boolean } | null
+    >(null)
     const [trayOpen, setTrayOpen] = useState(false)
     const [login, setLogin] = useState(false)
     const [thumbVersion, setThumbVersion] = useState(1)
@@ -76,7 +78,12 @@ export function Library() {
         let timer: number | undefined
         let closed = false
         const connect = () => {
-            socket = new WebSocket(new URL("api/events/ws", location.href.replace(/^http/, "ws").replace(/#.*$/, "")))
+            socket = new WebSocket(
+                new URL(
+                    "api/events/ws",
+                    location.href.replace(/^http/, "ws").replace(/#.*$/, ""),
+                ),
+            )
             socket.onmessage = (message) => {
                 const event = JSON.parse(message.data)
                 if (event.type === "job") {
@@ -111,12 +118,17 @@ export function Library() {
         }
     }, [load])
     useEffect(() => {
-        api.jobs().then(({ jobs }) => setJobs(Object.fromEntries(jobs.map((job) => [job.id, job]))), () => {})
+        api.jobs().then(
+            ({ jobs }) => setJobs(Object.fromEntries(jobs.map((job) => [job.id, job]))),
+            () => {},
+        )
     }, [])
 
     const all = data?.sections.flatMap((s) => s.recordings) ?? []
     const summaryRecording = summary ? all.find((r) => r.id === summary.id) : undefined
-    const uploadsByPath = new Map<string, Upload>((tray?.uploads ?? []).map((u) => [u.path, u]))
+    const uploadsByPath = new Map<string, Upload>(
+        (tray?.uploads ?? []).map((u) => [u.path, u]),
+    )
 
     const showSummary = (id: string) => {
         clearTimeout(hideTimer.current)
@@ -124,7 +136,10 @@ export function Library() {
     }
     const hideSummary = () => {
         clearTimeout(hideTimer.current)
-        hideTimer.current = setTimeout(() => setSummary((current) => current?.pinned ? current : null), 300)
+        hideTimer.current = setTimeout(
+            () => setSummary((current) => current?.pinned ? current : null),
+            300,
+        )
     }
 
     const open = (recording: Recording | RrdFile, target: string) => {
@@ -132,7 +147,10 @@ export function Library() {
             go({ view: "replay", id: recording.id })
             return
         }
-        api.open(recording.id, target).then((r) => toast(`opened ${r.opened}`, "ok"), fail)
+        api.open(recording.id, target).then(
+            (r) => toast(`opened ${r.opened}`, "ok"),
+            fail,
+        )
     }
     const upload = async (recording: Recording) => {
         try {
@@ -154,17 +172,25 @@ export function Library() {
     }
 
     const actions = (recording: Recording): MenuItem[] => [
-        { label: "Rename…", onSelect: () => setDialog({ kind: "rename", recording }) },
+        {
+            label: "Rename…",
+            onSelect: () => setDialog({ kind: "rename", recording }),
+        },
         {
             label: "Duplicate",
-            onSelect: () => api.duplicate(recording.id).then((r) => toast(`made ${r.id}`, "ok"), fail),
+            onSelect: () =>
+                api.duplicate(recording.id).then(
+                    (r) => toast(`made ${r.id}`, "ok"),
+                    fail,
+                ),
         },
         { separator: true },
         { heading: "Convert to" },
         ...recording.conversions.map((c) => ({
             label: `.${c.to}`,
             hint: c.ok ? undefined : c.reason,
-            disabled: !c.ok || Object.values(jobs).some((j) => j.recording === recording.id && j.state === "running"),
+            disabled: !c.ok ||
+                Object.values(jobs).some((j) => j.recording === recording.id && j.state === "running"),
             onSelect: () =>
                 api.convert(recording.id, c.to).then(
                     (job) => setJobs((current) => ({ ...current, [job.id]: job })),
@@ -173,9 +199,16 @@ export function Library() {
         })),
         { separator: true },
         { label: "Copy path", onSelect: () => copyPath(recording) },
-        { label: "Show in folder", onSelect: () => api.reveal(recording.id).then(() => {}, fail) },
+        {
+            label: "Show in folder",
+            onSelect: () => api.reveal(recording.id).then(() => {}, fail),
+        },
         { separator: true },
-        { label: "Delete…", danger: true, onSelect: () => setDialog({ kind: "delete", recording }) },
+        {
+            label: "Delete…",
+            danger: true,
+            onSelect: () => setDialog({ kind: "delete", recording }),
+        },
     ]
 
     const openMenu = (recording: Recording | RrdFile, testId: string) => (
@@ -224,7 +257,9 @@ export function Library() {
                         <span>.rrd</span>
                     </div>
                     <div className="name-cell">
-                        <span className="name mono">{recording.name}</span>
+                        <span className="name mono">
+                            <span className="name-text">{recording.name}</span>
+                        </span>
                         <span className="muted small">rerun recording</span>
                     </div>
                     <div className="mono num">{bytes(recording.size)}</div>
@@ -243,23 +278,41 @@ export function Library() {
                 key={recording.id}
                 data-id={recording.id}
             >
-                <Thumbnail id={recording.id} thumb={recording.thumbnail} version={thumbVersion} />
+                <Thumbnail
+                    id={recording.id}
+                    thumb={recording.thumbnail}
+                    version={thumbVersion}
+                />
                 <div className="name-cell">
                     <span className="name mono" title={recording.path}>
-                        {recording.name}
+                        <span className="name-text">{recording.name}</span>
                         {recording.symlink && (
-                            <span className="dim-badge" title="a symlink to a file elsewhere">link</span>
+                            <span className="dim-badge" title="a symlink to a file elsewhere">
+                                link
+                            </span>
                         )}
                     </span>
-                    {recording.note && <span className="note-line small">{recording.note.split("\n")[0]}</span>}
+                    {recording.note && (
+                        <span className="note-line small">
+                            {recording.note.split("\n")[0]}
+                        </span>
+                    )}
                     {running.map((job) => (
                         <div className="job" key={job.id}>
                             <span className="small muted">→ .{job.to}</span>
-                            <div className={`dim-progress ${job.progress ? "" : "indeterminate"}`}>
+                            <div
+                                className={`dim-progress ${job.progress ? "" : "indeterminate"}`}
+                            >
                                 <span style={{ width: `${(job.progress || 0.3) * 100}%` }} />
                             </div>
-                            <span className="small muted job-phase" title={job.phase}>{job.phase}</span>
-                            <button type="button" className="dim-btn ghost sm" onClick={() => api.cancelJob(job.id)}>
+                            <span className="small muted job-phase" title={job.phase}>
+                                {job.phase}
+                            </span>
+                            <button
+                                type="button"
+                                className="dim-btn ghost sm"
+                                onClick={() => api.cancelJob(job.id)}
+                            >
                                 ✕
                             </button>
                         </div>
@@ -273,7 +326,9 @@ export function Library() {
                     ))}
                 </div>
                 <div className="mono num">{bytes(recording.size)}</div>
-                <div className="mono num">{recording.inspected ? duration(recording.duration) : "…"}</div>
+                <div className="mono num">
+                    {recording.inspected ? duration(recording.duration) : "…"}
+                </div>
                 <div
                     className="mono"
                     title={recording.recordedFrom === "mtime"
@@ -313,15 +368,21 @@ export function Library() {
                                 type="button"
                                 className="dim-btn sm"
                                 disabled={!!liveUpload &&
-                                    (liveUpload.state === "queued" || liveUpload.state === "uploading")}
+                                    (liveUpload.state === "queued" ||
+                                        liveUpload.state === "uploading")}
                                 onClick={() => upload(recording)}
                             >
-                                {liveUpload?.state === "uploading" || liveUpload?.state === "queued"
+                                {liveUpload?.state === "uploading" ||
+                                        liveUpload?.state === "queued"
                                     ? "Uploading…"
                                     : "Upload"}
                             </button>
                         )}
-                    <HoverMenu label="⋯" items={actions(recording)} testId={`more-${recording.id}`} />
+                    <HoverMenu
+                        label="⋯"
+                        items={actions(recording)}
+                        testId={`more-${recording.id}`}
+                    />
                 </div>
             </div>
         )
@@ -332,7 +393,9 @@ export function Library() {
         <div className={`library ${summaryRecording ? "with-summary" : ""}`}>
             <header className="bar">
                 <span className="bar-title">Recordings</span>
-                <span className="mono muted small dir" title="the recordings folder">{data?.dir}</span>
+                <span className="mono muted small dir" title="the recordings folder">
+                    {data?.dir}
+                </span>
                 <div className="spacer" />
                 <div className="sorts" role="group" aria-label="sort">
                     {SORTS.map((s) => (
@@ -366,38 +429,40 @@ export function Library() {
                 <ThemeToggle />
             </header>
             {error && <p className="error banner">{error}</p>}
-            <div className="table">
-                <div className="row head">
-                    <span />
-                    <span>name</span>
-                    <span className="num">size</span>
-                    <span className="num">duration</span>
-                    <span>recorded</span>
-                    <span>streams</span>
-                    <span />
-                </div>
-                {data?.sections.map((section, index) => (
-                    <section key={section.label ?? index} className="group">
-                        {section.label && <h2 className="group-head">{section.label}</h2>}
-                        {section.recordings.map((recording) => row(recording, section.label))}
-                    </section>
-                ))}
-                {data && !all.length && (
-                    <div className="empty">
-                        <p className="section-head">No recordings</p>
-                        <p className="muted">Recordings in {data.dir} show up here.</p>
+            <div className="library-body">
+                <div className="table">
+                    <div className="row head">
+                        <span />
+                        <span>name</span>
+                        <span className="num">size</span>
+                        <span className="num">duration</span>
+                        <span>recorded</span>
+                        <span>streams</span>
+                        <span />
                     </div>
+                    {data?.sections.map((section, index) => (
+                        <section key={section.label ?? index} className="group">
+                            {section.label && <h2 className="group-head">{section.label}</h2>}
+                            {section.recordings.map((recording) => row(recording, section.label))}
+                        </section>
+                    ))}
+                    {data && !all.length && (
+                        <div className="empty">
+                            <p className="section-head">No recordings</p>
+                            <p className="muted">Recordings in {data.dir} show up here.</p>
+                        </div>
+                    )}
+                </div>
+                {summaryRecording && (
+                    <SummaryPanel
+                        recording={summaryRecording}
+                        pinned={!!summary?.pinned}
+                        onClose={() => setSummary(null)}
+                        onEnter={() => clearTimeout(hideTimer.current)}
+                        onLeave={hideSummary}
+                    />
                 )}
             </div>
-            {summaryRecording && (
-                <SummaryPanel
-                    recording={summaryRecording}
-                    pinned={!!summary?.pinned}
-                    onClose={() => setSummary(null)}
-                    onEnter={() => clearTimeout(hideTimer.current)}
-                    onLeave={hideSummary}
-                />
-            )}
             {trayOpen && (
                 <UploadTray
                     tray={tray}
@@ -414,7 +479,10 @@ export function Library() {
                     name={dialog.recording.name}
                     onClose={() => setDialog(null)}
                     onRename={(name) =>
-                        api.rename(dialog.recording.id, name).then((r) => toast(`renamed to ${r.id}`, "ok"), fail)}
+                        api.rename(dialog.recording.id, name).then(
+                            (r) => toast(`renamed to ${r.id}`, "ok"),
+                            fail,
+                        )}
                 />
             )}
             {dialog?.kind === "delete" && (

@@ -8,16 +8,32 @@ function Tree({ tf }: { tf: TfTree }) {
         return <p className="muted small">No tf stream.</p>
     }
     if (!tf.edges.length) {
-        return <p className="muted small">No frames in the first {tf.seconds} s of {tf.source}.</p>
+        return (
+            <p className="muted small">
+                No frames in the first {tf.seconds} s of {tf.source}.
+            </p>
+        )
     }
     const children = new Map<string, string[]>()
     for (const edge of tf.edges) {
-        children.set(edge.parent, [...(children.get(edge.parent) ?? []), edge.child])
+        children.set(edge.parent, [
+            ...(children.get(edge.parent) ?? []),
+            edge.child,
+        ])
     }
     const conflicted = new Set(tf.conflicts.map((c) => c.frame))
     const lines: { prefix: string; frame: string }[] = []
-    const walk = (frame: string, prefix: string, last: boolean, path: Set<string>, depth: number) => {
-        lines.push({ prefix: depth === 0 ? "" : prefix + (last ? "└─ " : "├─ "), frame })
+    const walk = (
+        frame: string,
+        prefix: string,
+        last: boolean,
+        path: Set<string>,
+        depth: number,
+    ) => {
+        lines.push({
+            prefix: depth === 0 ? "" : prefix + (last ? "└─ " : "├─ "),
+            frame,
+        })
         if (path.has(frame)) {
             return
         }
@@ -36,7 +52,9 @@ function Tree({ tf }: { tf: TfTree }) {
     roots.forEach((root) => walk(root, "", true, new Set(), 0))
     return (
         <>
-            <p className="muted small mono">{tf.source} · first {tf.seconds} s · {tf.messages} msgs</p>
+            <p className="muted small mono">
+                {tf.source} · first {tf.seconds} s · {tf.messages} msgs
+            </p>
             <pre className="tree mono">
                 {lines.map((line, i) => (
                     <div key={i} className={conflicted.has(line.frame) ? "warn" : i === 0 || !line.prefix ? "root" : ""}>
@@ -73,25 +91,46 @@ export function SummaryPanel(
         setInspection(null)
         setError(null)
         setNote(recording.note)
-        api.get(recording.id).then((full) => setInspection(full.inspection), (e) => setError(String(e.message ?? e)))
+        api.get(recording.id).then(
+            (full) => setInspection(full.inspection),
+            (e) => setError(String(e.message ?? e)),
+        )
     }, [recording.id])
     const save = (text: string) => {
         clearTimeout(timer.current)
         setSaved("saving")
         timer.current = setTimeout(() => {
-            api.setNote(recording.id, text).then(() => setSaved("saved"), (e) => setError(String(e.message ?? e)))
+            api.setNote(recording.id, text).then(
+                () => setSaved("saved"),
+                (e) => setError(String(e.message ?? e)),
+            )
         }, 500)
     }
-    const maxCount = Math.max(1, ...(inspection?.streams ?? []).map((s) => s.count))
+    const maxCount = Math.max(
+        1,
+        ...(inspection?.streams ?? []).map((s) => s.count),
+    )
     return (
-        <aside className="summary dim-card" onMouseEnter={onEnter} onMouseLeave={onLeave} aria-label="Summary">
+        <aside
+            className="summary dim-card"
+            onMouseEnter={onEnter}
+            onMouseLeave={onLeave}
+            aria-label="Summary"
+        >
             <header>
                 <div>
                     <p className="section-head">Summary</p>
                     <p className="summary-name mono">{recording.name}</p>
                 </div>
                 {pinned && (
-                    <button type="button" className="dim-btn ghost sm" onClick={onClose} aria-label="close">✕</button>
+                    <button
+                        type="button"
+                        className="dim-btn ghost sm"
+                        onClick={onClose}
+                        aria-label="close"
+                    >
+                        ✕
+                    </button>
                 )}
             </header>
             <dl className="facts">
@@ -113,7 +152,9 @@ export function SummaryPanel(
                 </dd>
             </dl>
             <label className="note">
-                <span className="dim-label">Notes {saved && <span className="muted">· {saved}</span>}</span>
+                <span className="dim-label">
+                    Notes {saved && <span className="muted">· {saved}</span>}
+                </span>
                 <textarea
                     className="dim-textarea"
                     placeholder="What's in this recording? (kept in the app, not the file)"
@@ -134,31 +175,58 @@ export function SummaryPanel(
                             <th>type</th>
                             <th className="num">count</th>
                             <th className="num">hz</th>
-                            <th className="num" title="99th percentile gap between messages">p99</th>
-                            <th className="num" title="largest gap, and how many times the average interval">gap</th>
+                            <th
+                                className="num"
+                                title="99th percentile gap between messages"
+                            >
+                                p99
+                            </th>
+                            <th
+                                className="num"
+                                title="largest gap, and how many times the average interval"
+                            >
+                                gap
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
                         {inspection.streams.map((s) => (
                             <tr key={s.name} className={s.count ? "" : "empty-stream"}>
                                 <td className="mono">{s.name}</td>
-                                <td className="mono muted" title={`${s.type} (${s.encoding})`}>
+                                <td
+                                    className="mono muted"
+                                    title={`${s.type} (${s.encoding})`}
+                                >
                                     {s.type.split(".").pop()}
-                                    <span className={`enc ${s.encoding === "cdr" ? "cdr" : ""}`}>{s.encoding}</span>
+                                    <span
+                                        className={`enc ${s.encoding === "cdr" ? "cdr" : ""}`}
+                                    >
+                                        {s.encoding}
+                                    </span>
                                 </td>
                                 <td className="num mono">
                                     <span
                                         className="count-bar"
                                         style={{
-                                            width: `${(Math.log10(s.count + 1) / Math.log10(maxCount + 1)) * 100}%`,
+                                            width: `${
+                                                (Math.log10(s.count + 1) / Math.log10(maxCount + 1)) *
+                                                100
+                                            }%`,
                                         }}
                                     />
                                     {s.count.toLocaleString()}
                                 </td>
-                                <td className="num mono">{s.hz > 0 ? s.hz.toFixed(1) : "—"}</td>
-                                <td className={`num mono ${s.p99Ratio > 3 ? "warn" : ""}`}>{gap(s.p99Gap)}</td>
-                                <td className={`num mono ${s.gapRatio > 5 ? "warn" : ""}`}>
-                                    {s.maxGap > 0 ? `${gap(s.maxGap)} ${s.gapRatio.toFixed(1)}×` : "—"}
+                                <td className="num mono">
+                                    {s.hz > 0 ? s.hz.toFixed(1) : "—"}
+                                </td>
+                                <td className={`num mono ${s.p99Ratio > 3 ? "warn" : ""}`}>
+                                    {gap(s.p99Gap)}
+                                </td>
+                                <td
+                                    className={`num mono ${s.gapRatio > 5 ? "warn" : ""}`}
+                                    title={s.maxGap > 0 ? `${s.gapRatio.toFixed(1)}× the average interval` : ""}
+                                >
+                                    {gap(s.maxGap)}
                                 </td>
                             </tr>
                         ))}

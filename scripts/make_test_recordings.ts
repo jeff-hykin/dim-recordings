@@ -10,7 +10,7 @@ import { openMcap } from "../backend/recordings/mcap.ts"
 import { unwrapBlob } from "../backend/recordings/messages.ts"
 
 const [out, sourceMcap, sourceDb] = Deno.args
-const SECONDS = 8
+let SECONDS = 8
 const DAY = 86400
 
 class FileSink {
@@ -128,6 +128,12 @@ async function lcmFromDb(source: string, target: string, startsAgo: number) {
 }
 
 const base = sourceMcap.split("/").pop()!.replace(/\.mcap$/, "")
+if (Deno.env.get("UPLOAD_CLIP")) {
+    // a small one (2 s) to upload for real: go2_short_clip_upload.mcap
+    SECONDS = 2
+    await clip(sourceMcap, `${out}/${base}_clip_upload.mcap`, 600)
+    Deno.exit(0)
+}
 const HOUR = 3600
 for (
     const [label, ago] of [["today", 2 * HOUR], ["yesterday", DAY + 3 * HOUR], ["3_days_ago", 3 * DAY], [

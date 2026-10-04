@@ -9,10 +9,19 @@
         "indentWidth": 4,
         "semiColons": false,
         "lineWidth": 120,
-        "exclude": ["frontend/dist", "frontend/node_modules", "icon.svg"]
+        "exclude": [
+            "frontend/dist",
+            "frontend/node_modules",
+            "icon.svg",
+            "frontend/src/dim-app"
+        ]
     },
     "lint": {
-        "exclude": ["frontend/dist", "frontend/node_modules"]
+        "exclude": [
+            "frontend/dist",
+            "frontend/node_modules",
+            "frontend/src/dim-app"
+        ]
     },
     "imports": {
         "@std/assert": "jsr:@std/assert@1",

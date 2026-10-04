@@ -82,6 +82,12 @@ export function progressOf(
     seen: { streams: number },
 ) {
     if (to === "rrd") {
+        // db_to_rrd: "Processing <stream> ..." per stream, then "<stream> ███░░ 58% [5200/8957]" within it
+        const within = line.match(/\[(\d+)\/(\d+)\]/)
+        if (within && seen.streams > 0) {
+            const fraction = Number(within[1]) / Math.max(1, Number(within[2]))
+            return Math.min(0.9, ((seen.streams - 1 + fraction) / Math.max(1, totalStreams)) * 0.9)
+        }
         if (/^Processing /.test(line)) {
             seen.streams++
             return Math.min(0.9, seen.streams / Math.max(1, totalStreams) * 0.9)
