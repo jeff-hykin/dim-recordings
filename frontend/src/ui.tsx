@@ -155,17 +155,35 @@ export function HoverMenu(
     },
 ) {
     const [open, setOpen] = useState(false)
+    // opened by a click it stays open until a choice or a click elsewhere; opened by hover it follows the pointer
+    const [pinned, setPinned] = useState(false)
     const timer = useRef<number | undefined>(undefined)
+    const wrap = useRef<HTMLDivElement>(null)
+    const close = () => {
+        setOpen(false)
+        setPinned(false)
+    }
+    useEffect(() => {
+        if (!pinned) {
+            return
+        }
+        const outside = (event: MouseEvent) => !wrap.current?.contains(event.target as Node) && close()
+        addEventListener("mousedown", outside)
+        return () => removeEventListener("mousedown", outside)
+    }, [pinned])
     const show = () => {
         clearTimeout(timer.current)
         setOpen(true)
     }
     const hide = () => {
         clearTimeout(timer.current)
-        timer.current = setTimeout(() => setOpen(false), 180)
+        if (!pinned) {
+            timer.current = setTimeout(() => setOpen(false), 350)
+        }
     }
     return (
         <div
+            ref={wrap}
             className={`menu-wrap ${open ? "open" : ""}`}
             onMouseEnter={show}
             onMouseLeave={hide}
@@ -176,7 +194,14 @@ export function HoverMenu(
                 className={`dim-btn sm ${className}`}
                 aria-haspopup="menu"
                 aria-expanded={open}
-                onClick={() => setOpen(!open)}
+                onClick={() => {
+                    if (pinned) {
+                        close()
+                    } else {
+                        setOpen(true)
+                        setPinned(true)
+                    }
+                }}
             >
                 {label}
             </button>
@@ -196,7 +221,7 @@ export function HoverMenu(
                                     disabled={item.disabled}
                                     title={item.hint}
                                     onClick={() => {
-                                        setOpen(false)
+                                        close()
                                         item.onSelect()
                                     }}
                                 >

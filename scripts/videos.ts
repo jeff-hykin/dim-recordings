@@ -194,6 +194,7 @@ const scenarios: Record<string, [string, Scenario, ("dark" | "light")?]> = {
         const more = (rowId: string) => row(page, rowId).locator(".menu-wrap button", { hasText: "⋯" })
         // duplicate
         await hover(page, more(id))
+        await more(id).click()
         await hover(page, row(page, id).locator(".menu-item", { hasText: "Duplicate" }))
         await row(page, id).locator(".menu-item", { hasText: "Duplicate" }).click()
         await page.waitForTimeout(2500)
@@ -201,6 +202,7 @@ const scenarios: Record<string, [string, Scenario, ("dark" | "light")?]> = {
         // rename the copy
         await row(page, copy).scrollIntoViewIfNeeded()
         await hover(page, more(copy))
+        await more(copy).click()
         await hover(page, row(page, copy).locator(".menu-item", { hasText: "Rename" }))
         await row(page, copy).locator(".menu-item", { hasText: "Rename" }).click()
         await page.waitForTimeout(500)
@@ -213,6 +215,7 @@ const scenarios: Record<string, [string, Scenario, ("dark" | "light")?]> = {
         const renamed = "go2_demo_renamed.mcap"
         await row(page, renamed).scrollIntoViewIfNeeded()
         await hover(page, more(renamed))
+        await more(renamed).click()
         await hover(page, row(page, renamed).locator(".menu-item", { hasText: ".db" }))
         await row(page, renamed).locator(".menu-item", { hasText: ".db" }).click()
         for (let i = 0; i < 40; i++) {
@@ -226,6 +229,7 @@ const scenarios: Record<string, [string, Scenario, ("dark" | "light")?]> = {
         for (const target of ["go2_demo_renamed.db", renamed]) {
             await row(page, target).scrollIntoViewIfNeeded()
             await hover(page, more(target))
+            await more(target).click()
             await hover(page, row(page, target).locator(".menu-item", { hasText: "Delete" }))
             await row(page, target).locator(".menu-item", { hasText: "Delete" }).click()
             await page.waitForTimeout(1200)
