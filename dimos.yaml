@@ -238,7 +238,7 @@ agent:
           path: "api/replay/{id}/frame"
           description: >-
               One camera frame as an image (jpeg, or png for raw pixels): the stream's message at or before time t
-              (seconds since the start; default the first frame)
+              (seconds since the start; default the first frame); without a stream, the main camera (color first)
           params:
               id:
                   type: string
@@ -246,12 +246,10 @@ agent:
                   description: "recording id: its path inside the recordings folder"
               stream:
                   type: string
-                  required: true
-                  description: stream (topic) name
+                  description: "image stream (default: the main camera)"
               t:
                   type: number
                   description: seconds since the start (default 0)
-          role: view
         - method: GET
           path: "api/replay/{id}/message"
           description: >-

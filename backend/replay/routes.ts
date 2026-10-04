@@ -339,13 +339,12 @@ export function replayRoutes({ library }: Services): Route[] {
         {
             method: "GET",
             path: "api/replay/{id}/frame",
-            role: "view",
             description:
                 "One camera frame as an image (jpeg, or png for raw pixels): the stream's message at or before time t " +
-                "(seconds since the start; default the first frame)",
+                "(seconds since the start; default the first frame); without a stream, the main camera (color first)",
             params: {
                 ...ID,
-                stream: STREAM,
+                stream: { type: "string", description: "image stream (default: the main camera)" },
                 t: {
                     type: "number",
                     description: "seconds since the start (default 0)",
@@ -354,7 +353,12 @@ export function replayRoutes({ library }: Services): Route[] {
             handler: async ({ id, stream, t }) => {
                 const recording = await find(String(id))
                 return await withSource(recording, async (source) => {
-                    const meta = streamOf(source, String(stream))
+                    const images = source.streams.filter((s) => s.kind === "image" && s.count > 0)
+                    const main = images.find((s) => !/depth|gray|grey|mono|infra/i.test(s.name)) ?? images[0]
+                    if (!stream && !main) {
+                        throw new HttpError(404, "this recording has no camera")
+                    }
+                    const meta = stream ? streamOf(source, String(stream)) : main!
                     if (meta.kind !== "image") {
                         throw new HttpError(
                             400,
