@@ -169,6 +169,172 @@ agent:
           description: >-
               The preview job: which recording it's working on, and the last results with their wall and CPU time (it runs one
               recording at a time under nice -n 19, pausing between frames)
+        # the Replayer (backend/replay/routes.ts)
+        - method: GET
+          path: "api/replay/{id}"
+          description: >-
+              The Replayer's view of a recording: start/end, every stream (type, kind: image | cloud | tf | pose | info
+              | other, count, first/last time), scrubbing-thumbnail progress, and the playhead of each page playing it
+          params:
+              id:
+                  type: string
+                  required: true
+                  description: "recording id: its path inside the recordings folder"
+        - method: GET
+          path: "api/replay/{id}/timeline"
+          description: >-
+              Per-stream message density for the timeline rows: the recording's span cut into `bins` equal slices and
+              each stream's message count per slice (ticks), plus its exact times when it has at most `exact` messages
+          params:
+              id:
+                  type: string
+                  required: true
+                  description: "recording id: its path inside the recordings folder"
+              bins:
+                  type: number
+                  description: slices (default 1200)
+              exact:
+                  type: number
+                  description: send exact times for streams with at most this many messages in the window (default 2000)
+              from:
+                  type: number
+                  description: "window start (recording time, seconds; default: the start)"
+              to:
+                  type: number
+                  description: "window end (recording time, seconds; default: the end)"
+        - method: GET
+          path: "api/replay/{id}/ws"
+          description: >-
+              The playback stream (a websocket the page opens): it sends {op:sub, id, stream, as: lcm | image | cloud |
+              header} and {op:at, t, mode: play | scrub | pause, seq}; the backend answers with what each stream has at
+              the playhead (binary: u32 header length, JSON header, payload) and {op:done, seq}
+          params:
+              id:
+                  type: string
+                  required: true
+                  description: "recording id: its path inside the recordings folder"
+        - method: POST
+          path: "api/replay/{id}/control"
+          description: >-
+              Drive the Replayer pages showing this recording: action = play | pause | seek (t: seconds since the
+              recording's start) | speed (speed: 0.25..8)
+          params:
+              id:
+                  type: string
+                  required: true
+                  description: "recording id: its path inside the recordings folder"
+              action:
+                  type: string
+                  required: true
+                  description: play | pause | seek | speed
+              t:
+                  type: number
+                  description: "seek: seconds since the start"
+              speed:
+                  type: number
+                  description: "speed: playback rate"
+          role: context
+        - method: GET
+          path: "api/replay/{id}/frame"
+          description: >-
+              One camera frame as an image (jpeg, or png for raw pixels): the stream's message at or before time t
+              (seconds since the start; default the first frame)
+          params:
+              id:
+                  type: string
+                  required: true
+                  description: "recording id: its path inside the recordings folder"
+              stream:
+                  type: string
+                  required: true
+                  description: stream (topic) name
+              t:
+                  type: number
+                  description: seconds since the start (default 0)
+          role: view
+        - method: GET
+          path: "api/replay/{id}/message"
+          description: >-
+              One stream's message at or before time t (seconds since the start), decoded to JSON (long arrays
+              shortened): what the player shows for that stream at that moment
+          params:
+              id:
+                  type: string
+                  required: true
+                  description: "recording id: its path inside the recordings folder"
+              stream:
+                  type: string
+                  required: true
+                  description: stream (topic) name
+              t:
+                  type: number
+                  description: seconds since the start (default 0)
+        - method: GET
+          path: "api/replay/{id}/path"
+          description: >-
+              The whole route of a pose stream (nav_msgs Odometry / PoseStamped): up to maxPoints [t, x, y, z] in its
+              frame (what the player draws as the odometry path)
+          params:
+              id:
+                  type: string
+                  required: true
+                  description: "recording id: its path inside the recordings folder"
+              stream:
+                  type: string
+                  required: true
+                  description: stream (topic) name
+              maxPoints:
+                  type: number
+                  description: most points (default 4000)
+        - method: POST
+          path: "api/recordings/{id}/streams/{stream}/rename"
+          description: >-
+              Rename a stream inside the recording, in place (a .db: ALTER TABLE; an .mcap: the chunk with its channel
+              record and the summary rewritten into a temp file beside it, then renamed over it). Players reload
+          params:
+              id:
+                  type: string
+                  required: true
+                  description: "recording id: its path inside the recordings folder"
+              stream:
+                  type: string
+                  required: true
+                  description: stream (topic) name
+              name:
+                  type: string
+                  required: true
+                  description: the new name
+        - method: DELETE
+          path: "api/recordings/{id}/streams/{stream}"
+          description: >-
+              Delete a stream and all its messages from the recording, in place (permanent; the page asks first).
+              Players reload
+          params:
+              id:
+                  type: string
+                  required: true
+                  description: "recording id: its path inside the recordings folder"
+              stream:
+                  type: string
+                  required: true
+                  description: stream (topic) name
+        - method: POST
+          path: "api/recordings/{id}/streams/{stream}/duplicate"
+          description: >-
+              Copy a stream inside the same recording under a new name (default "<stream>_copy"), in place. Players
+              reload
+          params:
+              id:
+                  type: string
+                  required: true
+                  description: "recording id: its path inside the recordings folder"
+              stream:
+                  type: string
+                  required: true
+                  description: stream (topic) name
+              name:
+                  type: string
+                  description: the copy's name (default "<stream>_copy")
 nix:
     cache:
         aarch64-linux:

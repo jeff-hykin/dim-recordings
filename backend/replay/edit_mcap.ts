@@ -81,6 +81,15 @@ export async function editMcap(
             throw new Error(`there is already a topic named ${edit.to}`)
         }
     }
+    // the edited file is written beside the original before it replaces it: there must be room for both
+    const free = await freeBytes(dirname(path))
+    if (free !== null && free < mcap.size + 256 * 1024 * 1024) {
+        mcap.close()
+        throw new Error(
+            `not enough free disk to edit ${basename(path)} in place: it needs ${(mcap.size / 1e9).toFixed(2)} GB ` +
+                `beside it for a moment, ${(free / 1e9).toFixed(2)} GB is free`,
+        )
+    }
     // the new name keeps the old one's leading slash, if it had one
     const newTopic = edit.op === "delete" ? "" : (target.topic.startsWith("/") ? "/" : "") + bare(edit.to)
     const temporary = join(dirname(path), `.${basename(path)}.editing`)
@@ -463,6 +472,22 @@ export async function editMcap(
         mcap.close()
         await Deno.remove(temporary).catch(() => {})
         throw error
+    }
+}
+
+/** Free bytes on the disk holding `dir` (df), or null when that can't be told. */
+async function freeBytes(dir: string): Promise<number | null> {
+    try {
+        const { stdout, success } = await new Deno.Command("df", { args: ["-k", dir], stdout: "piped", stderr: "null" })
+            .output()
+        if (!success) {
+            return null
+        }
+        const fields = new TextDecoder().decode(stdout).trim().split("\n").pop()!.split(/\s+/)
+        const available = Number(fields[3])
+        return Number.isFinite(available) ? available * 1024 : null
+    } catch {
+        return null
     }
 }
 

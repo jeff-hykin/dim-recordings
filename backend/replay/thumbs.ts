@@ -11,6 +11,39 @@ import { which } from "../recordings/foxglove.ts"
 /** at most one thumbnail per this many seconds */
 export const THUMB_SPACING = 0.25
 export const THUMB_WIDTH = 192
+/** all recordings' scrubbing thumbnails together stay under this; the least recently used go first */
+export const THUMBS_BUDGET_BYTES = 256 * 1024 * 1024
+
+/** Deletes the least recently used thumbnail folders under `root` until the rest fit the budget. */
+export function pruneThumbs(root: string, keep: string, budget = THUMBS_BUDGET_BYTES) {
+    let folders: { path: string; bytes: number; used: number }[] = []
+    try {
+        folders = [...Deno.readDirSync(root)].filter((entry) => entry.isDirectory).map((entry) => {
+            const path = join(root, entry.name)
+            let bytes = 0
+            let used = 0
+            for (const file of Deno.readDirSync(path)) {
+                const stat = Deno.statSync(join(path, file.name))
+                bytes += stat.size
+                used = Math.max(used, stat.mtime?.getTime() ?? 0)
+            }
+            return { path, bytes, used }
+        })
+    } catch {
+        return
+    }
+    let total = folders.reduce((sum, folder) => sum + folder.bytes, 0)
+    for (const folder of folders.sort((a, b) => a.used - b.used)) {
+        if (total <= budget) {
+            break
+        }
+        if (folder.path === keep) {
+            continue
+        }
+        Deno.removeSync(folder.path, { recursive: true })
+        total -= folder.bytes
+    }
+}
 
 type Track = {
     times: number[]
@@ -31,6 +64,7 @@ export class Thumbs {
 
     constructor(readonly dir: string, readonly source: Source) {
         Deno.mkdirSync(dir, { recursive: true })
+        pruneThumbs(join(dir, ".."), dir)
     }
 
     stop() {
