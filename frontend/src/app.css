@@ -436,19 +436,42 @@ a.dim-btn {
 .summary > .dim-label {
     margin: 8px 0 0;
 }
+/* fixed columns that always fit the panel: names and types truncate (full text in the title), numbers never do */
+.summary {
+    container-type: inline-size;
+}
 .streams {
     width: 100%;
+    table-layout: fixed;
     font-size: 11.5px;
 }
 .streams th,
 .streams td {
-    padding: 4px 6px;
+    padding: 4px 4px;
     white-space: nowrap;
-}
-.streams td:first-child {
-    max-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.streams col.c-type {
+    width: 30%;
+}
+.streams col.c-count {
+    width: 50px;
+}
+.streams col.c-hz {
+    width: 40px;
+}
+.streams col.c-p99,
+.streams col.c-gap {
+    width: 54px;
+}
+/* a narrow panel (a phone): the type column goes; its stream name keeps the type in the title */
+@container (max-width: 420px) {
+    .streams col.c-type,
+    .streams .t-type {
+        display: none;
+        width: 0;
+    }
 }
 .streams td.num {
     position: relative;

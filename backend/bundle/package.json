@@ -1,0 +1,20 @@
+{
+    "name": "dim-recordings-backend-bundle",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "description": "The backend as one file for the nix build (no package downloads at run time). Versions match backend/deps.ts (tests/deps_test.ts checks).",
+    "scripts": {
+        "build": "node build.mjs"
+    },
+    "dependencies": {
+        "@foxglove/rosmsg": "5.0.4",
+        "@foxglove/rosmsg2-serialization": "3.0.1",
+        "@mcap/core": "2.1.6",
+        "fzstd": "0.1.1",
+        "lz4js": "0.2.0"
+    },
+    "devDependencies": {
+        "esbuild": "0.25.10"
+    }
+}

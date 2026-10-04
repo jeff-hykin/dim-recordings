@@ -169,10 +169,18 @@ export function SummaryPanel(
             <p className="dim-label">Streams</p>
             {!inspection ? <p className="muted small">reading…</p> : (
                 <table className="dim-table streams">
+                    <colgroup>
+                        <col className="c-name" />
+                        <col className="c-type" />
+                        <col className="c-count" />
+                        <col className="c-hz" />
+                        <col className="c-p99" />
+                        <col className="c-gap" />
+                    </colgroup>
                     <thead>
                         <tr>
                             <th>stream</th>
-                            <th>type</th>
+                            <th className="t-type">type</th>
                             <th className="num">count</th>
                             <th className="num">hz</th>
                             <th
@@ -192,9 +200,9 @@ export function SummaryPanel(
                     <tbody>
                         {inspection.streams.map((s) => (
                             <tr key={s.name} className={s.count ? "" : "empty-stream"}>
-                                <td className="mono">{s.name}</td>
+                                <td className="mono" title={`${s.name}: ${s.type} (${s.encoding})`}>{s.name}</td>
                                 <td
-                                    className="mono muted"
+                                    className="mono muted t-type"
                                     title={`${s.type} (${s.encoding})`}
                                 >
                                     {s.type.split(".").pop()}

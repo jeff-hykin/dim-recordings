@@ -47,6 +47,7 @@ deno task test && deno task check     # backend tests (tiny .db/.mcap files made
 cd frontend && npm install && npm run build
 deno run -A backend/main.ts --port 8787 --recordings-dir <dir> --data-dir <dir> [--desktop-url http://127.0.0.1:7341]
 nix build .#dimosApp                  # what Desktop builds: bin/dimos-app-server
+cd backend/bundle && npm install && node build.mjs   # the one-file backend the nix build runs (no downloads at run time)
 ```
 
 Converting needs `dtk` on PATH (or `DIM_RECORDINGS_DTK="deno run -A <checkout>/main.js"`); previews need ffmpeg (the nix

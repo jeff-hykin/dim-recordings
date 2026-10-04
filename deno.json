@@ -13,14 +13,18 @@
             "frontend/dist",
             "frontend/node_modules",
             "icon.svg",
-            "frontend/src/dim-app"
+            "frontend/src/dim-app",
+            "backend/bundle/node_modules",
+            "backend/bundle/dist"
         ]
     },
     "lint": {
         "exclude": [
             "frontend/dist",
             "frontend/node_modules",
-            "frontend/src/dim-app"
+            "frontend/src/dim-app",
+            "backend/bundle/node_modules",
+            "backend/bundle/dist"
         ]
     },
     "imports": {
