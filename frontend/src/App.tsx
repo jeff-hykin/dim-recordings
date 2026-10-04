@@ -1,8 +1,11 @@
 // Hash routes: `#/` the library, `#/replay/<id>` the Replayer (views/Replay.tsx).
-import { useEffect, useState } from "react"
+import { lazy, Suspense, useEffect, useState } from "react"
 import { Library } from "./views/Library.tsx"
-import { Replay } from "./views/Replay.tsx"
 import { Toasts } from "./ui.tsx"
+
+// the Replayer (three.js, the Controller's view) loads only when a recording is opened in it; its styles then come
+// after the theme's, as they do in the Controller
+const Replay = lazy(() => import("./views/Replay.tsx").then((module) => ({ default: module.Replay })))
 
 export type Route = { view: "library" } | { view: "replay"; id: string }
 
@@ -24,7 +27,13 @@ export function App() {
     }, [])
     return (
         <>
-            {route.view === "replay" ? <Replay id={route.id} /> : <Library />}
+            {route.view === "replay"
+                ? (
+                    <Suspense fallback={null}>
+                        <Replay id={route.id} />
+                    </Suspense>
+                )
+                : <Library />}
             <Toasts />
         </>
     )

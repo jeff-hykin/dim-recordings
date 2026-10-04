@@ -1,0 +1,749 @@
+.lv .dim-select {
+    padding-right: 28px;
+}
+.lv .dim-input.number {
+    width: 72px;
+}
+.lv h3.dim-label {
+    display: block;
+    margin: 14px 0 6px;
+}
+.lv .empty, .lv .hint {
+    color: var(--muted-fg);
+    font-size: 12px;
+    margin: 6px 0;
+}
+.lv .problem {
+    color: var(--danger);
+    font-size: 12px;
+    margin: 6px 0;
+}
+.lv .dim {
+    color: var(--muted-fg);
+}
+
+.lv {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+
+/* ── the 3D view: fullscreen, or a picture-in-picture while a camera is main ── */
+.lv .scene-slot {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: radial-gradient(
+        120% 90% at 50% 0%,
+        var(--card),
+        var(--scene-bg) 70%
+    );
+}
+body.dark .lv .scene-slot {
+    background: radial-gradient(
+        120% 90% at 50% 0%,
+        color-mix(in srgb, var(--card) 70%, var(--scene-bg)),
+        var(--scene-bg) 60%
+    );
+}
+.lv .scene {
+    position: absolute;
+    inset: 0;
+    touch-action: none;
+}
+.lv .scene canvas {
+    display: block;
+}
+.lv .label-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.lv.camera-main .scene-slot {
+    inset: auto 16px 96px auto;
+    width: min(36vw, 420px);
+    height: min(26vw, 300px);
+    z-index: 6;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+}
+.lv.mobile.camera-main .scene-slot {
+    width: 42vw;
+    height: 30vw;
+    bottom: calc(176px + env(safe-area-inset-bottom));
+    right: 10px;
+}
+.lv .pip-expand {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 2;
+}
+
+.lv .scene-label {
+    font: 600 11px/1.2 var(--sans);
+    color: var(--fg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    background: color-mix(in srgb, var(--card) 80%, transparent);
+    border-left: 3px solid var(--label-color, var(--primary));
+    transform: translateY(-14px);
+}
+.lv .frame-label {
+    font-weight: 500;
+    font-size: 10px;
+    opacity: 0.8;
+    border-left-color: var(--muted-fg);
+}
+.lv .scene-label {
+    transition: opacity 0.15s;
+}
+.lv .scene-label.covered {
+    opacity: 0;
+}
+
+/* ── top bar ── */
+.lv .topbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px 0 14px;
+    padding-top: env(safe-area-inset-top);
+    background: color-mix(in srgb, var(--card) 88%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+}
+.lv .topbar .brand {
+    width: 22px;
+    height: 22px;
+}
+.lv .topbar .title {
+    white-space: nowrap;
+}
+.lv .topbar .spacer {
+    flex: 1;
+}
+.lv .topbar .dim-badge {
+    white-space: nowrap;
+}
+.lv .pill-extra {
+    color: var(--warn);
+}
+.lv .tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 9px;
+}
+.lv .tab-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 0 4px;
+    min-width: 14px;
+    height: 14px;
+    justify-content: center;
+    font-size: 9px;
+    letter-spacing: 0;
+}
+.lv .tab-badge.rec {
+    padding: 0;
+    min-width: 0;
+    width: 12px;
+    height: 12px;
+    animation: blink 1s infinite;
+}
+.lv .tab-badge .dot {
+    width: 6px;
+    height: 6px;
+}
+@keyframes blink {
+    50% {
+        opacity: 0.3;
+    }
+}
+
+/* ── side panel / bottom sheet ── */
+.lv .side-panel {
+    position: absolute;
+    top: 58px;
+    left: 10px;
+    bottom: 10px;
+    width: 340px;
+    z-index: 8;
+    display: flex;
+    flex-direction: column;
+}
+.lv .side-panel.sheet {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 62vh;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 12;
+}
+.lv .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px 4px 14px;
+}
+.lv .panel-head h2 {
+    margin: 0;
+}
+.lv .panel-head .icon-button {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+}
+.lv .panel-body {
+    overflow: auto;
+    padding: 4px 14px 14px;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+}
+
+.lv .field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+    min-height: 30px;
+}
+.lv .field-label {
+    width: 78px;
+    flex: none;
+    color: var(--muted-fg);
+    font-size: 11px;
+}
+.lv .field-control {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.lv .field-control .dim-select, .lv .field-control .dim-input:not(.number) {
+    flex: 1;
+}
+.lv .slider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+.lv .slider input {
+    flex: 1;
+    min-width: 60px;
+}
+.lv .slider-value {
+    font: 11px var(--mono);
+    color: var(--muted-fg);
+    min-width: 64px;
+    text-align: right;
+}
+.lv .dim-switch {
+    position: relative;
+    gap: 8px;
+}
+.lv .dim-switch .track {
+    flex: none;
+}
+.lv .toggle-label {
+    font-size: 12px;
+}
+.lv .segmented .dim-tab {
+    padding: 5px 10px;
+}
+.lv .gradients {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+    gap: 5px;
+    margin: 4px 0 4px 88px;
+}
+.lv .gradient-swatch {
+    height: 14px;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+}
+.lv .gradient-swatch.on {
+    border-color: var(--fg);
+}
+.lv .range-inputs {
+    display: flex;
+    gap: 6px;
+}
+.lv .button-row {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0;
+    flex-wrap: wrap;
+}
+.lv .icon-button, .lv .dim-btn.icon.icon-button {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    flex: none;
+    text-decoration: none;
+}
+.lv .link {
+    font: inherit;
+    border: 0;
+    background: none;
+    color: var(--primary);
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: 11px;
+}
+
+/* layers */
+.lv .layer-group h3:first-child {
+    margin-top: 6px;
+}
+.lv .layer-row {
+    border-radius: var(--radius);
+    padding: 3px 4px;
+}
+.lv .layer-row:hover {
+    background: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.lv .layer-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.lv .layer-name {
+    font: inherit;
+    color: inherit;
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    border: 0;
+    background: none;
+    padding: 3px 0;
+    cursor: pointer;
+    min-width: 0;
+    text-align: left;
+}
+.lv .layer-name:disabled {
+    cursor: default;
+}
+.lv .topic-name {
+    font: 12px var(--mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.lv .topic-type {
+    font-size: 10px;
+    color: var(--muted-fg);
+    white-space: nowrap;
+}
+.lv .chevron {
+    margin-left: auto;
+    color: var(--muted-fg);
+    transition: transform 0.15s;
+}
+.lv .chevron.open {
+    transform: rotate(90deg);
+}
+.lv .layer-status {
+    font: 10.5px var(--mono);
+    color: var(--muted-fg);
+    padding: 0 0 2px 40px;
+    overflow-wrap: anywhere;
+}
+.lv .layer-status.problem {
+    color: var(--warn);
+}
+.lv .layer-settings {
+    padding: 4px 0 8px 10px;
+    margin: 2px 0 6px 30px;
+    border-left: 2px solid var(--border);
+}
+.lv .other-topics summary {
+    cursor: pointer;
+    color: var(--muted-fg);
+    margin-top: 12px;
+    font-size: 11px;
+}
+.lv .other-topic {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font: 11px var(--mono);
+    padding: 2px 0;
+}
+
+.lv .rpc-group {
+    border-top: 1px dashed var(--border);
+    margin-top: 4px;
+    padding-top: 4px;
+}
+.lv .files {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.lv .file {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+}
+.lv .file-name {
+    flex: 1;
+    font: 11.5px var(--mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.lv .file-meta {
+    font-size: 11px;
+    color: var(--muted-fg);
+    white-space: nowrap;
+}
+
+/* tf */
+.lv .tf-tree {
+    font: 11.5px var(--mono);
+    margin-top: 8px;
+}
+.lv .tf-frame {
+    display: flex;
+    justify-content: space-between;
+    padding: 1px 0;
+}
+.lv .tf-frame.stale {
+    color: var(--warn);
+}
+.lv .tf-age {
+    color: var(--muted-fg);
+}
+
+/* ── cameras ── */
+.lv .camera-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+}
+/* black = the video's letterbox, in either theme */
+.lv .camera-panel {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #000;
+}
+.lv .camera-panel.floating {
+    position: absolute;
+    resize: both;
+    min-width: 180px;
+    min-height: 120px;
+}
+.lv .camera-panel.main {
+    position: absolute;
+    inset: 48px 0 0 0;
+    border-radius: 0;
+    border: 0;
+    z-index: 1;
+}
+.lv .camera-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    cursor: move;
+    flex: none;
+    background: color-mix(in srgb, var(--card) 88%, transparent);
+    border-bottom: 1px solid var(--border);
+}
+.lv .camera-head .dim-select {
+    width: auto;
+    padding: 2px 24px 2px 6px;
+    font-size: 11px;
+    max-width: 46%;
+    background-position: right 12px center, right 7px center;
+}
+.lv .camera-head .dim-btn.icon.icon-button {
+    width: 24px;
+    height: 24px;
+}
+.lv .camera-info {
+    flex: 1;
+    font: 10.5px var(--mono);
+    color: var(--muted-fg);
+    white-space: nowrap;
+    overflow: hidden;
+}
+.lv .camera-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+}
+.lv .camera-media, .lv .camera-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.lv .camera-overlay {
+    pointer-events: none;
+}
+.lv .add-camera {
+    position: absolute;
+    right: 12px;
+    bottom: 16px;
+    pointer-events: auto;
+    gap: 1px;
+    padding: 8px 10px;
+    border-radius: 999px;
+}
+
+.lv .keys {
+    display: grid;
+    gap: 3px;
+}
+.lv .keys > div {
+    display: flex;
+    gap: 3px;
+    justify-content: center;
+}
+.lv .key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    font: 700 11px var(--mono);
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted-fg);
+    transition: background 0.06s;
+}
+.lv .key.empty {
+    visibility: hidden;
+}
+.lv .key.down {
+    background: var(--primary);
+    color: var(--primary-fg);
+    border-color: var(--primary);
+}
+.lv .key.shift {
+    width: 30px;
+}
+.lv .hud-readout {
+    font: 11px var(--mono);
+    min-width: 190px;
+}
+
+.lv .hud-center {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+}
+
+.lv .stats-overlay {
+    position: absolute;
+    left: 12px;
+    bottom: 74px;
+    z-index: 6;
+    font-size: 11px;
+    padding: 6px 9px;
+    pointer-events: none;
+}
+.lv.desktop .side-panel ~ .stats-overlay {
+    left: 362px;
+}
+
+/* ── phone ── */
+.lv.mobile .topbar {
+    height: calc(44px + env(safe-area-inset-top));
+    gap: 6px;
+    padding-left: 10px;
+    padding-right: 4px;
+}
+.lv.mobile .topbar .title,
+.lv.mobile .stats-pill,
+.lv.mobile .tab-label,
+.lv.mobile .fullscreen-tab {
+    display: none;
+}
+.lv.mobile .topbar .dim-badge {
+    padding: 3px 8px;
+}
+.lv.mobile .tab {
+    padding: 8px 7px;
+}
+.lv.mobile .camera-panel.floating {
+    position: absolute;
+    top: calc(52px + env(safe-area-inset-top));
+    right: 8px;
+    width: 42vw;
+    height: 28vw;
+    resize: none;
+}
+.lv.mobile .camera-panel.floating ~ .camera-panel.floating {
+    display: none;
+}
+.lv.mobile .camera-panel.floating .camera-head select,
+.lv.mobile .camera-panel.floating .camera-info {
+    display: none;
+}
+.lv.mobile .camera-panel.main {
+    inset: calc(44px + env(safe-area-inset-top)) 0 0 0;
+}
+.lv.mobile .add-camera {
+    display: none;
+}
+.lv.mobile .stats-overlay {
+    bottom: auto;
+    top: calc(52px + env(safe-area-inset-top));
+}
+.lv.mobile .field-label {
+    width: 70px;
+}
+.lv.mobile .gradients {
+    margin-left: 0;
+}
+.lv.mobile .dim-select, .lv.mobile .dim-input {
+    font-size: 16px;
+} /* iOS zooms into anything smaller */
+
+.lv .depth-host canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.lv .camera-head .depth-range {
+    width: 52px;
+    padding: 2px 4px;
+    font-size: 11px;
+}
+
+/* point-style picker */
+.lv .style-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 6px;
+    width: 100%;
+}
+.lv .style-card {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+    text-align: left;
+    padding: 7px 8px;
+    cursor: pointer;
+    font: inherit;
+}
+.lv .style-card.on {
+    border-color: var(--primary);
+    box-shadow: inset 3px 0 0 var(--primary);
+}
+.lv .style-name {
+    font-size: 12px;
+    font-weight: 650;
+    grid-column: 2;
+}
+.lv .style-about {
+    font-size: 10px;
+    color: var(--muted-fg);
+    grid-column: 1 / 3;
+    margin-top: 3px;
+    line-height: 1.3;
+}
+.lv .style-swatch {
+    grid-row: 1;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    align-self: center;
+    background: linear-gradient(
+        135deg,
+        #6e1eaa,
+        #285aeb 40%,
+        #28c8e6 70%,
+        #96f096
+    );
+}
+.lv .swatch-splat {
+    border-radius: 50%;
+    filter: blur(2px);
+}
+.lv .swatch-disc {
+    border-radius: 50%;
+    background: radial-gradient(
+        circle at 35% 30%,
+        #96f096,
+        #28c8e6 45%,
+        #285aeb 75%,
+        #6e1eaa
+    );
+}
+.lv .swatch-square {
+    border-radius: 0;
+    background: #28c8e6;
+}
+.lv .swatch-default {
+    background: none;
+    border: 1px dashed var(--muted-fg);
+}
+.lv .field-block {
+    padding: 4px 0 8px;
+    display: grid;
+    gap: 6px;
+}
+
+/* live annotations' labels: the label, then a note line */
+.lv .scene-label.annotation-label {
+    white-space: pre;
+    text-align: center;
+    color: var(--label-color, var(--warn));
+    font-size: 12px;
+}
+
+/* location labels and the 3D view's right-click menu (ui/SceneMenu.tsx) */
+.lv .scene-label.location-label {
+    color: var(--label-color, var(--warn));
+    font-size: 12px;
+}
+.lv .scene-note {
+    position: fixed;
+    z-index: 30;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    padding: 8px 14px;
+    font-size: 12px;
+    box-shadow: var(--shadow-lg);
+}
+
+/* the Portal / Research switch in the top bar; on a phone the tabs need the room */
+.lv.mobile .theme-toggle {
+    display: none;
+}

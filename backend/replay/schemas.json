@@ -1,0 +1,1332 @@
+{
+    "actionlib_msgs.GoalID": [
+        { "name": "stamp", "type": "std_msgs.Time", "dims": [] },
+        { "name": "id", "type": "string", "dims": [] }
+    ],
+    "actionlib_msgs.GoalStatus": [
+        { "name": "goal_id", "type": "actionlib_msgs.GoalID", "dims": [] },
+        { "name": "status", "type": "byte", "dims": [] },
+        { "name": "text", "type": "string", "dims": [] }
+    ],
+    "actionlib_msgs.GoalStatusArray": [
+        { "name": "status_list_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "status_list",
+            "type": "actionlib_msgs.GoalStatus",
+            "dims": ["status_list_length"]
+        }
+    ],
+    "builtin_interfaces.Duration": [
+        { "name": "sec", "type": "int32_t", "dims": [] },
+        { "name": "nanosec", "type": "int32_t", "dims": [] }
+    ],
+    "builtin_interfaces.Time": [
+        { "name": "sec", "type": "int32_t", "dims": [] },
+        { "name": "nanosec", "type": "int32_t", "dims": [] }
+    ],
+    "diagnostic_msgs.DiagnosticArray": [
+        { "name": "status_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "status",
+            "type": "diagnostic_msgs.DiagnosticStatus",
+            "dims": ["status_length"]
+        }
+    ],
+    "diagnostic_msgs.DiagnosticStatus": [
+        { "name": "values_length", "type": "int32_t", "dims": [] },
+        { "name": "level", "type": "int8_t", "dims": [] },
+        { "name": "name", "type": "string", "dims": [] },
+        { "name": "message", "type": "string", "dims": [] },
+        { "name": "hardware_id", "type": "string", "dims": [] },
+        {
+            "name": "values",
+            "type": "diagnostic_msgs.KeyValue",
+            "dims": ["values_length"]
+        }
+    ],
+    "diagnostic_msgs.KeyValue": [
+        { "name": "key", "type": "string", "dims": [] },
+        { "name": "value", "type": "string", "dims": [] }
+    ],
+    "foxglove_msgs.ArrowPrimitive": [
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "shaft_length", "type": "double", "dims": [] },
+        { "name": "shaft_diameter", "type": "double", "dims": [] },
+        { "name": "head_length", "type": "double", "dims": [] },
+        { "name": "head_diameter", "type": "double", "dims": [] },
+        { "name": "color", "type": "foxglove_msgs.Color", "dims": [] }
+    ],
+    "foxglove_msgs.CameraCalibration": [
+        { "name": "d_length", "type": "int32_t", "dims": [] },
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] },
+        { "name": "width", "type": "int32_t", "dims": [] },
+        { "name": "height", "type": "int32_t", "dims": [] },
+        { "name": "distortion_model", "type": "string", "dims": [] },
+        { "name": "d", "type": "double", "dims": ["d_length"] },
+        { "name": "k", "type": "double", "dims": [9] },
+        { "name": "r", "type": "double", "dims": [9] },
+        { "name": "p", "type": "double", "dims": [12] }
+    ],
+    "foxglove_msgs.CircleAnnotation": [
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "position", "type": "foxglove_msgs.Point2", "dims": [] },
+        { "name": "diameter", "type": "double", "dims": [] },
+        { "name": "thickness", "type": "double", "dims": [] },
+        { "name": "fill_color", "type": "foxglove_msgs.Color", "dims": [] },
+        { "name": "outline_color", "type": "foxglove_msgs.Color", "dims": [] }
+    ],
+    "foxglove_msgs.Color": [
+        { "name": "r", "type": "double", "dims": [] },
+        { "name": "g", "type": "double", "dims": [] },
+        { "name": "b", "type": "double", "dims": [] },
+        { "name": "a", "type": "double", "dims": [] }
+    ],
+    "foxglove_msgs.CompressedImage": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] },
+        { "name": "data", "type": "byte", "dims": ["data_length"] },
+        { "name": "format", "type": "string", "dims": [] }
+    ],
+    "foxglove_msgs.CompressedVideo": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] },
+        { "name": "data", "type": "byte", "dims": ["data_length"] },
+        { "name": "format", "type": "string", "dims": [] }
+    ],
+    "foxglove_msgs.CubePrimitive": [
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "size", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "color", "type": "foxglove_msgs.Color", "dims": [] }
+    ],
+    "foxglove_msgs.CylinderPrimitive": [
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "size", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "bottom_scale", "type": "double", "dims": [] },
+        { "name": "top_scale", "type": "double", "dims": [] },
+        { "name": "color", "type": "foxglove_msgs.Color", "dims": [] }
+    ],
+    "foxglove_msgs.FrameTransform": [
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "parent_frame_id", "type": "string", "dims": [] },
+        { "name": "child_frame_id", "type": "string", "dims": [] },
+        { "name": "translation", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "rotation", "type": "geometry_msgs.Quaternion", "dims": [] }
+    ],
+    "foxglove_msgs.FrameTransforms": [
+        { "name": "transforms_length", "type": "int32_t", "dims": [] },
+        {
+            "name": "transforms",
+            "type": "foxglove_msgs.FrameTransform",
+            "dims": ["transforms_length"]
+        }
+    ],
+    "foxglove_msgs.GeoJSON": [
+        { "name": "geojson", "type": "string", "dims": [] }
+    ],
+    "foxglove_msgs.Grid": [
+        { "name": "fields_length", "type": "int32_t", "dims": [] },
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "column_count", "type": "int32_t", "dims": [] },
+        { "name": "cell_size", "type": "foxglove_msgs.Vector2", "dims": [] },
+        { "name": "row_stride", "type": "int32_t", "dims": [] },
+        { "name": "cell_stride", "type": "int32_t", "dims": [] },
+        {
+            "name": "fields",
+            "type": "foxglove_msgs.PackedElementField",
+            "dims": ["fields_length"]
+        },
+        { "name": "data", "type": "byte", "dims": ["data_length"] }
+    ],
+    "foxglove_msgs.ImageAnnotations": [
+        { "name": "circles_length", "type": "int32_t", "dims": [] },
+        { "name": "points_length", "type": "int32_t", "dims": [] },
+        { "name": "texts_length", "type": "int32_t", "dims": [] },
+        {
+            "name": "circles",
+            "type": "foxglove_msgs.CircleAnnotation",
+            "dims": ["circles_length"]
+        },
+        {
+            "name": "points",
+            "type": "foxglove_msgs.PointsAnnotation",
+            "dims": ["points_length"]
+        },
+        {
+            "name": "texts",
+            "type": "foxglove_msgs.TextAnnotation",
+            "dims": ["texts_length"]
+        }
+    ],
+    "foxglove_msgs.KeyValuePair": [
+        { "name": "key", "type": "string", "dims": [] },
+        { "name": "value", "type": "string", "dims": [] }
+    ],
+    "foxglove_msgs.LaserScan": [
+        { "name": "ranges_length", "type": "int32_t", "dims": [] },
+        { "name": "intensities_length", "type": "int32_t", "dims": [] },
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "start_angle", "type": "double", "dims": [] },
+        { "name": "end_angle", "type": "double", "dims": [] },
+        { "name": "ranges", "type": "double", "dims": ["ranges_length"] },
+        { "name": "intensities", "type": "double", "dims": ["intensities_length"] }
+    ],
+    "foxglove_msgs.LinePrimitive": [
+        { "name": "points_length", "type": "int32_t", "dims": [] },
+        { "name": "colors_length", "type": "int32_t", "dims": [] },
+        { "name": "indices_length", "type": "int32_t", "dims": [] },
+        { "name": "type", "type": "byte", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "thickness", "type": "double", "dims": [] },
+        { "name": "scale_invariant", "type": "boolean", "dims": [] },
+        {
+            "name": "points",
+            "type": "geometry_msgs.Point",
+            "dims": ["points_length"]
+        },
+        { "name": "color", "type": "foxglove_msgs.Color", "dims": [] },
+        {
+            "name": "colors",
+            "type": "foxglove_msgs.Color",
+            "dims": ["colors_length"]
+        },
+        { "name": "indices", "type": "int32_t", "dims": ["indices_length"] }
+    ],
+    "foxglove_msgs.LocationFix": [
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] },
+        { "name": "latitude", "type": "double", "dims": [] },
+        { "name": "longitude", "type": "double", "dims": [] },
+        { "name": "altitude", "type": "double", "dims": [] },
+        { "name": "position_covariance", "type": "double", "dims": [9] },
+        { "name": "position_covariance_type", "type": "byte", "dims": [] }
+    ],
+    "foxglove_msgs.Log": [
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "level", "type": "byte", "dims": [] },
+        { "name": "message", "type": "string", "dims": [] },
+        { "name": "name", "type": "string", "dims": [] },
+        { "name": "file", "type": "string", "dims": [] },
+        { "name": "line", "type": "int32_t", "dims": [] }
+    ],
+    "foxglove_msgs.ModelPrimitive": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "scale", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "color", "type": "foxglove_msgs.Color", "dims": [] },
+        { "name": "override_color", "type": "boolean", "dims": [] },
+        { "name": "url", "type": "string", "dims": [] },
+        { "name": "media_type", "type": "string", "dims": [] },
+        { "name": "data", "type": "byte", "dims": ["data_length"] }
+    ],
+    "foxglove_msgs.PackedElementField": [
+        { "name": "name", "type": "string", "dims": [] },
+        { "name": "offset", "type": "int32_t", "dims": [] },
+        { "name": "type", "type": "byte", "dims": [] }
+    ],
+    "foxglove_msgs.Point2": [
+        { "name": "x", "type": "double", "dims": [] },
+        { "name": "y", "type": "double", "dims": [] }
+    ],
+    "foxglove_msgs.PointCloud": [
+        { "name": "fields_length", "type": "int32_t", "dims": [] },
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "point_stride", "type": "int32_t", "dims": [] },
+        {
+            "name": "fields",
+            "type": "foxglove_msgs.PackedElementField",
+            "dims": ["fields_length"]
+        },
+        { "name": "data", "type": "byte", "dims": ["data_length"] }
+    ],
+    "foxglove_msgs.PointsAnnotation": [
+        { "name": "points_length", "type": "int32_t", "dims": [] },
+        { "name": "outline_colors_length", "type": "int32_t", "dims": [] },
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "type", "type": "byte", "dims": [] },
+        {
+            "name": "points",
+            "type": "foxglove_msgs.Point2",
+            "dims": ["points_length"]
+        },
+        { "name": "outline_color", "type": "foxglove_msgs.Color", "dims": [] },
+        {
+            "name": "outline_colors",
+            "type": "foxglove_msgs.Color",
+            "dims": ["outline_colors_length"]
+        },
+        { "name": "fill_color", "type": "foxglove_msgs.Color", "dims": [] },
+        { "name": "thickness", "type": "double", "dims": [] }
+    ],
+    "foxglove_msgs.PoseInFrame": [
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] }
+    ],
+    "foxglove_msgs.PosesInFrame": [
+        { "name": "poses_length", "type": "int32_t", "dims": [] },
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] },
+        { "name": "poses", "type": "geometry_msgs.Pose", "dims": ["poses_length"] }
+    ],
+    "foxglove_msgs.RawAudio": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "data", "type": "byte", "dims": ["data_length"] },
+        { "name": "format", "type": "string", "dims": [] },
+        { "name": "sample_rate", "type": "int32_t", "dims": [] },
+        { "name": "number_of_channels", "type": "int32_t", "dims": [] }
+    ],
+    "foxglove_msgs.RawImage": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] },
+        { "name": "width", "type": "int32_t", "dims": [] },
+        { "name": "height", "type": "int32_t", "dims": [] },
+        { "name": "encoding", "type": "string", "dims": [] },
+        { "name": "step", "type": "int32_t", "dims": [] },
+        { "name": "data", "type": "byte", "dims": ["data_length"] }
+    ],
+    "foxglove_msgs.SceneEntity": [
+        { "name": "metadata_length", "type": "int32_t", "dims": [] },
+        { "name": "arrows_length", "type": "int32_t", "dims": [] },
+        { "name": "cubes_length", "type": "int32_t", "dims": [] },
+        { "name": "spheres_length", "type": "int32_t", "dims": [] },
+        { "name": "cylinders_length", "type": "int32_t", "dims": [] },
+        { "name": "lines_length", "type": "int32_t", "dims": [] },
+        { "name": "triangles_length", "type": "int32_t", "dims": [] },
+        { "name": "texts_length", "type": "int32_t", "dims": [] },
+        { "name": "models_length", "type": "int32_t", "dims": [] },
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] },
+        { "name": "id", "type": "string", "dims": [] },
+        { "name": "lifetime", "type": "builtin_interfaces.Duration", "dims": [] },
+        { "name": "frame_locked", "type": "boolean", "dims": [] },
+        {
+            "name": "metadata",
+            "type": "foxglove_msgs.KeyValuePair",
+            "dims": ["metadata_length"]
+        },
+        {
+            "name": "arrows",
+            "type": "foxglove_msgs.ArrowPrimitive",
+            "dims": ["arrows_length"]
+        },
+        {
+            "name": "cubes",
+            "type": "foxglove_msgs.CubePrimitive",
+            "dims": ["cubes_length"]
+        },
+        {
+            "name": "spheres",
+            "type": "foxglove_msgs.SpherePrimitive",
+            "dims": ["spheres_length"]
+        },
+        {
+            "name": "cylinders",
+            "type": "foxglove_msgs.CylinderPrimitive",
+            "dims": ["cylinders_length"]
+        },
+        {
+            "name": "lines",
+            "type": "foxglove_msgs.LinePrimitive",
+            "dims": ["lines_length"]
+        },
+        {
+            "name": "triangles",
+            "type": "foxglove_msgs.TriangleListPrimitive",
+            "dims": ["triangles_length"]
+        },
+        {
+            "name": "texts",
+            "type": "foxglove_msgs.TextPrimitive",
+            "dims": ["texts_length"]
+        },
+        {
+            "name": "models",
+            "type": "foxglove_msgs.ModelPrimitive",
+            "dims": ["models_length"]
+        }
+    ],
+    "foxglove_msgs.SceneEntityDeletion": [
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "type", "type": "byte", "dims": [] },
+        { "name": "id", "type": "string", "dims": [] }
+    ],
+    "foxglove_msgs.SceneUpdate": [
+        { "name": "deletions_length", "type": "int32_t", "dims": [] },
+        { "name": "entities_length", "type": "int32_t", "dims": [] },
+        {
+            "name": "deletions",
+            "type": "foxglove_msgs.SceneEntityDeletion",
+            "dims": ["deletions_length"]
+        },
+        {
+            "name": "entities",
+            "type": "foxglove_msgs.SceneEntity",
+            "dims": ["entities_length"]
+        }
+    ],
+    "foxglove_msgs.SpherePrimitive": [
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "size", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "color", "type": "foxglove_msgs.Color", "dims": [] }
+    ],
+    "foxglove_msgs.TextAnnotation": [
+        { "name": "timestamp", "type": "builtin_interfaces.Time", "dims": [] },
+        { "name": "position", "type": "foxglove_msgs.Point2", "dims": [] },
+        { "name": "text", "type": "string", "dims": [] },
+        { "name": "font_size", "type": "double", "dims": [] },
+        { "name": "text_color", "type": "foxglove_msgs.Color", "dims": [] },
+        { "name": "background_color", "type": "foxglove_msgs.Color", "dims": [] }
+    ],
+    "foxglove_msgs.TextPrimitive": [
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "billboard", "type": "boolean", "dims": [] },
+        { "name": "font_size", "type": "double", "dims": [] },
+        { "name": "scale_invariant", "type": "boolean", "dims": [] },
+        { "name": "color", "type": "foxglove_msgs.Color", "dims": [] },
+        { "name": "text", "type": "string", "dims": [] }
+    ],
+    "foxglove_msgs.TriangleListPrimitive": [
+        { "name": "points_length", "type": "int32_t", "dims": [] },
+        { "name": "colors_length", "type": "int32_t", "dims": [] },
+        { "name": "indices_length", "type": "int32_t", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        {
+            "name": "points",
+            "type": "geometry_msgs.Point",
+            "dims": ["points_length"]
+        },
+        { "name": "color", "type": "foxglove_msgs.Color", "dims": [] },
+        {
+            "name": "colors",
+            "type": "foxglove_msgs.Color",
+            "dims": ["colors_length"]
+        },
+        { "name": "indices", "type": "int32_t", "dims": ["indices_length"] }
+    ],
+    "foxglove_msgs.Vector2": [
+        { "name": "x", "type": "double", "dims": [] },
+        { "name": "y", "type": "double", "dims": [] }
+    ],
+    "geometry_msgs.Accel": [
+        { "name": "linear", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "angular", "type": "geometry_msgs.Vector3", "dims": [] }
+    ],
+    "geometry_msgs.AccelStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "accel", "type": "geometry_msgs.Accel", "dims": [] }
+    ],
+    "geometry_msgs.AccelWithCovariance": [
+        { "name": "accel", "type": "geometry_msgs.Accel", "dims": [] },
+        { "name": "covariance", "type": "double", "dims": [36] }
+    ],
+    "geometry_msgs.AccelWithCovarianceStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "accel", "type": "geometry_msgs.AccelWithCovariance", "dims": [] }
+    ],
+    "geometry_msgs.Inertia": [
+        { "name": "m", "type": "double", "dims": [] },
+        { "name": "com", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "ixx", "type": "double", "dims": [] },
+        { "name": "ixy", "type": "double", "dims": [] },
+        { "name": "ixz", "type": "double", "dims": [] },
+        { "name": "iyy", "type": "double", "dims": [] },
+        { "name": "iyz", "type": "double", "dims": [] },
+        { "name": "izz", "type": "double", "dims": [] }
+    ],
+    "geometry_msgs.InertiaStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "inertia", "type": "geometry_msgs.Inertia", "dims": [] }
+    ],
+    "geometry_msgs.Point": [
+        { "name": "x", "type": "double", "dims": [] },
+        { "name": "y", "type": "double", "dims": [] },
+        { "name": "z", "type": "double", "dims": [] }
+    ],
+    "geometry_msgs.Point32": [
+        { "name": "x", "type": "float", "dims": [] },
+        { "name": "y", "type": "float", "dims": [] },
+        { "name": "z", "type": "float", "dims": [] }
+    ],
+    "geometry_msgs.PointStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "point", "type": "geometry_msgs.Point", "dims": [] }
+    ],
+    "geometry_msgs.Polygon": [
+        { "name": "points_length", "type": "int32_t", "dims": [] },
+        {
+            "name": "points",
+            "type": "geometry_msgs.Point32",
+            "dims": ["points_length"]
+        }
+    ],
+    "geometry_msgs.PolygonStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "polygon", "type": "geometry_msgs.Polygon", "dims": [] }
+    ],
+    "geometry_msgs.Pose": [
+        { "name": "position", "type": "geometry_msgs.Point", "dims": [] },
+        { "name": "orientation", "type": "geometry_msgs.Quaternion", "dims": [] }
+    ],
+    "geometry_msgs.Pose2D": [
+        { "name": "x", "type": "double", "dims": [] },
+        { "name": "y", "type": "double", "dims": [] },
+        { "name": "theta", "type": "double", "dims": [] }
+    ],
+    "geometry_msgs.PoseArray": [
+        { "name": "poses_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "poses", "type": "geometry_msgs.Pose", "dims": ["poses_length"] }
+    ],
+    "geometry_msgs.PoseStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] }
+    ],
+    "geometry_msgs.PoseWithCovariance": [
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "covariance", "type": "double", "dims": [36] }
+    ],
+    "geometry_msgs.PoseWithCovarianceStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.PoseWithCovariance", "dims": [] }
+    ],
+    "geometry_msgs.Quaternion": [
+        { "name": "x", "type": "double", "dims": [] },
+        { "name": "y", "type": "double", "dims": [] },
+        { "name": "z", "type": "double", "dims": [] },
+        { "name": "w", "type": "double", "dims": [] }
+    ],
+    "geometry_msgs.QuaternionStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "quaternion", "type": "geometry_msgs.Quaternion", "dims": [] }
+    ],
+    "geometry_msgs.Transform": [
+        { "name": "translation", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "rotation", "type": "geometry_msgs.Quaternion", "dims": [] }
+    ],
+    "geometry_msgs.TransformStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "child_frame_id", "type": "string", "dims": [] },
+        { "name": "transform", "type": "geometry_msgs.Transform", "dims": [] }
+    ],
+    "geometry_msgs.Twist": [
+        { "name": "linear", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "angular", "type": "geometry_msgs.Vector3", "dims": [] }
+    ],
+    "geometry_msgs.TwistStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "twist", "type": "geometry_msgs.Twist", "dims": [] }
+    ],
+    "geometry_msgs.TwistWithCovariance": [
+        { "name": "twist", "type": "geometry_msgs.Twist", "dims": [] },
+        { "name": "covariance", "type": "double", "dims": [36] }
+    ],
+    "geometry_msgs.TwistWithCovarianceStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "twist", "type": "geometry_msgs.TwistWithCovariance", "dims": [] }
+    ],
+    "geometry_msgs.Vector3": [
+        { "name": "x", "type": "double", "dims": [] },
+        { "name": "y", "type": "double", "dims": [] },
+        { "name": "z", "type": "double", "dims": [] }
+    ],
+    "geometry_msgs.Vector3Stamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "vector", "type": "geometry_msgs.Vector3", "dims": [] }
+    ],
+    "geometry_msgs.Wrench": [
+        { "name": "force", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "torque", "type": "geometry_msgs.Vector3", "dims": [] }
+    ],
+    "geometry_msgs.WrenchStamped": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "wrench", "type": "geometry_msgs.Wrench", "dims": [] }
+    ],
+    "nav_msgs.GridCells": [
+        { "name": "cells_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "cell_width", "type": "float", "dims": [] },
+        { "name": "cell_height", "type": "float", "dims": [] },
+        { "name": "cells", "type": "geometry_msgs.Point", "dims": ["cells_length"] }
+    ],
+    "nav_msgs.MapMetaData": [
+        { "name": "map_load_time", "type": "std_msgs.Time", "dims": [] },
+        { "name": "resolution", "type": "float", "dims": [] },
+        { "name": "width", "type": "int32_t", "dims": [] },
+        { "name": "height", "type": "int32_t", "dims": [] },
+        { "name": "origin", "type": "geometry_msgs.Pose", "dims": [] }
+    ],
+    "nav_msgs.OccupancyGrid": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "info", "type": "nav_msgs.MapMetaData", "dims": [] },
+        { "name": "data", "type": "int8_t", "dims": ["data_length"] }
+    ],
+    "nav_msgs.Odometry": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "child_frame_id", "type": "string", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.PoseWithCovariance", "dims": [] },
+        { "name": "twist", "type": "geometry_msgs.TwistWithCovariance", "dims": [] }
+    ],
+    "nav_msgs.Path": [
+        { "name": "poses_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "poses",
+            "type": "geometry_msgs.PoseStamped",
+            "dims": ["poses_length"]
+        }
+    ],
+    "sensor_msgs.BatteryState": [
+        { "name": "cell_voltage_length", "type": "int32_t", "dims": [] },
+        { "name": "cell_temperature_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "voltage", "type": "float", "dims": [] },
+        { "name": "temperature", "type": "float", "dims": [] },
+        { "name": "current", "type": "float", "dims": [] },
+        { "name": "charge", "type": "float", "dims": [] },
+        { "name": "capacity", "type": "float", "dims": [] },
+        { "name": "design_capacity", "type": "float", "dims": [] },
+        { "name": "percentage", "type": "float", "dims": [] },
+        { "name": "power_supply_status", "type": "byte", "dims": [] },
+        { "name": "power_supply_health", "type": "byte", "dims": [] },
+        { "name": "power_supply_technology", "type": "byte", "dims": [] },
+        { "name": "present", "type": "boolean", "dims": [] },
+        {
+            "name": "cell_voltage",
+            "type": "float",
+            "dims": ["cell_voltage_length"]
+        },
+        {
+            "name": "cell_temperature",
+            "type": "float",
+            "dims": ["cell_temperature_length"]
+        },
+        { "name": "location", "type": "string", "dims": [] },
+        { "name": "serial_number", "type": "string", "dims": [] }
+    ],
+    "sensor_msgs.CameraInfo": [
+        { "name": "D_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "height", "type": "int32_t", "dims": [] },
+        { "name": "width", "type": "int32_t", "dims": [] },
+        { "name": "distortion_model", "type": "string", "dims": [] },
+        { "name": "D", "type": "double", "dims": ["D_length"] },
+        { "name": "K", "type": "double", "dims": [9] },
+        { "name": "R", "type": "double", "dims": [9] },
+        { "name": "P", "type": "double", "dims": [12] },
+        { "name": "binning_x", "type": "int32_t", "dims": [] },
+        { "name": "binning_y", "type": "int32_t", "dims": [] },
+        { "name": "roi", "type": "sensor_msgs.RegionOfInterest", "dims": [] }
+    ],
+    "sensor_msgs.ChannelFloat32": [
+        { "name": "values_length", "type": "int32_t", "dims": [] },
+        { "name": "name", "type": "string", "dims": [] },
+        { "name": "values", "type": "float", "dims": ["values_length"] }
+    ],
+    "sensor_msgs.CompressedImage": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "format", "type": "string", "dims": [] },
+        { "name": "data", "type": "byte", "dims": ["data_length"] }
+    ],
+    "sensor_msgs.FluidPressure": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "fluid_pressure", "type": "double", "dims": [] },
+        { "name": "variance", "type": "double", "dims": [] }
+    ],
+    "sensor_msgs.Illuminance": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "illuminance", "type": "double", "dims": [] },
+        { "name": "variance", "type": "double", "dims": [] }
+    ],
+    "sensor_msgs.Image": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "height", "type": "int32_t", "dims": [] },
+        { "name": "width", "type": "int32_t", "dims": [] },
+        { "name": "encoding", "type": "string", "dims": [] },
+        { "name": "is_bigendian", "type": "byte", "dims": [] },
+        { "name": "step", "type": "int32_t", "dims": [] },
+        { "name": "data", "type": "byte", "dims": ["data_length"] }
+    ],
+    "sensor_msgs.Imu": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "orientation", "type": "geometry_msgs.Quaternion", "dims": [] },
+        { "name": "orientation_covariance", "type": "double", "dims": [9] },
+        { "name": "angular_velocity", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "angular_velocity_covariance", "type": "double", "dims": [9] },
+        {
+            "name": "linear_acceleration",
+            "type": "geometry_msgs.Vector3",
+            "dims": []
+        },
+        { "name": "linear_acceleration_covariance", "type": "double", "dims": [9] }
+    ],
+    "sensor_msgs.JointState": [
+        { "name": "name_length", "type": "int32_t", "dims": [] },
+        { "name": "position_length", "type": "int32_t", "dims": [] },
+        { "name": "velocity_length", "type": "int32_t", "dims": [] },
+        { "name": "effort_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "name", "type": "string", "dims": ["name_length"] },
+        { "name": "position", "type": "double", "dims": ["position_length"] },
+        { "name": "velocity", "type": "double", "dims": ["velocity_length"] },
+        { "name": "effort", "type": "double", "dims": ["effort_length"] }
+    ],
+    "sensor_msgs.Joy": [
+        { "name": "axes_length", "type": "int32_t", "dims": [] },
+        { "name": "buttons_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "axes", "type": "float", "dims": ["axes_length"] },
+        { "name": "buttons", "type": "int32_t", "dims": ["buttons_length"] }
+    ],
+    "sensor_msgs.JoyFeedback": [
+        { "name": "type", "type": "byte", "dims": [] },
+        { "name": "id", "type": "byte", "dims": [] },
+        { "name": "intensity", "type": "float", "dims": [] }
+    ],
+    "sensor_msgs.JoyFeedbackArray": [
+        { "name": "array_length", "type": "int32_t", "dims": [] },
+        {
+            "name": "array",
+            "type": "sensor_msgs.JoyFeedback",
+            "dims": ["array_length"]
+        }
+    ],
+    "sensor_msgs.LaserEcho": [
+        { "name": "echoes_length", "type": "int32_t", "dims": [] },
+        { "name": "echoes", "type": "float", "dims": ["echoes_length"] }
+    ],
+    "sensor_msgs.LaserScan": [
+        { "name": "ranges_length", "type": "int32_t", "dims": [] },
+        { "name": "intensities_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "angle_min", "type": "float", "dims": [] },
+        { "name": "angle_max", "type": "float", "dims": [] },
+        { "name": "angle_increment", "type": "float", "dims": [] },
+        { "name": "time_increment", "type": "float", "dims": [] },
+        { "name": "scan_time", "type": "float", "dims": [] },
+        { "name": "range_min", "type": "float", "dims": [] },
+        { "name": "range_max", "type": "float", "dims": [] },
+        { "name": "ranges", "type": "float", "dims": ["ranges_length"] },
+        { "name": "intensities", "type": "float", "dims": ["intensities_length"] }
+    ],
+    "sensor_msgs.MagneticField": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "magnetic_field", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "magnetic_field_covariance", "type": "double", "dims": [9] }
+    ],
+    "sensor_msgs.MultiDOFJointState": [
+        { "name": "joint_names_length", "type": "int32_t", "dims": [] },
+        { "name": "transforms_length", "type": "int32_t", "dims": [] },
+        { "name": "twist_length", "type": "int32_t", "dims": [] },
+        { "name": "wrench_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "joint_names", "type": "string", "dims": ["joint_names_length"] },
+        {
+            "name": "transforms",
+            "type": "geometry_msgs.Transform",
+            "dims": ["transforms_length"]
+        },
+        {
+            "name": "twist",
+            "type": "geometry_msgs.Twist",
+            "dims": ["twist_length"]
+        },
+        {
+            "name": "wrench",
+            "type": "geometry_msgs.Wrench",
+            "dims": ["wrench_length"]
+        }
+    ],
+    "sensor_msgs.MultiEchoLaserScan": [
+        { "name": "ranges_length", "type": "int32_t", "dims": [] },
+        { "name": "intensities_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "angle_min", "type": "float", "dims": [] },
+        { "name": "angle_max", "type": "float", "dims": [] },
+        { "name": "angle_increment", "type": "float", "dims": [] },
+        { "name": "time_increment", "type": "float", "dims": [] },
+        { "name": "scan_time", "type": "float", "dims": [] },
+        { "name": "range_min", "type": "float", "dims": [] },
+        { "name": "range_max", "type": "float", "dims": [] },
+        {
+            "name": "ranges",
+            "type": "sensor_msgs.LaserEcho",
+            "dims": ["ranges_length"]
+        },
+        {
+            "name": "intensities",
+            "type": "sensor_msgs.LaserEcho",
+            "dims": ["intensities_length"]
+        }
+    ],
+    "sensor_msgs.NavSatFix": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "status", "type": "sensor_msgs.NavSatStatus", "dims": [] },
+        { "name": "latitude", "type": "double", "dims": [] },
+        { "name": "longitude", "type": "double", "dims": [] },
+        { "name": "altitude", "type": "double", "dims": [] },
+        { "name": "position_covariance", "type": "double", "dims": [9] },
+        { "name": "position_covariance_type", "type": "byte", "dims": [] }
+    ],
+    "sensor_msgs.NavSatStatus": [
+        { "name": "status", "type": "int8_t", "dims": [] },
+        { "name": "service", "type": "int16_t", "dims": [] }
+    ],
+    "sensor_msgs.PointCloud": [
+        { "name": "points_length", "type": "int32_t", "dims": [] },
+        { "name": "channels_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "points",
+            "type": "geometry_msgs.Point32",
+            "dims": ["points_length"]
+        },
+        {
+            "name": "channels",
+            "type": "sensor_msgs.ChannelFloat32",
+            "dims": ["channels_length"]
+        }
+    ],
+    "sensor_msgs.PointCloud2": [
+        { "name": "fields_length", "type": "int32_t", "dims": [] },
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "height", "type": "int32_t", "dims": [] },
+        { "name": "width", "type": "int32_t", "dims": [] },
+        {
+            "name": "fields",
+            "type": "sensor_msgs.PointField",
+            "dims": ["fields_length"]
+        },
+        { "name": "is_bigendian", "type": "boolean", "dims": [] },
+        { "name": "point_step", "type": "int32_t", "dims": [] },
+        { "name": "row_step", "type": "int32_t", "dims": [] },
+        { "name": "data", "type": "byte", "dims": ["data_length"] },
+        { "name": "is_dense", "type": "boolean", "dims": [] }
+    ],
+    "sensor_msgs.PointField": [
+        { "name": "name", "type": "string", "dims": [] },
+        { "name": "offset", "type": "int32_t", "dims": [] },
+        { "name": "datatype", "type": "byte", "dims": [] },
+        { "name": "count", "type": "int32_t", "dims": [] }
+    ],
+    "sensor_msgs.Range": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "radiation_type", "type": "byte", "dims": [] },
+        { "name": "field_of_view", "type": "float", "dims": [] },
+        { "name": "min_range", "type": "float", "dims": [] },
+        { "name": "max_range", "type": "float", "dims": [] },
+        { "name": "range", "type": "float", "dims": [] }
+    ],
+    "sensor_msgs.RegionOfInterest": [
+        { "name": "x_offset", "type": "int32_t", "dims": [] },
+        { "name": "y_offset", "type": "int32_t", "dims": [] },
+        { "name": "height", "type": "int32_t", "dims": [] },
+        { "name": "width", "type": "int32_t", "dims": [] },
+        { "name": "do_rectify", "type": "boolean", "dims": [] }
+    ],
+    "sensor_msgs.RelativeHumidity": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "relative_humidity", "type": "double", "dims": [] },
+        { "name": "variance", "type": "double", "dims": [] }
+    ],
+    "sensor_msgs.Temperature": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "temperature", "type": "double", "dims": [] },
+        { "name": "variance", "type": "double", "dims": [] }
+    ],
+    "sensor_msgs.TimeReference": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "time_ref", "type": "std_msgs.Time", "dims": [] },
+        { "name": "source", "type": "string", "dims": [] }
+    ],
+    "shape_msgs.Mesh": [
+        { "name": "triangles_length", "type": "int32_t", "dims": [] },
+        { "name": "vertices_length", "type": "int32_t", "dims": [] },
+        {
+            "name": "triangles",
+            "type": "shape_msgs.MeshTriangle",
+            "dims": ["triangles_length"]
+        },
+        {
+            "name": "vertices",
+            "type": "geometry_msgs.Point",
+            "dims": ["vertices_length"]
+        }
+    ],
+    "shape_msgs.MeshTriangle": [
+        { "name": "vertex_indices", "type": "int32_t", "dims": [3] }
+    ],
+    "shape_msgs.Plane": [{ "name": "coef", "type": "double", "dims": [4] }],
+    "shape_msgs.SolidPrimitive": [
+        { "name": "dimensions_length", "type": "int32_t", "dims": [] },
+        { "name": "type", "type": "byte", "dims": [] },
+        { "name": "dimensions", "type": "double", "dims": ["dimensions_length"] }
+    ],
+    "std_msgs.Bool": [{ "name": "data", "type": "boolean", "dims": [] }],
+    "std_msgs.Byte": [{ "name": "data", "type": "int8_t", "dims": [] }],
+    "std_msgs.ByteMultiArray": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "layout", "type": "std_msgs.MultiArrayLayout", "dims": [] },
+        { "name": "data", "type": "int8_t", "dims": ["data_length"] }
+    ],
+    "std_msgs.Char": [{ "name": "data", "type": "byte", "dims": [] }],
+    "std_msgs.ColorRGBA": [
+        { "name": "r", "type": "float", "dims": [] },
+        { "name": "g", "type": "float", "dims": [] },
+        { "name": "b", "type": "float", "dims": [] },
+        { "name": "a", "type": "float", "dims": [] }
+    ],
+    "std_msgs.Duration": [
+        { "name": "sec", "type": "int32_t", "dims": [] },
+        { "name": "nsec", "type": "int32_t", "dims": [] }
+    ],
+    "std_msgs.Empty": [],
+    "std_msgs.Float32": [{ "name": "data", "type": "float", "dims": [] }],
+    "std_msgs.Float32MultiArray": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "layout", "type": "std_msgs.MultiArrayLayout", "dims": [] },
+        { "name": "data", "type": "float", "dims": ["data_length"] }
+    ],
+    "std_msgs.Float64": [{ "name": "data", "type": "double", "dims": [] }],
+    "std_msgs.Float64MultiArray": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "layout", "type": "std_msgs.MultiArrayLayout", "dims": [] },
+        { "name": "data", "type": "double", "dims": ["data_length"] }
+    ],
+    "std_msgs.Header": [
+        { "name": "seq", "type": "int32_t", "dims": [] },
+        { "name": "stamp", "type": "std_msgs.Time", "dims": [] },
+        { "name": "frame_id", "type": "string", "dims": [] }
+    ],
+    "std_msgs.Int16": [{ "name": "data", "type": "int16_t", "dims": [] }],
+    "std_msgs.Int16MultiArray": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "layout", "type": "std_msgs.MultiArrayLayout", "dims": [] },
+        { "name": "data", "type": "int16_t", "dims": ["data_length"] }
+    ],
+    "std_msgs.Int32": [{ "name": "data", "type": "int32_t", "dims": [] }],
+    "std_msgs.Int32MultiArray": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "layout", "type": "std_msgs.MultiArrayLayout", "dims": [] },
+        { "name": "data", "type": "int32_t", "dims": ["data_length"] }
+    ],
+    "std_msgs.Int64": [{ "name": "data", "type": "int64_t", "dims": [] }],
+    "std_msgs.Int64MultiArray": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "layout", "type": "std_msgs.MultiArrayLayout", "dims": [] },
+        { "name": "data", "type": "int64_t", "dims": ["data_length"] }
+    ],
+    "std_msgs.Int8": [{ "name": "data", "type": "int8_t", "dims": [] }],
+    "std_msgs.Int8MultiArray": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "layout", "type": "std_msgs.MultiArrayLayout", "dims": [] },
+        { "name": "data", "type": "int8_t", "dims": ["data_length"] }
+    ],
+    "std_msgs.MultiArrayDimension": [
+        { "name": "label", "type": "string", "dims": [] },
+        { "name": "size", "type": "int32_t", "dims": [] },
+        { "name": "stride", "type": "int32_t", "dims": [] }
+    ],
+    "std_msgs.MultiArrayLayout": [
+        { "name": "dim_length", "type": "int32_t", "dims": [] },
+        {
+            "name": "dim",
+            "type": "std_msgs.MultiArrayDimension",
+            "dims": ["dim_length"]
+        },
+        { "name": "data_offset", "type": "int32_t", "dims": [] }
+    ],
+    "std_msgs.String": [{ "name": "data", "type": "string", "dims": [] }],
+    "std_msgs.Time": [
+        { "name": "sec", "type": "int32_t", "dims": [] },
+        { "name": "nsec", "type": "int32_t", "dims": [] }
+    ],
+    "std_msgs.UInt16": [{ "name": "data", "type": "int16_t", "dims": [] }],
+    "std_msgs.UInt16MultiArray": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "layout", "type": "std_msgs.MultiArrayLayout", "dims": [] },
+        { "name": "data", "type": "int16_t", "dims": ["data_length"] }
+    ],
+    "std_msgs.UInt32": [{ "name": "data", "type": "int32_t", "dims": [] }],
+    "std_msgs.UInt32MultiArray": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "layout", "type": "std_msgs.MultiArrayLayout", "dims": [] },
+        { "name": "data", "type": "int32_t", "dims": ["data_length"] }
+    ],
+    "std_msgs.UInt64": [{ "name": "data", "type": "int64_t", "dims": [] }],
+    "std_msgs.UInt64MultiArray": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "layout", "type": "std_msgs.MultiArrayLayout", "dims": [] },
+        { "name": "data", "type": "int64_t", "dims": ["data_length"] }
+    ],
+    "std_msgs.UInt8": [{ "name": "data", "type": "byte", "dims": [] }],
+    "std_msgs.UInt8MultiArray": [
+        { "name": "data_length", "type": "int32_t", "dims": [] },
+        { "name": "layout", "type": "std_msgs.MultiArrayLayout", "dims": [] },
+        { "name": "data", "type": "byte", "dims": ["data_length"] }
+    ],
+    "stereo_msgs.DisparityImage": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "image", "type": "sensor_msgs.Image", "dims": [] },
+        { "name": "f", "type": "float", "dims": [] },
+        { "name": "T", "type": "float", "dims": [] },
+        {
+            "name": "valid_window",
+            "type": "sensor_msgs.RegionOfInterest",
+            "dims": []
+        },
+        { "name": "min_disparity", "type": "float", "dims": [] },
+        { "name": "max_disparity", "type": "float", "dims": [] },
+        { "name": "delta_d", "type": "float", "dims": [] }
+    ],
+    "tf2_msgs.TF2Error": [
+        { "name": "error", "type": "byte", "dims": [] },
+        { "name": "error_string", "type": "string", "dims": [] }
+    ],
+    "tf2_msgs.TFMessage": [
+        { "name": "transforms_length", "type": "int32_t", "dims": [] },
+        {
+            "name": "transforms",
+            "type": "geometry_msgs.TransformStamped",
+            "dims": ["transforms_length"]
+        }
+    ],
+    "trajectory_msgs.JointTrajectory": [
+        { "name": "joint_names_length", "type": "int32_t", "dims": [] },
+        { "name": "points_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "joint_names", "type": "string", "dims": ["joint_names_length"] },
+        {
+            "name": "points",
+            "type": "trajectory_msgs.JointTrajectoryPoint",
+            "dims": ["points_length"]
+        }
+    ],
+    "trajectory_msgs.JointTrajectoryPoint": [
+        { "name": "positions_length", "type": "int32_t", "dims": [] },
+        { "name": "velocities_length", "type": "int32_t", "dims": [] },
+        { "name": "accelerations_length", "type": "int32_t", "dims": [] },
+        { "name": "effort_length", "type": "int32_t", "dims": [] },
+        { "name": "positions", "type": "double", "dims": ["positions_length"] },
+        { "name": "velocities", "type": "double", "dims": ["velocities_length"] },
+        {
+            "name": "accelerations",
+            "type": "double",
+            "dims": ["accelerations_length"]
+        },
+        { "name": "effort", "type": "double", "dims": ["effort_length"] },
+        { "name": "time_from_start", "type": "std_msgs.Duration", "dims": [] }
+    ],
+    "trajectory_msgs.MultiDOFJointTrajectory": [
+        { "name": "joint_names_length", "type": "int32_t", "dims": [] },
+        { "name": "points_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "joint_names", "type": "string", "dims": ["joint_names_length"] },
+        {
+            "name": "points",
+            "type": "trajectory_msgs.MultiDOFJointTrajectoryPoint",
+            "dims": ["points_length"]
+        }
+    ],
+    "trajectory_msgs.MultiDOFJointTrajectoryPoint": [
+        { "name": "transforms_length", "type": "int32_t", "dims": [] },
+        { "name": "velocities_length", "type": "int32_t", "dims": [] },
+        { "name": "accelerations_length", "type": "int32_t", "dims": [] },
+        {
+            "name": "transforms",
+            "type": "geometry_msgs.Transform",
+            "dims": ["transforms_length"]
+        },
+        {
+            "name": "velocities",
+            "type": "geometry_msgs.Twist",
+            "dims": ["velocities_length"]
+        },
+        {
+            "name": "accelerations",
+            "type": "geometry_msgs.Twist",
+            "dims": ["accelerations_length"]
+        },
+        { "name": "time_from_start", "type": "std_msgs.Duration", "dims": [] }
+    ],
+    "vision_msgs.BoundingBox2D": [
+        { "name": "center", "type": "vision_msgs.Pose2D", "dims": [] },
+        { "name": "size_x", "type": "double", "dims": [] },
+        { "name": "size_y", "type": "double", "dims": [] }
+    ],
+    "vision_msgs.BoundingBox2DArray": [
+        { "name": "boxes_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "boxes",
+            "type": "vision_msgs.BoundingBox2D",
+            "dims": ["boxes_length"]
+        }
+    ],
+    "vision_msgs.BoundingBox3D": [
+        { "name": "center", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "size", "type": "geometry_msgs.Vector3", "dims": [] }
+    ],
+    "vision_msgs.BoundingBox3DArray": [
+        { "name": "boxes_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "boxes",
+            "type": "vision_msgs.BoundingBox3D",
+            "dims": ["boxes_length"]
+        }
+    ],
+    "vision_msgs.Classification": [
+        { "name": "results_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "results",
+            "type": "vision_msgs.ObjectHypothesis",
+            "dims": ["results_length"]
+        }
+    ],
+    "vision_msgs.Detection2D": [
+        { "name": "results_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "results",
+            "type": "vision_msgs.ObjectHypothesisWithPose",
+            "dims": ["results_length"]
+        },
+        { "name": "bbox", "type": "vision_msgs.BoundingBox2D", "dims": [] },
+        { "name": "id", "type": "string", "dims": [] }
+    ],
+    "vision_msgs.Detection2DArray": [
+        { "name": "detections_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "detections",
+            "type": "vision_msgs.Detection2D",
+            "dims": ["detections_length"]
+        }
+    ],
+    "vision_msgs.Detection3D": [
+        { "name": "results_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "results",
+            "type": "vision_msgs.ObjectHypothesisWithPose",
+            "dims": ["results_length"]
+        },
+        { "name": "bbox", "type": "vision_msgs.BoundingBox3D", "dims": [] },
+        { "name": "id", "type": "string", "dims": [] }
+    ],
+    "vision_msgs.Detection3DArray": [
+        { "name": "detections_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "detections",
+            "type": "vision_msgs.Detection3D",
+            "dims": ["detections_length"]
+        }
+    ],
+    "vision_msgs.LabelInfo": [
+        { "name": "class_map_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        {
+            "name": "class_map",
+            "type": "vision_msgs.VisionClass",
+            "dims": ["class_map_length"]
+        },
+        { "name": "threshold", "type": "float", "dims": [] }
+    ],
+    "vision_msgs.ObjectHypothesis": [
+        { "name": "class_id", "type": "string", "dims": [] },
+        { "name": "score", "type": "double", "dims": [] }
+    ],
+    "vision_msgs.ObjectHypothesisWithPose": [
+        {
+            "name": "hypothesis",
+            "type": "vision_msgs.ObjectHypothesis",
+            "dims": []
+        },
+        { "name": "pose", "type": "geometry_msgs.PoseWithCovariance", "dims": [] }
+    ],
+    "vision_msgs.Point2D": [
+        { "name": "x", "type": "double", "dims": [] },
+        { "name": "y", "type": "double", "dims": [] }
+    ],
+    "vision_msgs.Pose2D": [
+        { "name": "position", "type": "vision_msgs.Point2D", "dims": [] },
+        { "name": "theta", "type": "double", "dims": [] }
+    ],
+    "vision_msgs.VisionClass": [
+        { "name": "class_id", "type": "int16_t", "dims": [] },
+        { "name": "class_name", "type": "string", "dims": [] }
+    ],
+    "vision_msgs.VisionInfo": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "method", "type": "string", "dims": [] },
+        { "name": "database_location", "type": "string", "dims": [] },
+        { "name": "database_version", "type": "int32_t", "dims": [] }
+    ],
+    "visualization_msgs.ImageMarker": [
+        { "name": "points_length", "type": "int32_t", "dims": [] },
+        { "name": "outline_colors_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "ns", "type": "string", "dims": [] },
+        { "name": "id", "type": "int32_t", "dims": [] },
+        { "name": "type", "type": "int32_t", "dims": [] },
+        { "name": "action", "type": "int32_t", "dims": [] },
+        { "name": "position", "type": "geometry_msgs.Point", "dims": [] },
+        { "name": "scale", "type": "float", "dims": [] },
+        { "name": "outline_color", "type": "std_msgs.ColorRGBA", "dims": [] },
+        { "name": "filled", "type": "byte", "dims": [] },
+        { "name": "fill_color", "type": "std_msgs.ColorRGBA", "dims": [] },
+        { "name": "lifetime", "type": "std_msgs.Duration", "dims": [] },
+        {
+            "name": "points",
+            "type": "geometry_msgs.Point",
+            "dims": ["points_length"]
+        },
+        {
+            "name": "outline_colors",
+            "type": "std_msgs.ColorRGBA",
+            "dims": ["outline_colors_length"]
+        }
+    ],
+    "visualization_msgs.InteractiveMarker": [
+        { "name": "menu_entries_length", "type": "int32_t", "dims": [] },
+        { "name": "controls_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "name", "type": "string", "dims": [] },
+        { "name": "description", "type": "string", "dims": [] },
+        { "name": "scale", "type": "float", "dims": [] },
+        {
+            "name": "menu_entries",
+            "type": "visualization_msgs.MenuEntry",
+            "dims": ["menu_entries_length"]
+        },
+        {
+            "name": "controls",
+            "type": "visualization_msgs.InteractiveMarkerControl",
+            "dims": ["controls_length"]
+        }
+    ],
+    "visualization_msgs.InteractiveMarkerControl": [
+        { "name": "markers_length", "type": "int32_t", "dims": [] },
+        { "name": "name", "type": "string", "dims": [] },
+        { "name": "orientation", "type": "geometry_msgs.Quaternion", "dims": [] },
+        { "name": "orientation_mode", "type": "byte", "dims": [] },
+        { "name": "interaction_mode", "type": "byte", "dims": [] },
+        { "name": "always_visible", "type": "boolean", "dims": [] },
+        {
+            "name": "markers",
+            "type": "visualization_msgs.Marker",
+            "dims": ["markers_length"]
+        },
+        { "name": "independent_marker_orientation", "type": "boolean", "dims": [] },
+        { "name": "description", "type": "string", "dims": [] }
+    ],
+    "visualization_msgs.InteractiveMarkerFeedback": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "client_id", "type": "string", "dims": [] },
+        { "name": "marker_name", "type": "string", "dims": [] },
+        { "name": "control_name", "type": "string", "dims": [] },
+        { "name": "event_type", "type": "byte", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "menu_entry_id", "type": "int32_t", "dims": [] },
+        { "name": "mouse_point", "type": "geometry_msgs.Point", "dims": [] },
+        { "name": "mouse_point_valid", "type": "boolean", "dims": [] }
+    ],
+    "visualization_msgs.InteractiveMarkerInit": [
+        { "name": "markers_length", "type": "int32_t", "dims": [] },
+        { "name": "server_id", "type": "string", "dims": [] },
+        { "name": "seq_num", "type": "int64_t", "dims": [] },
+        {
+            "name": "markers",
+            "type": "visualization_msgs.InteractiveMarker",
+            "dims": ["markers_length"]
+        }
+    ],
+    "visualization_msgs.InteractiveMarkerPose": [
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "name", "type": "string", "dims": [] }
+    ],
+    "visualization_msgs.InteractiveMarkerUpdate": [
+        { "name": "markers_length", "type": "int32_t", "dims": [] },
+        { "name": "poses_length", "type": "int32_t", "dims": [] },
+        { "name": "erases_length", "type": "int32_t", "dims": [] },
+        { "name": "server_id", "type": "string", "dims": [] },
+        { "name": "seq_num", "type": "int64_t", "dims": [] },
+        { "name": "type", "type": "byte", "dims": [] },
+        {
+            "name": "markers",
+            "type": "visualization_msgs.InteractiveMarker",
+            "dims": ["markers_length"]
+        },
+        {
+            "name": "poses",
+            "type": "visualization_msgs.InteractiveMarkerPose",
+            "dims": ["poses_length"]
+        },
+        { "name": "erases", "type": "string", "dims": ["erases_length"] }
+    ],
+    "visualization_msgs.Marker": [
+        { "name": "points_length", "type": "int32_t", "dims": [] },
+        { "name": "colors_length", "type": "int32_t", "dims": [] },
+        { "name": "header", "type": "std_msgs.Header", "dims": [] },
+        { "name": "ns", "type": "string", "dims": [] },
+        { "name": "id", "type": "int32_t", "dims": [] },
+        { "name": "type", "type": "int32_t", "dims": [] },
+        { "name": "action", "type": "int32_t", "dims": [] },
+        { "name": "pose", "type": "geometry_msgs.Pose", "dims": [] },
+        { "name": "scale", "type": "geometry_msgs.Vector3", "dims": [] },
+        { "name": "color", "type": "std_msgs.ColorRGBA", "dims": [] },
+        { "name": "lifetime", "type": "std_msgs.Duration", "dims": [] },
+        { "name": "frame_locked", "type": "boolean", "dims": [] },
+        {
+            "name": "points",
+            "type": "geometry_msgs.Point",
+            "dims": ["points_length"]
+        },
+        {
+            "name": "colors",
+            "type": "std_msgs.ColorRGBA",
+            "dims": ["colors_length"]
+        },
+        { "name": "text", "type": "string", "dims": [] },
+        { "name": "mesh_resource", "type": "string", "dims": [] },
+        { "name": "mesh_use_embedded_materials", "type": "boolean", "dims": [] }
+    ],
+    "visualization_msgs.MarkerArray": [
+        { "name": "markers_length", "type": "int32_t", "dims": [] },
+        {
+            "name": "markers",
+            "type": "visualization_msgs.Marker",
+            "dims": ["markers_length"]
+        }
+    ],
+    "visualization_msgs.MenuEntry": [
+        { "name": "id", "type": "int32_t", "dims": [] },
+        { "name": "parent_id", "type": "int32_t", "dims": [] },
+        { "name": "title", "type": "string", "dims": [] },
+        { "name": "command", "type": "string", "dims": [] },
+        { "name": "command_type", "type": "byte", "dims": [] }
+    ]
+}
