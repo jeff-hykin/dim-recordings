@@ -1,6 +1,6 @@
 // The recordings list: sort, date sections, previews, the Summary panel, Open / actions menus, conversions and
 // uploads. Every action is a backend endpoint (api.ts), the same ones Desktop's agent calls.
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
     api,
     bytes,
@@ -16,6 +16,8 @@ import {
 } from "../api.ts"
 import { go } from "../App.tsx"
 import { ThemeToggle } from "../ThemeToggle.tsx"
+import { appEvents } from "../dim-app/events.js"
+import { useBackendState } from "../dim-app/react.js"
 import { ConfirmDialog, HoverMenu, type MenuItem, RenameDialog, Thumbnail, toast } from "../ui.tsx"
 import { SummaryPanel } from "./SummaryPanel.tsx"
 import { UploadTray, useTray } from "./Uploads.tsx"
@@ -51,8 +53,6 @@ type DialogState =
 export function Library() {
     const [sort, setSort] = useState<SortKey>(saved("sort", "date"))
     const [order, setOrder] = useState<Order>(saved("order", "desc"))
-    const [data, setData] = useState<ListResponse | null>(null)
-    const [error, setError] = useState<string | null>(null)
     const [jobs, setJobs] = useState<Record<string, Job>>({})
     const [dialog, setDialog] = useState<DialogState>(null)
     const [summary, setSummary] = useState<
@@ -64,59 +64,29 @@ export function Library() {
     const hideTimer = useRef<number | undefined>(undefined)
     const { tray, error: trayError, refresh: refreshTray } = useTray()
 
-    const load = useCallback(() => {
-        api.list(sort, order).then((d) => {
-            setData(d)
-            setError(null)
-        }, (e) => setError(String(e.message ?? e)))
-    }, [sort, order])
-    useEffect(load, [load])
+    // the list is backend state: GET api/recordings, re-GET when the backend's stateChanged("recordings") arrives
+    // (zenoh, frontend topic state/recordings) and after the zenoh-web connection comes back
+    const [data, { error: listError }] = useBackendState<ListResponse>(
+        `api/recordings?sort=${sort}&order=${order}&tz=${new Date().getTimezoneOffset()}`,
+        { key: "recordings" },
+    )
+    const error = listError ? String(listError.message ?? listError) : null
 
-    // live: the backend's events (a file appeared, a preview finished, a job moved)
-    useEffect(() => {
-        let socket: WebSocket | null = null
-        let timer: number | undefined
-        let closed = false
-        const connect = () => {
-            socket = new WebSocket(
-                new URL(
-                    "api/events/ws",
-                    location.href.replace(/^http/, "ws").replace(/#.*$/, ""),
-                ),
-            )
-            socket.onmessage = (message) => {
-                const event = JSON.parse(message.data)
-                if (event.type === "job") {
-                    const job = event.job as Job
-                    setJobs((current) => ({ ...current, [job.id]: job }))
-                    if (job.state === "done") {
-                        toast(`${job.phase}`, "ok")
-                    } else if (job.state === "failed") {
-                        toast(`converting failed: ${job.error}`, "danger")
-                    }
-                    if (job.state !== "running") {
-                        load()
-                    }
-                    return
+    // live: the backend's events (a preview finished, a job moved), on its frontend topic `events`
+    useEffect(() =>
+        appEvents((event) => {
+            if (event.type === "job") {
+                const job = event.job as Job
+                setJobs((current) => ({ ...current, [job.id]: job }))
+                if (job.state === "done") {
+                    toast(`${job.phase}`, "ok")
+                } else if (job.state === "failed") {
+                    toast(`converting failed: ${job.error}`, "danger")
                 }
-                if (event.type === "thumbnail") {
-                    setThumbVersion((v) => v + 1)
-                }
-                clearTimeout(timer)
-                timer = setTimeout(load, 250)
+            } else if (event.type === "thumbnail") {
+                setThumbVersion((v) => v + 1)
             }
-            socket.onclose = () => {
-                if (!closed) {
-                    setTimeout(connect, 2000)
-                }
-            }
-        }
-        connect()
-        return () => {
-            closed = true
-            socket?.close()
-        }
-    }, [load])
+        }), [])
     useEffect(() => {
         api.jobs().then(
             ({ jobs }) => setJobs(Object.fromEntries(jobs.map((job) => [job.id, job]))),

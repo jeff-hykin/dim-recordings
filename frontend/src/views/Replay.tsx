@@ -14,6 +14,7 @@ import { Icon } from "../live/ui/icons.tsx"
 import { useMobile } from "../live/ui/useMobile.ts"
 import { forgetRoutes } from "../live/layers/odometry.tsx"
 import { bytes } from "../api.ts"
+import { appEvents } from "../dim-app/events.js"
 import { clock, type Overview, replayApi } from "../replay/api.ts"
 import { Timeline } from "../replay/Timeline.tsx"
 import "../live/styles.css"
@@ -135,42 +136,26 @@ function LiveReplay({ overview, initial, expanded, onExpanded, onReload }: {
             const { t, speed, loop } = created.connection.playhead.get()
             onReload({ t, speed, loop })
         }
-        // the agent drives open players: POST api/replay/{id}/control
-        let socket: WebSocket | null = null
-        let closed = false
-        const listen = () => {
-            socket = new WebSocket(
-                new URL(
-                    "api/events/ws",
-                    location.href.replace(/^http/, "ws").replace(/#.*$/, ""),
-                ),
-            )
-            socket.onmessage = (event) => {
-                const message = JSON.parse(event.data)
-                if (message.type !== "replay" || message.id !== overview.id) {
-                    return
-                }
-                const connection = created.connection
-                if (message.action === "play") {
-                    connection.play()
-                } else if (message.action === "pause") {
-                    connection.pause()
-                } else if (message.action === "seek" && typeof message.t === "number") {
-                    connection.seek(overview.start + message.t)
-                } else if (
-                    message.action === "speed" && typeof message.speed === "number"
-                ) {
-                    connection.playhead.update({
-                        speed: Math.min(16, Math.max(0.05, message.speed)),
-                    })
-                }
+        // the agent drives open players: POST api/replay/{id}/control → a `replay` event on the frontend topic `events`
+        const stopEvents = appEvents((message) => {
+            if (message.type !== "replay" || message.id !== overview.id) {
+                return
             }
-            socket.onclose = () => !closed && setTimeout(listen, 2000)
-        }
-        listen()
+            const connection = created.connection
+            if (message.action === "play") {
+                connection.play()
+            } else if (message.action === "pause") {
+                connection.pause()
+            } else if (message.action === "seek" && typeof message.t === "number") {
+                connection.seek(overview.start + message.t)
+            } else if (message.action === "speed" && typeof message.speed === "number") {
+                connection.playhead.update({
+                    speed: Math.min(16, Math.max(0.05, message.speed)),
+                })
+            }
+        })
         return () => {
-            closed = true
-            socket?.close()
+            stopEvents()
             removeEventListener("dim-theme", theme)
             created.dispose()
             if (globalThis.__lv === created) {

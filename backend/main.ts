@@ -3,7 +3,7 @@
 // fallback).
 import { loadConfig } from "./config.ts"
 import { dimosApp } from "./dimos_app.ts"
-import { eventsSocket, handle, publishEvent } from "./http.ts"
+import { handle, publishEvent, stateChanged } from "./http.ts"
 import { buildRoutes, DESCRIPTION } from "./routes.ts"
 import { makeServices } from "./services.ts"
 
@@ -15,7 +15,16 @@ function flag(name: string): string | undefined {
 const config = loadConfig()
 const services = makeServices(config)
 const routes = buildRoutes(services)
-services.library.listeners.add(publishEvent)
+// pages: the list is state ("recordings": they re-GET api/recordings), the rest are events (frontend topic `events`)
+services.library.listeners.add((event) => {
+    const jobMoved = event.type === "job" && (event.job as { state?: string })?.state !== "running"
+    if (event.type === "recordings" || event.type === "thumbnail" || jobMoved) {
+        stateChanged("recordings")
+    }
+    if (event.type !== "recordings") {
+        publishEvent(event)
+    }
+})
 // a new file in the folder: tell the pages, look for preview work
 try {
     Deno.mkdirSync(config.recordingsDir, { recursive: true })
@@ -24,7 +33,7 @@ try {
         for await (const _event of Deno.watchFs(config.recordingsDir, { recursive: true })) {
             clearTimeout(timer)
             timer = setTimeout(() => {
-                publishEvent({ type: "recordings", reason: "folder" })
+                stateChanged("recordings")
                 services.thumbnails.poke()
             }, 800)
         }
@@ -66,9 +75,6 @@ async function file(path: string): Promise<Response> {
 
 async function serve(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname
-    if (path === "/api/events/ws") {
-        return eventsSocket(request)
-    }
     return (await handle(request, routes, DESCRIPTION)) ?? file(path)
 }
 

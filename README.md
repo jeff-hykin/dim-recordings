@@ -39,6 +39,23 @@ dimos-desktop install https://github.com/jeff-hykin/dim-recordings
 Each of these is an HTTP endpoint (`backend/recordings/routes.ts`, `backend/replay/routes.ts`, listed in dimos.yaml's
 `agent:`), so Desktop's agent can do anything the page does.
 
+## Backend → page
+
+Desktop's rule (its docs/events.md): the page asks over HTTP and hears back over zenoh, on its one zenoh-web connection
+(dim-app's `getZenoh()`). The backend publishes through Desktop's relay (`POST /desktop/frontend/<name>/<topic>`,
+dim-app's `frontend_publish.js`, vendored in `backend/dim-app/`):
+
+- `state/recordings` — `stateChanged("recordings")` on a rename, delete, duplicate, note, inspection, preview, finished
+  conversion or a change in the folder; the list (`useBackendState`) re-GETs `api/recordings`.
+- `state/uploads` — after an upload action; the tray also re-GETs `api/uploads` on the dimos server's upload events
+  (`<ns>/dimos/events/upload`, `uploads`, `upload-removed`, `cloud-login`).
+- `events` — `{type: "job", job}` (conversion progress), `{type: "thumbnail", id}`, and `{type: "replay", action, id}`
+  (`POST api/replay/{id}/control`, the agent driving open Replayers).
+
+**The exception**: the Replayer's playback stream, `api/replay/{id}/ws`, stays a websocket (Jeff's call, 2026-10-05): it
+is the page's internal request/answer stream for frames at the playhead (subscribe, seek / play / scrub, and the frames
+back, with drop-to-latest and thumbnail-while-scrubbing), not an event feed.
+
 ## Layout
 
 | path                              | what                                                                                                                                                                |
@@ -48,7 +65,7 @@ Each of these is an HTTP endpoint (`backend/recordings/routes.ts`, `backend/repl
 | `frontend/src/views/`             | `Library.tsx` (the list), `SummaryPanel.tsx`, `Uploads.tsx`, `Replay.tsx` (the Replayer)                                                                            |
 | `frontend/src/live/`              | dim-controller's frontend (cbcd274), its bridge connection swapped for the playback websocket (`core/transport.ts`, `core/video.ts`)                                |
 | `frontend/src/replay/`            | the Replayer's timeline                                                                                                                                             |
-| `frontend/src/dim-app/`           | the dim-app theme (Portal dark / Research light), vendored at the tag in `VERSION`                                                                                  |
+| `frontend/src/dim-app/`           | dim-app (theme, zenoh connection, useBackendState, events), vendored at the tag in `VERSION`; `backend/dim-app/`: its relay publisher                               |
 | `scripts/replay_rss.ts`           | the backend's peak memory while a recording is opened, scrubbed end to end and played                                                                               |
 | `scripts/make_test_recordings.ts` | short clips with shifted times (for the date sections) and a raw-LCM `.mcap` (which Foxglove can't draw)                                                            |
 

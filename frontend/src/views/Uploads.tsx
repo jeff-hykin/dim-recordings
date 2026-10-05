@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import { api, bytes, desktopPath, type Tray, type Upload } from "../api.ts"
 import { isDark } from "../dim-app/theme.js"
+import { useBackendState } from "../dim-app/react.js"
+import { getZenoh } from "../dim-app/zenoh.js"
 
 const PHASES: Record<string, string> = {
     preparing: "preparing",
@@ -19,32 +21,26 @@ function eta(seconds: number | null) {
     return seconds < 60 ? `${Math.ceil(seconds)} s left` : `${Math.ceil(seconds / 60)} min left`
 }
 
-/** The tray's state, polled each second while something's moving (every 5 s otherwise). */
+/** The tray's state (GET api/uploads): re-read when the backend says it changed (frontend topic state/uploads) and
+ * on the dimos server's upload events (`<ns>/dimos/events/upload*`, `cloud-login`), at most every 250 ms. */
 export function useTray() {
-    const [tray, setTray] = useState<Tray | null>(null)
-    const [error, setError] = useState<string | null>(null)
-    const [tick, setTick] = useState(0)
+    const [tray, { error, refresh }] = useBackendState<Tray>("api/uploads", { key: "uploads", debounceMs: 250 })
     useEffect(() => {
-        let stopped = false
-        const read = () =>
-            api.tray().then((t) => {
-                if (!stopped) {
-                    setTray(t)
-                    setError(null)
-                }
-            }, (e) => !stopped && setError(String(e.message ?? e)))
-        read()
-        const busy = tray?.uploads.some((u) => u.state === "queued" || u.state === "uploading")
-        const timer = setInterval(read, busy ? 1000 : 5000)
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const off = getZenoh().subscribeDimos("*", (event: { type?: string }) => {
+            if (["upload", "uploads", "upload-removed", "cloud-login"].includes(event?.type ?? "") && !timer) {
+                timer = setTimeout(() => {
+                    timer = undefined
+                    refresh()
+                }, 250)
+            }
+        })
         return () => {
-            stopped = true
-            clearInterval(timer)
+            off()
+            clearTimeout(timer)
         }
-    }, [
-        tick,
-        tray?.uploads.some((u) => u.state === "queued" || u.state === "uploading"),
-    ])
-    return { tray, error, refresh: () => setTick((n) => n + 1) }
+    }, [refresh])
+    return { tray: tray ?? null, error: error ? String(error.message ?? error) : null, refresh: () => void refresh() }
 }
 
 export function LoginPanel(

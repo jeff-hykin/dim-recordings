@@ -1,7 +1,7 @@
 // Uploads to the Dimensional cloud go through Desktop's dimos server (`/dimos/uploads`, `/dimos/cloud/*`; the
 // contract: NosyPuma upload_api.md). This only relays, so the page and the agent use one set of endpoints.
 import type { Config } from "../config.ts"
-import { HttpError } from "../http.ts"
+import { HttpError, stateChanged } from "../http.ts"
 
 export type Uploaded = { path: string; uploadId: string; link: string | null; changed: boolean; uploadedAt: number }
 
@@ -31,6 +31,9 @@ export class Uploads {
                 // plain text
             }
             throw new HttpError(response.status, message.slice(0, 400))
+        }
+        if (method !== "GET") {
+            stateChanged("uploads") // the tray (progress arrives as the dimos server's upload events)
         }
         return text ? JSON.parse(text) : null
     }

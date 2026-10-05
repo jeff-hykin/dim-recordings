@@ -1,15 +1,17 @@
-// Desktop → app events: a subscription to dimOS Desktop's push stream (`GET /api/events`, Server-Sent Events, one JSON
-// object per `data:` line, typed by its `type`: apps, endpoints, blueprints, runs, notification, notifications,
-// ui-settings, dimos, job, recordings, agent).
+// Desktop → app events (Desktop's docs/events.md): Desktop publishes each event on `<ns>/desktop/events/<type>` (typed by
+// its `type`: apps, endpoints, blueprints, runs, notification, notifications, ui-settings, recordings, job, error, …),
+// and the dimos server's on `<ns>/dimos/events/<type>`.
 //
-//     import { onDesktopEvent } from "https://esm.sh/gh/jeff-hykin/dim-app@v0.9.5/desktop_events.js"
+//     import { onDesktopEvent } from "https://esm.sh/gh/jeff-hykin/dim-app@v0.10.1/desktop_events.js"
 //     const off = onDesktopEvent("endpoints", (event) => refreshTools())   // or "*" for every event
 //     off()                                                                // unsubscribe
 //
-// Browser: an EventSource on the same origin ("/api/events"; apps are served under /apps/<name>/). Deno (an app's
-// backend): fetches the stream from the Desktop URL its server was given (`--desktop-url`, else DIMOS_DESKTOP_URL),
-// parses the `data:` lines, and reconnects with backoff (0.5 s doubling to 10 s). One connection per process/page,
-// shared by every subscription; it closes when the last one unsubscribes. Never throws.
+// Browser: a subscription on the page's one zenoh-web connection (zenoh.js's getZenoh()). Events published while that
+// connection was down are gone; `onDesktopReconnect(callback)` says when to re-GET. Deno (an app's backend, which has
+// no zenoh-web): Desktop's deprecated `GET /api/events` stream from DIMOS_APP's desktopUrl (Server-Sent Events, kept by
+// Desktop for one release), reconnecting with backoff (0.5 s doubling to 10 s). Never throws.
+
+import { getZenoh } from "./zenoh.js"
 
 const RECONNECT_MIN_MS = 500
 const RECONNECT_MAX_MS = 10_000
@@ -70,16 +72,11 @@ function desktopUrlFromServer() {
         return ctx.desktopUrl
     }
     try {
-        return globalThis.Deno?.env.get("DIMOS_DESKTOP_URL") ?? null
+        const app = globalThis.Deno?.env.get("DIMOS_APP")
+        return (app && JSON.parse(app).desktopUrl) || (globalThis.Deno?.env.get("DIMOS_DESKTOP_URL") ?? null)
     } catch {
         return null
     }
-}
-
-function connectBrowser(url) {
-    const source = new EventSource(url)
-    source.onmessage = (message) => dispatch(message.data) // EventSource reconnects by itself
-    return { close: () => source.close() }
 }
 
 function connectFetch(url) {
@@ -124,28 +121,49 @@ function connectFetch(url) {
     }
 }
 
+const inBrowser = () => typeof document !== "undefined" && typeof location !== "undefined"
+
 /**
  * Calls `callback(event)` for each Desktop event of `type` ("*" = every event). Returns an unsubscribe function.
  * @param {string} type
  * @param {(event: { type: string, [key: string]: unknown }) => void} callback
- * @param {{ desktopUrl?: string }} [options] Desktop's base URL; default: same origin (browser) or the server's
- *   --desktop-url / DIMOS_DESKTOP_URL (Deno)
+ * @param {{ desktopUrl?: string }} [options] Deno only: Desktop's base URL (default: DIMOS_APP's desktopUrl)
  * @returns {() => void}
  */
 export function onDesktopEvent(type, callback, options = {}) {
+    if (inBrowser() && !options.desktopUrl) {
+        try {
+            return getZenoh().subscribeDesktop(type, callback)
+        } catch (error) {
+            console.debug("[dim-app] onDesktopEvent: couldn't subscribe:", error)
+            return () => {}
+        }
+    }
+    return onDesktopEventStream(type, callback, options)
+}
+
+/** Browser: calls `callback(event)` for each dimos server event of `type` ("*" = every one): launch, log, upload, … */
+export function onDimosEvent(type, callback) {
+    return getZenoh().subscribeDimos(type, callback)
+}
+
+/** Browser: `callback()` when the page's zenoh-web connection is back after being lost (re-GET what you show). */
+export function onDesktopReconnect(callback) {
+    return getZenoh().onReconnect(callback)
+}
+
+function onDesktopEventStream(type, callback, options) {
     if (!subscribers.has(type)) {
         subscribers.set(type, new Set())
     }
     subscribers.get(type).add(callback)
     if (!connection) {
         try {
-            const inBrowser = typeof EventSource === "function" && typeof document !== "undefined"
-            const base = options.desktopUrl ?? (inBrowser ? location.origin : desktopUrlFromServer())
+            const base = options.desktopUrl ?? desktopUrlFromServer()
             if (!base) {
                 console.debug("[dim-app] onDesktopEvent: no Desktop URL (not under dimOS Desktop); no events")
             } else {
-                const url = new URL("/api/events", base).href
-                connection = inBrowser && !options.desktopUrl ? connectBrowser(url) : connectFetch(url)
+                connection = connectFetch(new URL("/api/events", base).href)
             }
         } catch (error) {
             console.debug("[dim-app] onDesktopEvent: couldn't connect:", error)

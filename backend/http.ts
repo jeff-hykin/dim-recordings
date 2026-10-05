@@ -2,6 +2,9 @@
 // way. `routes` is also served as agent.json (Desktop's agent finds the endpoints there; dimos.yaml repeats them, and
 // `deno task check-endpoints` keeps the two in step). Docs: dimos-desktop docs/apps.md, docs/agent.md.
 
+// @ts-types="./dim-app/frontend_publish.d.ts"
+import { publishFrontend, stateChanged } from "./dim-app/frontend_publish.js"
+
 export type Params = Record<string, { type: string; description?: string; required?: boolean; items?: unknown }>
 
 export type Route = {
@@ -99,21 +102,9 @@ export async function handle(request: Request, routes: Route[], description: str
     return null
 }
 
-/** Pages listening on `api/events/ws` (the standard backend → page channel): one JSON event per message. */
-const pages = new Set<WebSocket>()
-
+/** Backend → page (Desktop's docs/events.md): Desktop's relay publishes it on `<ns>/apps/<name>/frontend/events`. */
 export function publishEvent(event: unknown) {
-    const text = JSON.stringify(event)
-    for (const ws of pages) {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(text)
-        }
-    }
+    return publishFrontend("events", event)
 }
 
-export function eventsSocket(request: Request): Response {
-    const { socket, response } = Deno.upgradeWebSocket(request)
-    socket.onopen = () => pages.add(socket)
-    socket.onclose = () => pages.delete(socket)
-    return response
-}
+export { publishFrontend, stateChanged }
