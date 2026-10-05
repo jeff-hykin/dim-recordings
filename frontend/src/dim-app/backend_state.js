@@ -12,7 +12,8 @@
 // ("api/library?sort=name": its key is the path's last segment, "library", unless `key` says otherwise). React pages
 // use react.js's useBackendState, which wraps this.
 
-import { checkTopic, getZenoh } from "./zenoh.js"
+import { checkTopic } from "./topic.js"
+import { getZenoh } from "./zenoh.js"
 
 /**
  * `{ url, key, topic }` for a source: a key (no "/" or "?") or an app-relative URL.
