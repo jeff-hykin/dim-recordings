@@ -1,6 +1,7 @@
 // The Replayer (`#/replay/<id>`): the Controller's live view (3D with point clouds, poses and their path, the tf
 // tree, camera panels, layers; src/live is its code) playing a recording, with a timeline docked at the bottom. Its
 // backend is backend/replay. Nothing is loaded up front: the page asks for what the playhead needs.
+import { EmptyState } from "../EmptyState.tsx"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { go } from "../App.tsx"
 import { ViewerApp } from "../live/core/app.ts"
@@ -54,16 +55,14 @@ export function Replay({ id }: { id: string }) {
     if (error) {
         return (
             <div className="replay-page">
-                <div className="replay-message">
-                    <p className="section-head">Replayer</p>
-                    <p className="error">{error}</p>
-                    <button
-                        type="button"
-                        className="dim-btn"
-                        onClick={() => go({ view: "library" })}
-                    >
-                        Back to the recordings
-                    </button>
+                <div className="replay-message" data-testid="onboard-replay-error">
+                    <EmptyState
+                        label="Replayer"
+                        tone="warn"
+                        title={`Couldn't open ${id}`}
+                        body={`${error}. The file may be unfinished (still recording), damaged, or missing the streams the Replayer draws; try another recording.`}
+                        actions={[{ label: "Back to the recordings", onClick: () => go({ view: "library" }) }]}
+                    />
                 </div>
             </div>
         )

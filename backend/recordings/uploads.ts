@@ -10,7 +10,7 @@ export class Uploads {
 
     async #call(method: string, path: string, body?: unknown) {
         if (!this.config.desktopUrl) {
-            throw new HttpError(503, "uploads go through Desktop, and this app isn't running in one")
+            throw new HttpError(503, "Uploads go through dimOS Desktop: open the Recordings app from Desktop to upload")
         }
         let response: Response
         try {

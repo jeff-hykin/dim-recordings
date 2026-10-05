@@ -213,13 +213,18 @@ export function UploadTray(
                 />
             )}
             {tray && !tray.account.loggedIn && !login && !tray.waitingForLogin && (
-                <button type="button" className="dim-btn sm" onClick={onLogin}>
-                    Log in
-                </button>
+                <div className="tray-login" data-testid="onboard-login">
+                    <p className="small">
+                        Log in to Dimensional cloud to upload. Uploads you start before that wait here until you do.
+                    </p>
+                    <button type="button" className="dim-btn sm primary" onClick={onLogin}>
+                        Log in
+                    </button>
+                </div>
             )}
             {!tray?.uploads.length && (
                 <p className="muted small">
-                    Nothing uploading. Use a row's Upload button.
+                    Nothing uploading. Use a recording's Upload button to send it to your Dimensional account.
                 </p>
             )}
             {tray?.uploads.slice().reverse().map((upload) => (

@@ -98,13 +98,15 @@ function spawn(command: string[]) {
     child.unref()
 }
 
-/** Opens the file in the target; returns what happened, for the page's toast and the agent. */
+/** Opens the file in the target; returns what happened, for the page's toast and the agent. `show: false` loads it
+ * into another app without switching to it (`app` says which; the page opens it in its own window, so Back returns). */
 export async function openIn(
     config: Config,
     target: OpenTarget["target"],
     recording: { id: string; name: string; path: string; format: string; symlink: boolean },
     inspection: Inspection | null,
-): Promise<{ ok: true; opened: string }> {
+    show = true,
+): Promise<{ ok: true; opened: string; app?: string }> {
     const env = await environment(config)
     const choice = openTargets(recording.format, inspection, env).find((t) => t.target === target)
     if (!choice) {
@@ -127,16 +129,20 @@ export async function openIn(
                 path: recording.path,
                 writable: !recording.symlink,
             })
-            await desktop(config, "/api/open-app", { app: MAP_EDITOR_APP })
-            return { ok: true, opened: `the Map Editor on ${recording.name}` }
+            if (show) {
+                await desktop(config, "/api/open-app", { app: MAP_EDITOR_APP })
+            }
+            return { ok: true, opened: `the Map Editor on ${recording.name}`, app: MAP_EDITOR_APP }
         case "foxglove":
             spawn([...findFoxglove()!.command, recording.path])
             return { ok: true, opened: `Foxglove on ${recording.name}` }
         case "rerun":
             if (env.apps.includes(RERUN_APP)) {
                 await desktop(config, `/apps/${RERUN_APP}/api/open`, { path: recording.path })
-                await desktop(config, "/api/open-app", { app: RERUN_APP })
-                return { ok: true, opened: `the Rerun app on ${recording.name}` }
+                if (show) {
+                    await desktop(config, "/api/open-app", { app: RERUN_APP })
+                }
+                return { ok: true, opened: `the Rerun app on ${recording.name}`, app: RERUN_APP }
             }
             spawn([which("rerun")!, recording.path])
             return { ok: true, opened: `rerun on ${recording.name}` }

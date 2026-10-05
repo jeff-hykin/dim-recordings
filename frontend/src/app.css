@@ -107,7 +107,8 @@ a.dim-btn {
 .table {
     flex: 1;
     overflow: auto;
-    padding: 0 20px 80px;
+    /* the list's end stays above Desktop's dock (dim-app --dim-inset-bottom) */
+    padding: 0 20px calc(80px + var(--dim-inset-bottom));
 }
 .library-body {
     flex: 1;
@@ -368,12 +369,12 @@ a.dim-btn {
 /* ── the summary panel ── */
 .summary {
     flex: 0 0 520px;
-    margin: 10px 12px 12px 0;
+    margin: 10px 12px calc(12px + var(--dim-inset-bottom)) 0;
 }
 .tray {
     position: fixed;
     right: 12px;
-    bottom: 12px;
+    bottom: calc(12px + var(--dim-inset-bottom));
     z-index: 10;
 }
 .summary,
@@ -655,4 +656,15 @@ body.science .summary .streams td {
     .table {
         padding: 0 12px 80px;
     }
+}
+
+/* a first-run message in the list */
+.tray-login {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+.dim-toasts {
+    bottom: calc(24px + var(--dim-inset-bottom));
 }

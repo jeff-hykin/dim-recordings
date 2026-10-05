@@ -18,6 +18,8 @@ import { go } from "../App.tsx"
 import { ThemeToggle } from "../ThemeToggle.tsx"
 import { appEvents } from "../dim-app/events.js"
 import { useBackendState } from "../dim-app/react.js"
+import { EmptyState } from "../EmptyState.tsx"
+import { inDesktopShell, openApp } from "../dim-app/desktop.js"
 import { ConfirmDialog, HoverMenu, type MenuItem, RenameDialog, Thumbnail, toast } from "../ui.tsx"
 import { SummaryPanel } from "./SummaryPanel.tsx"
 import { UploadTray, useTray } from "./Uploads.tsx"
@@ -117,8 +119,17 @@ export function Library() {
             go({ view: "replay", id: recording.id })
             return
         }
-        api.open(recording.id, target).then(
-            (r) => toast(`opened ${r.opened}`, "ok"),
+        // an app (Map Editor, Rerun) gets the recording, then opens in this window through the shell, so the
+        // browser's Back comes back here; outside Desktop's shell the backend switches Desktop's last window
+        const inShell = inDesktopShell()
+        api.open(recording.id, target, !inShell).then(
+            (r) => {
+                if (inShell && r.app) {
+                    openApp(r.app)
+                } else {
+                    toast(`opened ${r.opened}`, "ok")
+                }
+            },
             fail,
         )
     }
@@ -401,7 +412,12 @@ export function Library() {
                 </button>
                 <ThemeToggle />
             </header>
-            {error && <p className="error banner">{error}</p>}
+            {error && (
+                <p className="error banner" data-testid="onboard-backend-down">
+                    The Recordings server isn't answering ({error}). It retries by itself; if this stays, close the app
+                    (✕) and open it again.
+                </p>
+            )}
             <div className="library-body">
                 <div className="table">
                     <div className="row head">
@@ -420,9 +436,25 @@ export function Library() {
                         </section>
                     ))}
                     {data && !all.length && (
-                        <div className="empty">
-                            <p className="section-head">No recordings</p>
-                            <p className="muted">Recordings in {data.dir} show up here.</p>
+                        <div className="empty" data-testid="onboard-no-recordings">
+                            <EmptyState
+                                label="No recordings"
+                                title="You don't have any recordings yet"
+                                body={`Record a robot with the Controller app: run a blueprint (or a replay), open the Controller's Record tab and press Record. New recordings in ${data.dir} show up here by themselves.`}
+                                actions={[
+                                    {
+                                        label: "Record with the Controller",
+                                        app: "dim-controller",
+                                        appTitle: "the Controller",
+                                    },
+                                    {
+                                        label: "Open the Launcher",
+                                        app: "launcher",
+                                        params: { kind: "blueprint" },
+                                        primary: false,
+                                    },
+                                ]}
+                            />
                         </div>
                     )}
                 </div>

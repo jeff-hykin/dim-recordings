@@ -4,6 +4,8 @@
 .replay-page {
     position: fixed;
     inset: 0;
+    /* the timeline (the page's bottom row) stays above Desktop's dock (dim-app --dim-inset-bottom) */
+    bottom: var(--dim-inset-bottom);
     display: flex;
     flex-direction: column;
     background: var(--bg);

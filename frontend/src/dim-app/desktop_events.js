@@ -2,7 +2,7 @@
 // its `type`: apps, endpoints, blueprints, runs, notification, notifications, ui-settings, recordings, job, error, …),
 // and the dimos server's on `<ns>/dimos/events/<type>`.
 //
-//     import { onDesktopEvent } from "https://esm.sh/gh/jeff-hykin/dim-app@v0.10.2/desktop_events.js"
+//     import { onDesktopEvent } from "https://esm.sh/gh/jeff-hykin/dim-app@v0.11.0/desktop_events.js"
 //     const off = onDesktopEvent("endpoints", (event) => refreshTools())   // or "*" for every event
 //     off()                                                                // unsubscribe
 //

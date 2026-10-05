@@ -197,9 +197,10 @@ export const api = {
     convert: (id: string, to: string) => call<Job>("POST", `api/recordings/${enc(id)}/convert`, { to }),
     jobs: () => call<{ jobs: Job[] }>("GET", "api/jobs"),
     cancelJob: (id: string) => call("DELETE", `api/jobs/${enc(id)}`),
-    open: (id: string, target: string) =>
-        call<{ opened: string }>("POST", `api/recordings/${enc(id)}/open`, {
+    open: (id: string, target: string, show = true) =>
+        call<{ opened: string; app?: string }>("POST", `api/recordings/${enc(id)}/open`, {
             target,
+            show,
         }),
     reveal: (id: string) => call("POST", `api/recordings/${enc(id)}/reveal`, {}),
     upload: (id: string) => call<Upload>("POST", `api/recordings/${enc(id)}/upload`, {}),

@@ -241,8 +241,13 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             params: {
                 ...ID,
                 target: { type: "string", required: true, description: "replayer | map-editor | foxglove | rerun" },
+                show: {
+                    type: "boolean",
+                    description:
+                        "switch Desktop's window to the app that opened it (default true); false = load only, the answer's `app` says which",
+                },
             },
-            handler: async ({ id, target }) => {
+            handler: async ({ id, target, show }) => {
                 const recording = await find(String(id))
                 try {
                     return await openIn(
@@ -250,6 +255,7 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
                         String(target) as OpenTarget["target"],
                         recording,
                         recording.inspection,
+                        show !== false,
                     )
                 } catch (error) {
                     throw new HttpError(409, error instanceof Error ? error.message : String(error))

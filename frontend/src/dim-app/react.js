@@ -1,11 +1,13 @@
-// React bindings: useBackendState, snapshot + live backend state (backend_state.js). Imports "react" from the app.
+// React bindings: useBackendState, snapshot + live backend state (backend_state.js); EmptyState and useAppInstalled
+// (desktop.js). Imports "react" from the app.
 //
 //     import { useBackendState } from "./dim-app/react.js"
 //     const [recordings, { loading, error, refresh }] = useBackendState("recordings") // GET api/state/recordings
 //     const [library] = useBackendState("api/library", { key: "library" })            // re-GET on state/library events
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { createElement, useCallback, useEffect, useRef, useState } from "react"
 import { watchBackendState } from "./backend_state.js"
+import { appInstalled, emptyState } from "./desktop.js"
 
 /**
  * @param {string} source a key ("recordings" → GET api/state/recordings) or an app-relative URL
@@ -34,4 +36,30 @@ export function useBackendState(source, options = {}) {
     }, [source])
     const refresh = useCallback(() => watch.current?.refresh() ?? Promise.resolve(), [])
     return [snapshot.data, { loading: snapshot.loading, error: snapshot.error, version: snapshot.version, refresh }]
+}
+
+/**
+ * desktop.js's `emptyState` as a component: a first-run / empty / error message with next-step buttons. `layer`
+ * centers it over the whole view (a canvas, a 3D scene), above Desktop's dock.
+ * @param {Parameters<typeof emptyState>[0] & { layer?: boolean, style?: object }} props
+ */
+export function EmptyState(props) {
+    const ref = useRef(null)
+    useEffect(() => {
+        ref.current?.replaceChildren(emptyState(props))
+    })
+    return createElement("div", { ref, className: props.layer ? "dim-empty-layer" : "dim-empty-host", style: props.style })
+}
+
+/** Whether app `id` is installed in Desktop (null until known); re-checks when Desktop's app list changes. */
+export function useAppInstalled(id) {
+    const [installed, setInstalled] = useState(null)
+    useEffect(() => {
+        let live = true
+        appInstalled(id).then((value) => live && setInstalled(value))
+        return () => {
+            live = false
+        }
+    }, [id])
+    return installed
 }
