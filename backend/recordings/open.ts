@@ -73,7 +73,7 @@ export async function environment(config: Config): Promise<Environment> {
 
 async function desktop(config: Config, path: string, body: unknown) {
     if (!config.desktopUrl) {
-        throw new Error("not running in Desktop (no --desktop-url)")
+        throw new Error("not running in Desktop (no desktopUrl in DIMOS_APP)")
     }
     const response = await fetch(`${config.desktopUrl}${path}`, {
         method: "POST",

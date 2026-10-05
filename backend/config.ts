@@ -1,5 +1,7 @@
-// Where things are: Desktop's flags (docs/apps.md) and env, with fallbacks for running outside Desktop.
+// Where things are: what Desktop passes in DIMOS_APP (docs/apps.md; dimos_app.ts), with fallbacks for running outside
+// Desktop (--recordings-dir, --data-dir, --desktop-url).
 import { join } from "node:path"
+import { dimosApp } from "./dimos_app.ts"
 
 function flag(name: string): string | undefined {
     const index = Deno.args.indexOf(`--${name}`)
@@ -22,10 +24,9 @@ export type Config = {
 
 export function loadConfig(): Config {
     return {
-        recordingsDir: flag("recordings-dir") ?? Deno.env.get("DIMOS_RECORDINGS_DIR") ?? join(dimosHome, "recordings"),
-        dataDir: flag("data-dir") ?? Deno.env.get("DIMOS_APP_DATA") ??
-            join(dimosHome, "data", "apps", "dim-recordings"),
-        desktopUrl: (flag("desktop-url") ?? Deno.env.get("DIMOS_DESKTOP_URL") ?? "").replace(/\/+$/, ""),
-        appName: Deno.env.get("DIMOS_APP_NAME") ?? "dim-recordings",
+        recordingsDir: flag("recordings-dir") ?? dimosApp.recordingsDir ?? join(dimosHome, "recordings"),
+        dataDir: flag("data-dir") ?? dimosApp.dataDir ?? join(dimosHome, "data", "apps", "dim-recordings"),
+        desktopUrl: (dimosApp.desktopUrl ?? "").replace(/\/+$/, ""),
+        appName: dimosApp.name ?? "dim-recordings",
     }
 }

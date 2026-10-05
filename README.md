@@ -17,7 +17,7 @@ dimos-desktop install https://github.com/jeff-hykin/dim-recordings
   pointer's x scrubs it. The job is slow on purpose: one recording at a time, ffmpeg under `nice -n 19`, a pause between
   frames. Works for `.db` and `.mcap` (LCM or CDR `Image` / `CompressedImage`).
 - **Summary** (hover): every stream's type, encoding, count, rate, p99 and largest gap, and the tf frame tree, like
-  `dtk data summary`. It also holds a note, kept in the app's data dir (`DIMOS_APP_DATA`), never in the file.
+  `dtk data summary`. It also holds a note, kept in the app's data dir (`DIMOS_APP`'s `dataDir`), never in the file.
 - **Open**: in the Replayer (`#/replay/<id>`, this app), the Map Editor (when `dim-map-builder` is installed), or
   Foxglove (when installed, and only for an `.mcap` whose image, point cloud and camera_info channels are CDR). An
   `.rrd` lists under the `.db` / `.mcap` with its name. It opens in the Rerun app (`dim-rerun`), else the `rerun`
