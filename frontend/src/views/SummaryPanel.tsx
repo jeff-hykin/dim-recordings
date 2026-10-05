@@ -1,7 +1,33 @@
-// The right-side panel: a recording's streams (type, encoding, count, rate, gaps) and tf frame tree, like `dtk data
-// summary`, plus its note (saved in the app's data, not the file).
+// The selected recording's summary (the right-side panel on a desktop, a full-width sheet on a phone): its streams
+// (type, encoding, count, rate, gaps) and tf frame tree, like `dtk data summary`, plus its note (saved in the app's
+// data, not the file).
 import { useEffect, useRef, useState } from "react"
 import { api, bytes, duration, gap, type Inspection, type Recording, type TfTree } from "../api.ts"
+
+// `dtk data summary --html` colors p99 and gap by how many times the stream's average interval they are, on a log scale
+// where 1× (even spacing) is calm and 20× is saturated: log10(ratio) / log10(20). Its three thirds become the theme's
+// status colors: even (< 2.7×) ok, uneven (2.7–7.4×) warn, gappy (≥ 7.4×) danger (Portal has no red: a filled warn).
+// Count and hz are dtk's other heat: magnitude on a log scale against the busiest stream, drawn as a bar under the number.
+const EVEN = 20 ** (1 / 3)
+const GAPPY = 20 ** (2 / 3)
+type Level = "ok" | "warn" | "bad" | ""
+const gapLevel = (ratio: number): Level => !(ratio > 0) ? "" : ratio < EVEN ? "ok" : ratio < GAPPY ? "warn" : "bad"
+const logShare = (value: number, max: number) => value > 0 && max > 0 ? Math.log10(value + 1) / Math.log10(max + 1) : 0
+
+function Legend() {
+    return (
+        <p className="rate-legend small muted" data-testid="rate-legend">
+            <span className="mono">p99 · gap</span> vs the average interval:
+            <span className="lvl ok">even &lt; {EVEN.toFixed(1)}×</span>
+            <span className="lvl warn">uneven</span>
+            <span className="lvl bad">gappy ≥ {GAPPY.toFixed(1)}×</span>
+            <span className="legend-bar">
+                <span className="count-bar" />
+            </span>
+            count, hz (log, vs the busiest stream)
+        </p>
+    )
+}
 
 function Tree({ tf }: { tf: TfTree }) {
     if (!tf.source) {
@@ -74,12 +100,10 @@ function Tree({ tf }: { tf: TfTree }) {
 }
 
 export function SummaryPanel(
-    { recording, pinned, onClose, onEnter, onLeave }: {
+    { recording, sheet, onClose }: {
         recording: Recording
-        pinned: boolean
+        sheet: boolean
         onClose: () => void
-        onEnter: () => void
-        onLeave: () => void
     },
 ) {
     const [inspection, setInspection] = useState<Inspection | null>(null)
@@ -110,28 +134,27 @@ export function SummaryPanel(
         1,
         ...(inspection?.streams ?? []).map((s) => s.count),
     )
-    return (
+    const maxHz = Math.max(0, ...(inspection?.streams ?? []).map((s) => s.hz))
+    const panel = (
         <aside
-            className="summary dim-card"
-            onMouseEnter={onEnter}
-            onMouseLeave={onLeave}
+            className={`summary dim-card ${sheet ? "sheet" : ""}`}
             aria-label="Summary"
+            data-testid="summary"
         >
             <header>
                 <div>
                     <p className="section-head">Summary</p>
                     <p className="summary-name mono">{recording.name}</p>
                 </div>
-                {pinned && (
-                    <button
-                        type="button"
-                        className="dim-btn ghost sm"
-                        onClick={onClose}
-                        aria-label="close"
-                    >
-                        ✕
-                    </button>
-                )}
+                <button
+                    type="button"
+                    className={`dim-btn sm ${sheet ? "" : "ghost"}`}
+                    onClick={onClose}
+                    aria-label="close"
+                    title="close (Esc)"
+                >
+                    {sheet ? "Close" : "✕"}
+                </button>
             </header>
             <dl className="facts">
                 <dt>size</dt>
@@ -200,7 +223,12 @@ export function SummaryPanel(
                     <tbody>
                         {inspection.streams.map((s) => (
                             <tr key={s.name} className={s.count ? "" : "empty-stream"}>
-                                <td className="mono" title={`${s.name}: ${s.type} (${s.encoding})`}>{s.name}</td>
+                                <td
+                                    className="mono"
+                                    title={`${s.name}: ${s.type} (${s.encoding})`}
+                                >
+                                    {s.name}
+                                </td>
                                 <td
                                     className="mono muted t-type"
                                     title={`${s.type} (${s.encoding})`}
@@ -215,23 +243,25 @@ export function SummaryPanel(
                                 <td className="num mono">
                                     <span
                                         className="count-bar"
-                                        style={{
-                                            width: `${
-                                                (Math.log10(s.count + 1) / Math.log10(maxCount + 1)) *
-                                                100
-                                            }%`,
-                                        }}
+                                        style={{ width: `${logShare(s.count, maxCount) * 100}%` }}
                                     />
                                     {s.count.toLocaleString()}
                                 </td>
                                 <td className="num mono">
+                                    <span
+                                        className="count-bar"
+                                        style={{ width: `${logShare(s.hz, maxHz) * 100}%` }}
+                                    />
                                     {s.hz > 0 ? s.hz.toFixed(1) : "—"}
                                 </td>
-                                <td className={`num mono ${s.p99Ratio > 3 ? "warn" : ""}`}>
+                                <td
+                                    className={`num mono lvl ${gapLevel(s.p99Ratio)}`}
+                                    title={s.p99Gap > 0 ? `${s.p99Ratio.toFixed(1)}× the average interval` : ""}
+                                >
                                     {gap(s.p99Gap)}
                                 </td>
                                 <td
-                                    className={`num mono ${s.gapRatio > 5 ? "warn" : ""}`}
+                                    className={`num mono lvl ${gapLevel(s.gapRatio)}`}
                                     title={s.maxGap > 0 ? `${s.gapRatio.toFixed(1)}× the average interval` : ""}
                                 >
                                     {gap(s.maxGap)}
@@ -241,8 +271,19 @@ export function SummaryPanel(
                     </tbody>
                 </table>
             )}
+            {inspection && <Legend />}
             <p className="dim-label">tf frames</p>
             {inspection && <Tree tf={inspection.tf} />}
         </aside>
     )
+    return sheet
+        ? (
+            <div
+                className="sheet-scrim"
+                onClick={(event) => event.target === event.currentTarget && onClose()}
+            >
+                {panel}
+            </div>
+        )
+        : panel
 }

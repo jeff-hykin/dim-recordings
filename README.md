@@ -16,13 +16,16 @@ dimos-desktop install https://github.com/jeff-hykin/dim-recordings
   pixels) and keeps 15 frames from its start, middle and end. A row plays its preview while it's on screen, and the
   pointer's x scrubs it. The job is slow on purpose: one recording at a time, ffmpeg under `nice -n 19`, a pause between
   frames. Works for `.db` and `.mcap` (LCM or CDR `Image` / `CompressedImage`).
-- **Summary** (hover): every stream's type, encoding, count, rate, p99 and largest gap, and the tf frame tree, like
-  `dtk data summary`. It also holds a note, kept in the app's data dir (`DIMOS_APP`'s `dataDir`), never in the file.
+- **Summary**: click a row (desktop) to select it and show its summary in a side panel (↑ / ↓ move the selection, Esc
+  closes); on a phone a row's Summary button opens it as a sheet. Every stream's type, encoding, count, rate, p99 and
+  largest gap, colored the way `dtk data summary --html` does (p99 / gap vs the average interval: even < 2.7×,
+  uneven, gappy ≥ 7.4×, as the theme's status colors; count / hz as a log bar), and the tf frame tree. It also holds a
+  note, kept in the app's data dir (`DIMOS_APP`'s `dataDir`), never in the file.
 - **Open**: in the Replayer (`#/replay/<id>`, this app), the Map Editor (when `dim-map-builder` is installed), or
   Foxglove (when installed, and only for an `.mcap` whose image, point cloud and camera_info channels are CDR). An
   `.rrd` lists under the `.db` / `.mcap` with its name. It opens in the Rerun app (`dim-rerun`), else the `rerun`
   viewer, else the button says what's missing.
-- **Actions**: rename, delete (asks first), duplicate, convert to `.db` / `.mcap` / `.rrd` (with
+- **Actions**: Upload, Rename and (set apart) Delete (asks first) on the row; in its ⋯ menu: duplicate, convert to `.db` / `.mcap` / `.rrd` (with
   [dtk](https://github.com/jeff-hykin/dtk), with progress), copy path, show in folder, and upload to the Dimensional
   cloud through Desktop's `/dimos/uploads` (a tray with progress and ETA; once a file is uploaded, its button becomes a
   link).

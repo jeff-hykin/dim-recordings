@@ -1,6 +1,6 @@
 // The recordings list: sort, date sections, previews, the Summary panel, Open / actions menus, conversions and
 // uploads. Every action is a backend endpoint (api.ts), the same ones Desktop's agent calls.
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import {
     api,
     bytes,
@@ -45,6 +45,23 @@ function save(key: string, value: string) {
     }
 }
 
+// a phone (the same breakpoint as app.css): the summary is a sheet a row's Summary button opens, not a side panel
+const PHONE = "(max-width: 900px)"
+function usePhone() {
+    const [phone, setPhone] = useState(() => matchMedia(PHONE).matches)
+    useEffect(() => {
+        const query = matchMedia(PHONE)
+        const change = () => setPhone(query.matches)
+        query.addEventListener("change", change)
+        return () => query.removeEventListener("change", change)
+    }, [])
+    return phone
+}
+
+// a click on a row's own controls (buttons, menus, links) is that control's, not a selection
+const ownControl = (target: EventTarget | null) =>
+    target instanceof Element && !!target.closest("button, a, input, textarea, select, label, .menu-wrap, .rrd")
+
 const fail = (error: unknown) => toast(String((error as Error)?.message ?? error), "danger")
 
 type DialogState =
@@ -57,13 +74,12 @@ export function Library() {
     const [order, setOrder] = useState<Order>(saved("order", "desc"))
     const [jobs, setJobs] = useState<Record<string, Job>>({})
     const [dialog, setDialog] = useState<DialogState>(null)
-    const [summary, setSummary] = useState<
-        { id: string; pinned: boolean } | null
-    >(null)
+    // the selected recording: its summary shows in the side panel (desktop) or the sheet (phone)
+    const [selected, setSelected] = useState<string | null>(null)
+    const phone = usePhone()
     const [trayOpen, setTrayOpen] = useState(false)
     const [login, setLogin] = useState(false)
     const [thumbVersion, setThumbVersion] = useState(1)
-    const hideTimer = useRef<number | undefined>(undefined)
     const { tray, error: trayError, refresh: refreshTray } = useTray()
 
     // the list is backend state: GET api/recordings, re-GET when the backend's stateChanged("recordings") arrives
@@ -97,22 +113,39 @@ export function Library() {
     }, [])
 
     const all = data?.sections.flatMap((s) => s.recordings) ?? []
-    const summaryRecording = summary ? all.find((r) => r.id === summary.id) : undefined
+    const summaryRecording = selected ? all.find((r) => r.id === selected && r.format !== "rrd") : undefined
     const uploadsByPath = new Map<string, Upload>(
         (tray?.uploads ?? []).map((u) => [u.path, u]),
     )
 
-    const showSummary = (id: string) => {
-        clearTimeout(hideTimer.current)
-        setSummary((current) => current?.pinned ? current : { id, pinned: false })
-    }
-    const hideSummary = () => {
-        clearTimeout(hideTimer.current)
-        hideTimer.current = setTimeout(
-            () => setSummary((current) => current?.pinned ? current : null),
-            300,
-        )
-    }
+    // ↑ / ↓ move the selection through the list (desktop), Esc closes the summary; not while typing or in a dialog
+    const selectable = all.filter((r) => r.format !== "rrd").map((r) => r.id)
+    useEffect(() => {
+        const keydown = (event: KeyboardEvent) => {
+            const target = event.target as Element | null
+            if (dialog || target?.closest?.("input, textarea, select, [contenteditable=true], [role=dialog]")) {
+                return
+            }
+            if (event.key === "Escape" && selected) {
+                setSelected(null)
+                return
+            }
+            if (phone || (event.key !== "ArrowDown" && event.key !== "ArrowUp") || !selectable.length) {
+                return
+            }
+            event.preventDefault()
+            const index = selected ? selectable.indexOf(selected) : -1
+            const next = index < 0
+                ? (event.key === "ArrowDown" ? 0 : selectable.length - 1)
+                : Math.max(0, Math.min(selectable.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)))
+            setSelected(selectable[next])
+            document.querySelector(`.row[data-id="${CSS.escape(selectable[next])}"]`)?.scrollIntoView({
+                block: "nearest",
+            })
+        }
+        addEventListener("keydown", keydown)
+        return () => removeEventListener("keydown", keydown)
+    }, [selectable.join("\n"), selected, phone, dialog])
 
     const open = (recording: Recording | RrdFile, target: string) => {
         if (target === "replayer") {
@@ -154,10 +187,6 @@ export function Library() {
 
     const actions = (recording: Recording): MenuItem[] => [
         {
-            label: "Rename…",
-            onSelect: () => setDialog({ kind: "rename", recording }),
-        },
-        {
             label: "Duplicate",
             onSelect: () =>
                 api.duplicate(recording.id).then(
@@ -183,12 +212,6 @@ export function Library() {
         {
             label: "Show in folder",
             onSelect: () => api.reveal(recording.id).then(() => {}, fail),
-        },
-        { separator: true },
-        {
-            label: "Delete…",
-            danger: true,
-            onSelect: () => setDialog({ kind: "delete", recording }),
         },
     ]
 
@@ -220,7 +243,7 @@ export function Library() {
                 </button>
                 <button
                     type="button"
-                    className="dim-btn sm ghost delete"
+                    className="dim-btn sm danger"
                     onClick={() => setDialog({ kind: "delete", recording: rrd })}
                 >
                     Delete
@@ -255,9 +278,11 @@ export function Library() {
         const link = liveUpload?.state === "done" ? liveUpload.link : recording.uploaded?.link
         return (
             <div
-                className={`row ${summary?.id === recording.id ? "active" : ""}`}
+                className={`row selectable ${selected === recording.id ? "active" : ""}`}
                 key={recording.id}
                 data-id={recording.id}
+                aria-selected={selected === recording.id}
+                onClick={(event) => !phone && !ownControl(event.target) && setSelected(recording.id)}
             >
                 <Thumbnail
                     id={recording.id}
@@ -322,15 +347,15 @@ export function Library() {
                     {recording.error ? "unreadable" : recording.summary ?? "reading…"}
                 </div>
                 <div className="row-actions">
-                    <button
-                        type="button"
-                        className={`dim-btn sm ghost ${summary?.id === recording.id ? "on" : ""}`}
-                        onMouseEnter={() => showSummary(recording.id)}
-                        onMouseLeave={hideSummary}
-                        onClick={() => setSummary({ id: recording.id, pinned: true })}
-                    >
-                        Summary
-                    </button>
+                    {phone && (
+                        <button
+                            type="button"
+                            className="dim-btn sm"
+                            onClick={() => setSelected(recording.id)}
+                        >
+                            Summary
+                        </button>
+                    )}
                     {openMenu(recording, `open-${recording.id}`)}
                     {link
                         ? (
@@ -362,11 +387,27 @@ export function Library() {
                                     : "Upload"}
                             </button>
                         )}
+                    <button
+                        type="button"
+                        className="dim-btn sm"
+                        onClick={() => setDialog({ kind: "rename", recording })}
+                    >
+                        Rename
+                    </button>
                     <HoverMenu
                         label="⋯"
                         items={actions(recording)}
                         testId={`more-${recording.id}`}
                     />
+                    <span className="action-gap" />
+                    <button
+                        type="button"
+                        className="dim-btn sm danger"
+                        data-testid={`delete-${recording.id}`}
+                        onClick={() => setDialog({ kind: "delete", recording })}
+                    >
+                        Delete
+                    </button>
                 </div>
             </div>
         )
@@ -374,7 +415,7 @@ export function Library() {
 
     const active = (tray?.uploads ?? []).filter((u) => u.state === "queued" || u.state === "uploading").length
     return (
-        <div className={`library ${summaryRecording ? "with-summary" : ""}`}>
+        <div className={`library ${summaryRecording && !phone ? "with-summary" : ""}`}>
             <header className="bar">
                 <span className="dim-title">Recordings</span>
                 <span className="mono muted small dir" title="the recordings folder">
@@ -461,10 +502,8 @@ export function Library() {
                 {summaryRecording && (
                     <SummaryPanel
                         recording={summaryRecording}
-                        pinned={!!summary?.pinned}
-                        onClose={() => setSummary(null)}
-                        onEnter={() => clearTimeout(hideTimer.current)}
-                        onLeave={hideSummary}
+                        sheet={phone}
+                        onClose={() => setSelected(null)}
                     />
                 )}
             </div>

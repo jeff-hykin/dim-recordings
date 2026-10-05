@@ -93,7 +93,6 @@ a.dim-btn {
     color: var(--fg);
 }
 /* destructive: the docs give status colors only (ok / warn), so warn marks it */
-.dim-btn.ghost.delete,
 .menu-item.danger {
     color: var(--warn);
 }
@@ -121,13 +120,28 @@ a.dim-btn {
 }
 /* with the summary open, the streams column gives way to it */
 .library.with-summary .row {
-    grid-template-columns: 112px minmax(140px, 1fr) 68px 70px 150px auto;
+    grid-template-columns: 96px minmax(120px, 1fr) 64px 64px 124px auto;
+    gap: 12px;
+}
+/* a narrower desktop: size and duration give way too (the summary shows both), and the actions wrap before they
+   would push Delete out of view */
+@media (max-width: 1400px) {
+    .library.with-summary .row {
+        grid-template-columns: 96px minmax(120px, 1fr) 124px auto;
+    }
+    .library.with-summary .row > :nth-child(3),
+    .library.with-summary .row > :nth-child(4) {
+        display: none;
+    }
+}
+.library.with-summary .row-actions {
+    flex-wrap: wrap;
 }
 .library.with-summary .row > :nth-child(6) {
     display: none;
 }
 .library.with-summary .thumb {
-    width: 112px;
+    width: 96px;
 }
 .row {
     display: grid;
@@ -151,9 +165,17 @@ a.dim-btn {
     padding-top: 10px;
     padding-bottom: 8px;
 }
-.row:not(.head):hover,
-.row.active {
+.row:not(.head):hover {
     background: var(--accent);
+}
+/* a click on a row selects it (its summary shows beside the list); the selected row carries the accent */
+.row.selectable {
+    cursor: pointer;
+}
+.row.active,
+.row.active:hover {
+    background: var(--primary-soft);
+    box-shadow: inset 2px 0 0 var(--primary);
 }
 .group-head {
     margin: 0;
@@ -217,6 +239,10 @@ a.dim-btn {
 .rrd > .mono:first-child {
     overflow: hidden;
     text-overflow: ellipsis;
+}
+/* Delete stands apart from the everyday actions */
+.action-gap {
+    flex: 0 0 14px;
 }
 .rrd .row-actions {
     margin-left: auto;
@@ -368,7 +394,7 @@ a.dim-btn {
 
 /* ── the summary panel ── */
 .summary {
-    flex: 0 0 520px;
+    flex: 0 0 clamp(380px, 36vw, 480px);
     margin: 10px 12px calc(12px + var(--dim-inset-bottom)) 0;
 }
 .tray {
@@ -377,9 +403,14 @@ a.dim-btn {
     bottom: calc(12px + var(--dim-inset-bottom));
     z-index: 10;
 }
-.summary,
 .tray {
     width: 520px;
+}
+.summary {
+    width: clamp(380px, 36vw, 480px);
+}
+.summary,
+.tray {
     overflow: auto;
     padding: 16px 18px;
     background: var(--card);
@@ -491,6 +522,61 @@ body.science .summary .streams td {
 }
 .streams tbody {
     isolation: isolate;
+}
+/* dtk data summary's gap colors (SummaryPanel.tsx gapLevel), as the theme's status colors */
+.lvl.ok {
+    color: var(--ok);
+}
+.lvl.warn {
+    color: var(--warn);
+}
+.lvl.bad {
+    color: var(--danger);
+    font-weight: 600;
+}
+td.lvl.bad {
+    background: var(--lvl-bad-fill);
+}
+:root {
+    --lvl-bad-fill: rgba(194, 65, 47, 0.1);
+}
+body.science.dark {
+    --lvl-bad-fill: rgba(232, 191, 106, 0.16);
+}
+.rate-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    margin: 0;
+}
+.rate-legend .lvl {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.rate-legend .lvl::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    background: currentColor;
+    border-radius: var(--radius-round);
+}
+.rate-legend .lvl.bad {
+    padding: 0 4px;
+    background: var(--lvl-bad-fill);
+    border-radius: var(--radius-sm);
+}
+.legend-bar {
+    position: relative;
+    display: inline-block;
+    width: 22px;
+    height: 8px;
+    isolation: isolate;
+}
+.legend-bar .count-bar {
+    width: 100%;
+    height: 3px;
 }
 .empty-stream td {
     opacity: 0.45;
@@ -636,13 +722,35 @@ body.science .summary .streams td {
     .library-body {
         flex-direction: column;
     }
-    .summary {
+    /* a phone: the summary is a full-width sheet from the bottom, over a scrim, closed by its Close button */
+    .sheet-scrim {
         position: fixed;
-        inset: 60px 8px 8px 8px;
-        width: auto;
-        background: var(--bg);
+        inset: 0;
+        z-index: 30;
+        background: rgba(0, 0, 0, 0.35);
+        display: flex;
+        align-items: flex-end;
+    }
+    .summary.sheet {
+        flex: none;
+        width: 100%;
+        max-height: calc(100% - 48px);
         margin: 0;
-        z-index: 10;
+        padding-bottom: calc(16px + var(--dim-inset-bottom));
+        border-left: 0;
+        border-right: 0;
+        border-bottom: 0;
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    }
+    .row.selectable {
+        cursor: default;
+    }
+    .action-gap {
+        flex: 1;
+    }
+    /* right-aligned on whichever line the wrap leaves it */
+    .row-actions > .danger {
+        margin-left: auto;
     }
     .tray {
         left: 8px;
