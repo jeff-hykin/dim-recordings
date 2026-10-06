@@ -27,6 +27,8 @@ export class Thumbnailer {
         error?: string
     }[] = []
     #wake: (() => void) | null = null
+    /** a poke that came while a pass was running: look again straight away */
+    #poked = false
 
     /** files outside the recordings folder that want a preview too (a plugged-in drive's), done first */
     extra: () => FileEntry[] = () => []
@@ -69,6 +71,7 @@ export class Thumbnailer {
 
     /** Look for work now (after a new file, a rename, a conversion). */
     poke() {
+        this.#poked = true
         this.#wake?.()
     }
 
@@ -84,13 +87,14 @@ export class Thumbnailer {
     async #loop() {
         while (this.running) {
             let did = false
+            this.#poked = false
             try {
                 did = await this.#one()
             } catch (error) {
                 console.error("thumbnails:", error)
             }
             await new Promise<void>((resolve) => {
-                const timer = setTimeout(resolve, did ? PAUSE_BETWEEN_RECORDINGS_MS : 30_000)
+                const timer = setTimeout(resolve, did || this.#poked ? PAUSE_BETWEEN_RECORDINGS_MS : 30_000)
                 this.#wake = () => {
                     clearTimeout(timer)
                     resolve()

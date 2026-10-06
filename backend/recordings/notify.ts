@@ -12,7 +12,8 @@ export function driveNotification(appName: string, drive: Drive) {
         app: appName,
         kind: "ok",
         actions: [["Transfer recordings", `open:${appName}/#/transfer`]],
-        details: { drive: drive.mount, files: drive.files.slice(0, 20).map((file) => file.relative) },
+        // Desktop shows details as text
+        details: [drive.mount, ...drive.files.slice(0, 20).map((file) => `  ${file.relative}`)].join("\n"),
     }
 }
 

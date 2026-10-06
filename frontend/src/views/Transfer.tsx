@@ -132,7 +132,7 @@ export function TransferDialog({ onClose }: { onClose: () => void }) {
                 </div>
                 <p className="small muted">
                     Into <span className="mono">{data?.destination.dir}</span>
-                    {free !== null && <>· {bytes(free)} free</>}
+                    {free !== null && ` · ${bytes(free)} free`}
                 </p>
                 {data && !data.drives.length && (
                     <p className="transfer-empty muted">
@@ -173,7 +173,7 @@ export function TransferDialog({ onClose }: { onClose: () => void }) {
                                         <span className="mono">{file.name}</span>
                                         <span className="small muted mono">
                                             {file.relative.includes("/")
-                                                ? file.relative.slice(0, file.relative.lastIndexOf("/") + 1)
+                                                ? `${file.relative.slice(0, file.relative.lastIndexOf("/") + 1)} · `
                                                 : ""}
                                             {bytes(file.size)} · {date(file.modified)}
                                         </span>

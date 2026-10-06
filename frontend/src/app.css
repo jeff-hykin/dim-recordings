@@ -945,6 +945,8 @@ body.science.dark {
 
 /* ── the transfer dialog (views/Transfer.tsx) ── */
 .dialog.transfer-dialog {
+    /* solid: the list behind it shouldn't read through a dialog this big */
+    background: var(--bg);
     width: min(860px, calc(100vw - 32px));
     max-height: calc(100vh - 64px - var(--dim-inset-bottom, 0px));
     gap: 10px;
