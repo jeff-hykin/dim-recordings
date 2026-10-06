@@ -37,7 +37,10 @@ dimos-desktop install https://github.com/jeff-hykin/dim-recordings
   `.mcap` in place. Nothing is loaded up front: the backend reads a stream's message times when it's first needed and a
   message when the playhead reaches it. While scrubbing, cameras show 192-px thumbnails (made in the background for
   jpeg/png streams, thinned on the fly for raw ones) and clouds are thinned to 6k points; playing or paused, everything
-  is full resolution.
+  is full resolution. A jump shows the whole tf tree as it was then, from an index of every tf message; reading it means
+  decompressing most of a big `.mcap` (36 s for a 1.6 GB zstd one), so it's read in the background, and until it gets
+  there a jump sends the tf of the moment before and then the whole tree. The background work (that index, the scrubbing
+  thumbnails) only runs while no page is playing or scrubbing.
 
 Each of these is an HTTP endpoint (`backend/recordings/routes.ts`, `backend/replay/routes.ts`, listed in dimos.yaml's
 `agent:`), so Desktop's agent can do anything the page does.

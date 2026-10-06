@@ -10,7 +10,7 @@ import { openMcap } from "../backend/recordings/mcap.ts"
 import { editDb } from "../backend/replay/edit_db.ts"
 import { editMcap } from "../backend/replay/edit_mcap.ts"
 import { acquire, closeAll, closeNow, Session, TfIndex } from "../backend/replay/player.ts"
-import { atOrBefore, openSource } from "../backend/replay/source.ts"
+import { atOrBefore, openSource, type Source } from "../backend/replay/source.ts"
 import { handle } from "../backend/http.ts"
 import { buildRoutes, DESCRIPTION } from "../backend/routes.ts"
 import { makeServices } from "../backend/services.ts"
@@ -182,10 +182,24 @@ Deno.test("source: an .mcap indexes from MessageIndex records and decompresses o
     }
 })
 
-/** a Session with its sends collected */
-async function session(path: string) {
-    const source = await openSource(path)
-    const tfIndexes = new Map<string, Promise<TfIndex>>()
+/** `source`, with every read of `stream` (default: all) waiting for `gate` */
+const gated = (source: Source, gate: () => Promise<void>, stream?: string): Source => ({
+    format: source.format,
+    path: source.path,
+    streams: source.streams,
+    index: (name) => source.index(name),
+    read: async (name, i) => (!stream || name === stream ? await gate() : undefined, source.read(name, i)),
+    close: () => source.close(),
+})
+
+/** a Session with its sends collected; `wrap` stands in for the source the player (`player`) or the tf index (`tf`) reads */
+async function session(
+    path: string,
+    wrap: { player?: (source: Source) => Source; tf?: (source: Source) => Source } = {},
+) {
+    const opened = await openSource(path)
+    const source = wrap.player?.(opened) ?? opened
+    const tfIndexes = new Map<string, TfIndex>()
     const sent: { header: Record<string, unknown>; payload: Uint8Array }[] = []
     const texts: Record<string, unknown>[] = []
     const player = new Session(
@@ -193,7 +207,10 @@ async function session(path: string) {
         source,
         (stream) => {
             if (!tfIndexes.has(stream)) {
-                tfIndexes.set(stream, TfIndex.build(source, stream))
+                tfIndexes.set(
+                    stream,
+                    TfIndex.start(wrap.tf?.(source) ?? source, stream),
+                )
             }
             return tfIndexes.get(stream)!
         },
@@ -229,7 +246,8 @@ async function session(path: string) {
         player,
         at,
         take,
-        close: () => (player.close(), source.close()),
+        tfIndex: (stream: string) => tfIndexes.get(stream)!,
+        close: () => (player.close(), opened.close()),
     }
 }
 
@@ -280,10 +298,75 @@ Deno.test("player: a jump sends the whole tf tree as it was then (an edge set on
         p.player.onText(
             JSON.stringify({ op: "sub", id: 7, stream: "tf", as: "lcm" }),
         )
+        await p.tfIndex("tf").done
         await p.at(T0 + 6.5, "scrub")
         const times = p.take().filter((m) => m.header.s === 7).map((m) => (m.header.t as number) - T0)
         // message 0 (base_link → camera, never sent again) and message 6 (world → base_link, the latest)
         assertEquals(times, [0, 6])
+    } finally {
+        p.close()
+    }
+})
+
+Deno.test("player: a jump never waits for the tf index: the latest tf at once, the whole tree when it's read", async () => {
+    const { path } = await sampleDb()
+    // the index reads tf only once the gate opens (a big .mcap's tf takes many seconds to read)
+    let open = () => {}
+    const gate = new Promise<void>((resolve) => open = resolve)
+    const p = await session(path, { tf: (source) => gated(source, () => gate) })
+    try {
+        p.player.onText(
+            JSON.stringify({ op: "sub", id: 1, stream: "odom", as: "lcm" }),
+        )
+        p.player.onText(
+            JSON.stringify({ op: "sub", id: 7, stream: "tf", as: "lcm" }),
+        )
+        await p.at(T0 + 6.5, "scrub")
+        const first = p.take()
+        assertEquals(
+            first.filter((m) => m.header.s === 1).length,
+            1,
+            "the other streams answer as usual",
+        )
+        assertEquals(
+            first.filter((m) => m.header.s === 7).map((m) => (m.header.t as number) - T0),
+            [6],
+        )
+        await p.at(T0 + 7.5, "scrub")
+        assertEquals(
+            p.take().filter((m) => m.header.s === 7).map((m) => (m.header.t as number) - T0),
+            [7],
+        )
+        // read: the page, asking nothing more, gets the tree at its playhead
+        open()
+        await p.tfIndex("tf").done
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        assertEquals(
+            p.take().filter((m) => m.header.s === 7).map((m) => (m.header.t as number) - T0),
+            [0, 7],
+        )
+    } finally {
+        p.close()
+    }
+})
+
+Deno.test("player: a newer playhead cuts short the one being answered (a scrub grabbed mid-play doesn't wait)", async () => {
+    const { path } = await sampleDb()
+    // the camera's reads wait until the gate opens: a slow tick
+    let open = () => {}
+    let gate = new Promise<void>((resolve) => open = resolve)
+    const p = await session(path, { player: (source) => gated(source, () => gate, "camera") })
+    try {
+        p.player.onText(JSON.stringify({ op: "sub", id: 1, stream: "camera", as: "image" }))
+        p.player.onText(JSON.stringify({ op: "sub", id: 2, stream: "odom", as: "lcm" }))
+        const playing = p.at(T0 + 4, "play")
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        const scrubbed = p.at(T0 + 8, "scrub") // sent while the play tick is stuck on the camera
+        open()
+        gate = Promise.resolve()
+        await Promise.all([playing, scrubbed])
+        const odom = p.take().filter((m) => m.header.s === 2).map((m) => Math.round(((m.header.t as number) - T0) * 10))
+        assertEquals(odom, [80], "odom at 4 s was never read: the play tick stopped for the scrub")
     } finally {
         p.close()
     }

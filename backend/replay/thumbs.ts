@@ -7,6 +7,7 @@ import { decodeImage, type ImageFrame } from "./payload.ts"
 import type { Source } from "./source.ts"
 import { ffmpeg } from "../recordings/thumbnails.ts"
 import { which } from "../recordings/foxglove.ts"
+import { afterPages } from "./player.ts"
 
 /** at most one thumbnail per this many seconds */
 export const THUMB_SPACING = 0.25
@@ -199,6 +200,7 @@ export class Thumbs {
                 if (this.#stopped) {
                     break
                 }
+                await afterPages()
                 const image = decodeImage(meta, await this.source.read(stream, i))
                 await writer.write(image?.data ?? new Uint8Array(0))
             }

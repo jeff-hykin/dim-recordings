@@ -379,7 +379,7 @@ export class Connection {
         if (this.#inFlight && now - this.#inFlight.at > 5000) {
             this.#inFlight = null
         }
-        if (this.#inFlight || this.#ws?.readyState !== WebSocket.OPEN) {
+        if (this.#ws?.readyState !== WebSocket.OPEN) {
             return
         }
         const current = this.playhead.get()
@@ -390,6 +390,11 @@ export class Connection {
             } else if (now - this.#stillSince > SETTLE_MS) {
                 mode = "pause" // held still mid-scrub: full quality
             }
+        }
+        // one request in flight, except that a new mode (a scrub grabbed mid-play, its release) goes at once: the
+        // backend drops the old one's remaining streams for it
+        if (this.#inFlight && this.#inFlight.mode === mode) {
+            return
         }
         if (this.#sent && this.#sent.t === current.t && this.#sent.mode === mode) {
             return

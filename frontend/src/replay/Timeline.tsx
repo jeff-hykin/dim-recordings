@@ -42,6 +42,8 @@ export function Timeline({ app, overview, expanded, onExpanded, onEdited }: {
     const [rows, setRows] = useState<TimelineData | null>(null)
     const [hover, setHover] = useState<{ x: number; t: number } | null>(null)
     const resumeAfterScrub = useRef(false)
+    /** ends the scrub in progress (its release may never reach this page: a press after it ends it first) */
+    const endScrub = useRef<(() => void) | null>(null)
     const connection = app.connection
 
     // per-stream ticks for the visible window (re-asked when zoomed)
@@ -61,6 +63,9 @@ export function Timeline({ app, overview, expanded, onExpanded, onEdited }: {
             clearTimeout(timer)
         }
     }, [expanded, overview.id, view.from, view.to])
+
+    // a drag's window listeners go with the timeline
+    useEffect(() => () => endScrub.current?.(), [])
 
     // keyboard: space plays / pauses, arrows step (shift: 10 s), Home / End (not while typing)
     useEffect(() => {
@@ -117,35 +122,39 @@ export function Timeline({ app, overview, expanded, onExpanded, onEdited }: {
             if (event.button !== 0) {
                 return
             }
+            endScrub.current?.()
             const lane = event.currentTarget
-            lane.setPointerCapture(event.pointerId)
+            try {
+                lane.setPointerCapture(event.pointerId)
+            } catch {
+                // a press Desktop's portal forwarded (its frame's margin covers the lane): not this page's pointer
+            }
             resumeAfterScrub.current = connection.playhead.get().playing
             connection.playhead.update({
                 scrubbing: true,
                 playing: false,
                 t: timeAt(lane, event.clientX),
             })
+            // the window follows the drag: a forwarded drag has no capture, and a release or cancel anywhere ends it
+            const move = (moved: PointerEvent) => connection.playhead.update({ t: timeAt(lane, moved.clientX) })
+            const end = () => {
+                endScrub.current = null
+                removeEventListener("pointermove", move)
+                removeEventListener("pointerup", end)
+                removeEventListener("pointercancel", end)
+                connection.playhead.update({
+                    scrubbing: false,
+                    playing: resumeAfterScrub.current,
+                })
+            }
+            addEventListener("pointermove", move)
+            addEventListener("pointerup", end)
+            addEventListener("pointercancel", end)
+            endScrub.current = end
         },
         onPointerMove: (event: React.PointerEvent<HTMLElement>) => {
             const lane = event.currentTarget
-            const t = timeAt(lane, event.clientX)
-            setHover({ x: event.clientX - lane.getBoundingClientRect().left, t })
-            if (
-                connection.playhead.get().scrubbing &&
-                lane.hasPointerCapture(event.pointerId)
-            ) {
-                connection.playhead.update({ t })
-            }
-        },
-        onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
-            if (!connection.playhead.get().scrubbing) {
-                return
-            }
-            event.currentTarget.releasePointerCapture(event.pointerId)
-            connection.playhead.update({
-                scrubbing: false,
-                playing: resumeAfterScrub.current,
-            })
+            setHover({ x: event.clientX - lane.getBoundingClientRect().left, t: timeAt(lane, event.clientX) })
         },
         onPointerLeave: () => setHover(null),
         onWheel: (event: React.WheelEvent<HTMLElement>) => {

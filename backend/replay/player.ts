@@ -31,6 +31,8 @@ const MAX_CONTINUOUS_STEP = 1.5
 const LEAD_IN = 2
 /** most messages of one stream sent in one tick (a long tick at high speed keeps the newest) */
 const MAX_PER_TICK = 400
+/** seconds of tf before the playhead a jump past the tf index sends meanwhile (short: every chunk it spans is read) */
+const TF_RECENT = 0.3
 
 // ── open recordings, shared by every page and endpoint looking at the same file ──
 
@@ -38,7 +40,7 @@ type Open = {
     source: Promise<Source>
     users: number
     timer?: number
-    tf: Map<string, Promise<TfIndex>>
+    tf: Map<string, TfIndex>
     /** the file it opened (inode, size, mtime): a different file at the same path is opened afresh */
     identity: string
 }
@@ -57,7 +59,7 @@ export async function acquire(
     {
         source: Source
         release: () => void
-        tf: (stream: string) => Promise<TfIndex>
+        tf: (stream: string) => TfIndex
     }
 > {
     const identity = await identityOf(path)
@@ -106,7 +108,7 @@ export async function acquire(
         tf: (stream) => {
             let index = mine.tf.get(stream)
             if (!index) {
-                index = TfIndex.build(source, stream)
+                index = TfIndex.start(source, stream)
                 mine.tf.set(stream, index)
             }
             return index
@@ -143,27 +145,60 @@ export async function closeNow(path: string) {
 
 // ── the tf tree at any time: for every edge, which messages carry it ──
 
+/** a slice of the event loop the tf index reads for before it lets pages' requests in (ms) */
+const TF_SLICE_MS = 8
+/** background reads (the tf index, scrubbing thumbnails) wait until no page has asked for this long (ms) */
+const PAGES_IDLE_MS = 100
+/** pages' requests being answered right now, and when the last one was */
+let ticking = 0
+let lastTick = 0
+
+/** Waits until pages are idle: a background read of a whole file never slows playing or scrubbing. */
+export async function afterPages() {
+    while (ticking > 0 || performance.now() - lastTick < PAGES_IDLE_MS) {
+        await new Promise((resolve) => setTimeout(resolve, PAGES_IDLE_MS / 4))
+    }
+}
+
 export class TfIndex {
     /** per edge (parent\nchild), the indexes of the messages that set it, ascending */
     edges = new Map<string, number[]>()
+    /** messages read so far, from the first: a snapshot at a message before this is the whole tree */
+    covered = 0
+    /** settles when every message is read (or reading failed: the file closed or changed) */
+    done: Promise<void> = Promise.resolve()
+    finished = false
 
-    static async build(source: Source, stream: string): Promise<TfIndex> {
+    /** Starts reading the stream's messages in the background (a big .mcap's tf means decompressing most of it). */
+    static start(source: Source, stream: string): TfIndex {
         const index = new TfIndex()
+        index.done = index.#read(source, stream).catch(() => {}).finally(() => index.finished = true)
+        return index
+    }
+
+    /** Reads every message in order, letting other work in every TF_SLICE_MS (a .db's reads never yield). */
+    async #read(source: Source, stream: string) {
         const meta = source.streams.find((s) => s.name === stream)!
         const { times } = await source.index(stream)
+        let slice = performance.now()
         for (let i = 0; i < times.length; i++) {
+            if (performance.now() - slice > TF_SLICE_MS) {
+                await new Promise((resolve) => setTimeout(resolve, 0))
+                await afterPages()
+                slice = performance.now()
+            }
             const message = decodeObject(meta, await source.read(stream, i))
             for (const transform of message?.transforms ?? []) {
                 const key = `${transform.header?.frame_id ?? ""}\n${transform.child_frame_id ?? ""}`
-                let list = index.edges.get(key)
+                let list = this.edges.get(key)
                 if (!list) {
                     list = []
-                    index.edges.set(key, list)
+                    this.edges.set(key, list)
                 }
                 list.push(i)
             }
+            this.covered = i + 1
         }
-        return index
     }
 
     /** The messages that, applied in order, give the tree as it was at message `at`: each edge's latest. */
@@ -199,6 +234,8 @@ type Subscription = {
     last: number
     lastQuality: Quality
     lastSentT: number
+    /** a tf jump sent before the index reached it: the whole tree follows when the index is read */
+    tfPending?: boolean
 }
 
 const sessions = new Set<Session>()
@@ -216,7 +253,7 @@ export class Session {
     constructor(
         readonly path: string,
         readonly source: Source,
-        readonly tf: (stream: string) => Promise<TfIndex>,
+        readonly tf: (stream: string) => TfIndex,
         readonly thumbs: Thumbs | null,
         readonly send: (data: Uint8Array | string) => void,
     ) {
@@ -265,6 +302,9 @@ export class Session {
                 lastSentT: -Infinity,
             }
             this.#subs.set(sub.id, sub)
+            if (meta.kind === "tf" && sub.as === "lcm") {
+                this.tf(meta.name) // its index starts reading now, so a jump later finds it ready
+            }
             // a new subscriber gets what's at the playhead now, like a live topic's latest sample
             this.#request({
                 t: this.#t,
@@ -320,7 +360,13 @@ export class Session {
                 if (next === this.#pending) {
                     this.#pending = null
                 }
-                await this.#tick(next.t, next.mode, (next as { only?: number }).only)
+                ticking++
+                try {
+                    await this.#tick(next.t, next.mode, (next as { only?: number }).only)
+                } finally {
+                    ticking--
+                    lastTick = performance.now()
+                }
                 if (next.seq >= 0) {
                     this.send(JSON.stringify({ op: "done", seq: next.seq }))
                 }
@@ -348,6 +394,9 @@ export class Session {
         }
         const quality: Quality = mode === "scrub" ? "low" : "full"
         for (const sub of [...this.#subs.values()]) {
+            if (only === undefined && this.#pending) {
+                return // a newer playhead is waiting: the rest of this one is out of date
+            }
             if (this.#closed || (only !== undefined && sub.id !== only)) {
                 continue
             }
@@ -374,8 +423,22 @@ export class Session {
             ) {
                 // a jump: the whole tree as it was at t (each edge's latest message), not just the last message
                 if (at !== sub.last || fresh) {
-                    const index = await this.tf(sub.meta.name)
-                    for (const i of index.snapshot(at)) {
+                    const index = this.tf(sub.meta.name)
+                    const wanted = new Set(index.snapshot(at))
+                    if (at >= index.covered) {
+                        // not read that far yet: the last moment's tf now (never wait for the index), the tree when it's in
+                        const from = Math.max(
+                            atOrBefore(times, times[at] - TF_RECENT) + 1,
+                            at - MAX_PER_TICK + 1,
+                        )
+                        for (let i = from; i <= at; i++) {
+                            wanted.add(i)
+                        }
+                        if (!index.finished) {
+                            this.#treeWhenRead(sub, index)
+                        }
+                    }
+                    for (const i of [...wanted].sort((a, b) => a - b)) {
                         await this.#send(sub, i, times[i], quality)
                     }
                     sub.last = at
@@ -403,6 +466,26 @@ export class Session {
             await this.#send(sub, at, times[at], quality)
             sub.last = at
         }
+    }
+
+    /** Once the tf index is read, sends the whole tree at the playhead (the page may be paused and ask nothing more). */
+    #treeWhenRead(sub: Subscription, index: TfIndex) {
+        if (sub.tfPending) {
+            return
+        }
+        sub.tfPending = true
+        index.done.then(() => {
+            sub.tfPending = false
+            if (this.#closed || this.#subs.get(sub.id) !== sub) {
+                return
+            }
+            this.#request({
+                t: this.#t,
+                mode: this.#mode === "play" ? "pause" : this.#mode,
+                seq: -1,
+                only: sub.id,
+            })
+        })
     }
 
     async #send(sub: Subscription, i: number, t: number, quality: Quality) {
