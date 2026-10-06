@@ -5,7 +5,6 @@ import { useStore } from "../core/store.ts"
 import { splatFallback } from "../core/render/rendering.ts"
 import { Icon } from "./icons.tsx"
 import type { Tab } from "./SidePanel.tsx"
-import { ThemeToggle } from "../../ThemeToggle.tsx"
 
 const TABS: { tab: Tab; icon: string; label: string }[] = [
     { tab: "layers", icon: "layers", label: "Layers" },
@@ -61,7 +60,6 @@ export function TopBar(
                 </button>
             )}
             <span className="spacer" />
-            <ThemeToggle className="theme-toggle" />
             <nav className="dim-tabs tabs">
                 {TABS.map((item) => (
                     <button

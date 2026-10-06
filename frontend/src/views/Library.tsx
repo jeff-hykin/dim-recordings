@@ -15,7 +15,6 @@ import {
     when,
 } from "../api.ts"
 import { go } from "../App.tsx"
-import { ThemeToggle } from "../ThemeToggle.tsx"
 import { appEvents } from "../dim-app/events.js"
 import { useBackendState } from "../dim-app/react.js"
 import { EmptyState } from "../EmptyState.tsx"
@@ -456,7 +455,6 @@ export function Library() {
                 >
                     Uploads{active ? ` · ${active}` : ""}
                 </button>
-                <ThemeToggle />
             </header>
             {error && (
                 <p className="error banner" data-testid="onboard-backend-down">

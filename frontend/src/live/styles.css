@@ -743,11 +743,6 @@ body.dark .lv .scene-slot {
     box-shadow: var(--shadow-lg);
 }
 
-/* the Portal / Research switch in the top bar; on a phone the tabs need the room */
-.lv.mobile .theme-toggle {
-    display: none;
-}
-
 /* a layer's color picker: a theme control around the color it previews (the swatch is the 3D color, not chrome) */
 .lv input[type="color"] {
     appearance: none;
