@@ -208,9 +208,14 @@ export class Jobs {
                 } else {
                     try {
                         if (to === "rrd") {
-                            // to_rrd keeps its .rrd in dtk's cache and prints its path last
+                            // to_rrd keeps its .rrd in dtk's cache and prints its path last: it's moved out, not
+                            // copied, so a conversion leaves one .rrd on disk rather than two (dtk rebuilds a missing one)
                             await Deno.remove(output).catch(() => {})
-                            await Deno.copyFile(lastStdout, output)
+                            await Deno.rename(lastStdout, output).catch(async () => {
+                                // another volume: copy, then drop the cache's
+                                await Deno.copyFile(lastStdout, output)
+                                await Deno.remove(lastStdout).catch(() => {})
+                            })
                         } else {
                             Deno.renameSync(partial!, output)
                         }
