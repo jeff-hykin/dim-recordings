@@ -1,8 +1,10 @@
-// What's inside a recording: per-stream type, encoding, count, rate and gaps, and the tf frame tree (a port of
-// `dtk data summary`, tools/db_summary.js). Reads only indexes and timestamps, plus the first seconds of tf.
+// What's inside a recording: per-stream type, encoding, count, rate and gaps, the tf frame tree (a port of
+// `dtk data summary`, tools/db_summary.js), and what looks wrong (warnings.ts). Reads indexes and timestamps, a .db's
+// whole tf stream (an .mcap's tf in windows across it), and each stream's first message for its frame.
 import { openDb } from "./sqlite.ts"
-import { decodeCdrFrames, decodeLcmFrames, type Edge, unwrapBlob } from "./messages.ts"
+import { decodeCdrFrames, decodeLcmFrames, type Edge, readCdrFrameId, readLcmFrameId, unwrapBlob } from "./messages.ts"
 import { logTimesFromIndexes, openMcap } from "./mcap.ts"
+import { type EdgeSpan, streamWarnings, tfWarnings, type Warning } from "./warnings.ts"
 
 export type StreamInfo = {
     name: string
@@ -26,9 +28,11 @@ export type StreamInfo = {
 export type TfTree = {
     /** which streams it came from ("tf + tf_static"), null when the recording has no tf */
     source: string | null
-    seconds: number
+    /** how much of it was read: "all of it" (a .db), "16 windows of 1 s, every 31 s" (an .mcap) */
+    coverage: string
     messages: number
-    edges: (Edge & { count: number })[]
+    /** each parent → child with its count, first and last time, and rate (0 when static) over what was read */
+    edges: EdgeSpan[]
     roots: string[]
     /** frames with more than one parent: tf allows exactly one */
     conflicts: { frame: string; parents: { parent: string; count: number }[] }[]
@@ -42,6 +46,8 @@ export type Inspection = {
     messages: number
     streams: StreamInfo[]
     tf: TfTree
+    /** what looks wrong, worst first: a broken tf tree, outlier gaps, rate drops, streams that start late or stop early */
+    warnings: Warning[]
     /** a short line for the list: "1 camera · 2 point clouds · odometry · tf" */
     summary: string
     error?: string
@@ -143,21 +149,62 @@ export function streamSummary(streams: Pick<StreamInfo, "name" | "type" | "count
     return parts.join(" · ") || "empty"
 }
 
-export function buildTree(source: string | null, seconds: number, messages: number, edgeLists: Edge[][]): TfTree {
-    const counts = new Map<string, number>()
+/** One read of a tf stream: when, which edges, from a static stream or not, and which window it was read in. */
+export type TfSample = { time: number; edges: Edge[]; static: boolean; window: number }
+
+export function buildTree(source: string | null, coverage: string, samples: TfSample[]): TfTree {
+    type Acc = {
+        count: number
+        first: number
+        last: number
+        static: boolean
+        windows: Map<number, [number, number, number]>
+    }
+    const byKey = new Map<string, Acc>()
     const parentsOf = new Map<string, Map<string, number>>()
-    for (const edges of edgeLists) {
-        for (const { parent, child } of edges) {
+    for (const sample of samples) {
+        for (const { parent, child } of sample.edges) {
             const key = `${parent}\n${child}`
-            counts.set(key, (counts.get(key) ?? 0) + 1)
+            let acc = byKey.get(key)
+            if (!acc) {
+                acc = { count: 0, first: Infinity, last: -Infinity, static: true, windows: new Map() }
+                byKey.set(key, acc)
+            }
+            acc.count++
+            acc.first = Math.min(acc.first, sample.time)
+            acc.last = Math.max(acc.last, sample.time)
+            acc.static &&= sample.static
+            const span = acc.windows.get(sample.window)
+            if (span) {
+                span[0]++
+                span[1] = Math.min(span[1], sample.time)
+                span[2] = Math.max(span[2], sample.time)
+            } else {
+                acc.windows.set(sample.window, [1, sample.time, sample.time])
+            }
             const seen = parentsOf.get(child) ?? new Map<string, number>()
             seen.set(parent, (seen.get(parent) ?? 0) + 1)
             parentsOf.set(child, seen)
         }
     }
-    const edges = [...counts].map(([key, count]) => {
+    const edges: EdgeSpan[] = [...byKey].map(([key, acc]) => {
         const [parent, child] = key.split("\n")
-        return { parent, child, count }
+        // a rate within each window read, so the stretches between windows don't count as silence
+        let intervals = 0
+        let time = 0
+        for (const [count, first, last] of acc.windows.values()) {
+            intervals += count - 1
+            time += last - first
+        }
+        return {
+            parent,
+            child,
+            count: acc.count,
+            first: acc.first,
+            last: acc.last,
+            hz: acc.static || time <= 0 ? 0 : intervals / time,
+            static: acc.static,
+        }
     }).sort((a, b) => a.parent.localeCompare(b.parent) || a.child.localeCompare(b.child))
     const children = new Set(edges.map((edge) => edge.child))
     const roots = [...new Set(edges.map((edge) => edge.parent))].filter((frame) => !children.has(frame)).sort()
@@ -165,7 +212,7 @@ export function buildTree(source: string | null, seconds: number, messages: numb
         frame,
         parents: [...seen].map(([parent, count]) => ({ parent, count })).sort((a, b) => b.count - a.count),
     }))
-    return { source, seconds, messages, edges, roots, conflicts }
+    return { source, coverage, messages: samples.length, edges, roots, conflicts }
 }
 
 /** tf + tf_static when present (a rival TFMessage stream is another estimate, not more of this tree), else the first TFMessage stream */
@@ -178,11 +225,36 @@ function tfStreams(streams: StreamInfo[]): string[] {
     return any ? [any.name] : []
 }
 
-function finish(format: "db" | "mcap", streams: StreamInfo[], tf: TfTree): Inspection {
+const ORDER = ["two parents", "cycle", "forest", "unplaced", "stops early", "starts late", "gap", "rate drop"]
+
+function finish(
+    format: "db" | "mcap",
+    streams: StreamInfo[],
+    tf: TfTree,
+    timesOf: (name: string) => number[],
+    headerFrames: Map<string, string>,
+    sampledEvery = 0,
+    sampledWindow = 0,
+): Inspection {
     const starts = streams.map((s) => s.start).filter((t): t is number => t !== null)
     const ends = streams.map((s) => s.end).filter((t): t is number => t !== null)
     const start = starts.length ? Math.min(...starts) : null
     const end = ends.length ? Math.max(...ends) : null
+    const steady = streams.filter((s) => s.count >= 20 && s.start !== null && s.end !== null)
+    const middle = (values: number[]) => values.sort((a, b) => a - b)[Math.floor((values.length - 1) / 2)]
+    const usualStart = steady.length ? middle(steady.map((s) => s.start!)) : start
+    const usualEnd = steady.length ? middle(steady.map((s) => s.end!)) : end
+    const warnings = [
+        ...tfWarnings(tf.edges, start, end, headerFrames, sampledEvery, sampledWindow),
+        ...streams.flatMap((s) =>
+            streamWarnings(s.name, timesOf(s.name), start, end, usualStart, usualEnd, /TFMessage$/.test(s.type))
+        ),
+    ]
+    const rank = (w: Warning) => {
+        const at = ORDER.indexOf(w.kind)
+        return (w.message.startsWith("TF:") ? 0 : 100) + (at < 0 ? 50 : at)
+    }
+    warnings.sort((a, b) => rank(a) - rank(b))
     return {
         format,
         start,
@@ -191,11 +263,14 @@ function finish(format: "db" | "mcap", streams: StreamInfo[], tf: TfTree): Inspe
         messages: streams.reduce((sum, s) => sum + s.count, 0),
         streams,
         tf,
+        warnings,
         summary: streamSummary(streams),
     }
 }
 
-const TF_SECONDS = 10
+/** an .mcap's tf is read in this many windows of TF_WINDOW seconds across it (a whole read decompresses every chunk) */
+const TF_WINDOWS = 16
+const TF_WINDOW = 1
 
 export function inspectDb(path: string): Inspection {
     const db = openDb(path)
@@ -204,7 +279,13 @@ export function inspectDb(path: string): Inspection {
             name: string
             config: string
         }[]
+        const tables = new Set(
+            (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((r) =>
+                r.name
+            ),
+        )
         const streams: StreamInfo[] = []
+        const timesByName = new Map<string, number[]>()
         for (const { name, config } of rows) {
             let payload = ""
             let codec = ""
@@ -224,6 +305,7 @@ export function inspectDb(path: string): Inspection {
             } catch {
                 // a stream registered without its table
             }
+            timesByName.set(name, times)
             streams.push({
                 ...gapStats(name, times.length, times),
                 type: shortType(payload),
@@ -232,29 +314,53 @@ export function inspectDb(path: string): Inspection {
             })
         }
         const names = tfStreams(streams)
-        const edgeLists: Edge[][] = []
+        const samples: TfSample[] = []
         for (const name of names) {
-            const stream = streams.find((s) => s.name === name)!
             const quoted = name.replaceAll('"', '""')
             const isStatic = name.endsWith("_static")
-            const sql = `SELECT b.data AS data FROM "${quoted}" AS s JOIN "${quoted}_blob" AS b ON b.id = s.id` +
-                (isStatic ? "" : " WHERE s.ts <= ?")
             try {
-                const statement = db.prepare(sql)
-                const blobs = (isStatic ? statement.all() : statement.all(stream.start! + TF_SECONDS)) as {
-                    data: Uint8Array
-                }[]
-                for (const { data } of blobs) {
-                    edgeLists.push(decodeLcmFrames(unwrapBlob(new Uint8Array(data))))
+                const blobs = db.prepare(
+                    `SELECT s.ts AS ts, b.data AS data FROM "${quoted}" AS s JOIN "${quoted}_blob" AS b ON b.id = s.id ORDER BY s.ts`,
+                ).all() as { ts: number; data: Uint8Array }[]
+                for (const { ts, data } of blobs) {
+                    samples.push({
+                        time: ts,
+                        edges: decodeLcmFrames(unwrapBlob(new Uint8Array(data))),
+                        static: isStatic,
+                        window: 0,
+                    })
                 }
             } catch {
                 // blobs kept somewhere else (a file blob store): no tree
             }
         }
+        const headerFrames = new Map<string, string>()
+        for (const stream of streams) {
+            const quoted = stream.name.replaceAll('"', '""')
+            if (names.includes(stream.name) || !stream.count || !tables.has(`${stream.name}_blob`)) {
+                continue
+            }
+            if (stream.encoding && !stream.encoding.includes("lcm")) {
+                continue // jpeg frames carry no header
+            }
+            try {
+                const first = db.prepare(
+                    `SELECT b.data AS data FROM "${quoted}" AS s JOIN "${quoted}_blob" AS b ON b.id = s.id ORDER BY s.ts LIMIT 1`,
+                ).get() as { data: Uint8Array } | undefined
+                const frame = first ? readLcmFrameId(unwrapBlob(new Uint8Array(first.data))) : null
+                if (frame) {
+                    headerFrames.set(stream.name, frame)
+                }
+            } catch {
+                // an undecodable first message: no frame to check
+            }
+        }
         return finish(
             "db",
             streams,
-            buildTree(names.length ? names.join(" + ") : null, TF_SECONDS, edgeLists.length, edgeLists),
+            buildTree(names.length ? names.join(" + ") : null, "all of it", samples),
+            (name) => timesByName.get(name) ?? [],
+            headerFrames,
         )
     } finally {
         db.close()
@@ -274,14 +380,17 @@ export async function inspectMcap(path: string): Promise<Inspection> {
             }
         }
         const streams: (StreamInfo & { channel: typeof channels[number] })[] = []
+        const timesByName = new Map<string, number[]>()
         for (const channel of channels) {
             const schema = reader.schemasById.get(channel.schemaId)
             const times = (timesById.get(channel.id) ?? []).sort((a, b) => a - b)
             const count = Number(reader.statistics?.channelMessageCounts.get(channel.id) ?? times.length)
             // a raw-LCM channel has no schema; its type rides in the channel metadata
             const typeName = schema?.name ?? channel.metadata.get("type") ?? channel.metadata.get("lcm_type") ?? ""
+            const name = channel.topic.replace(/^\//, "")
+            timesByName.set(name, times)
             streams.push({
-                ...gapStats(channel.topic.replace(/^\//, ""), count, times),
+                ...gapStats(name, count, times),
                 type: shortType(typeName),
                 encoding: channel.messageEncoding,
                 hasSchema: !!schema && schema.data.byteLength > 0,
@@ -289,25 +398,79 @@ export async function inspectMcap(path: string): Promise<Inspection> {
             })
         }
         const names = tfStreams(streams)
-        const edgeLists: Edge[][] = []
+        const samples: TfSample[] = []
+        const starts = streams.map((s) => s.start).filter((t): t is number => t !== null)
+        const ends = streams.map((s) => s.end).filter((t): t is number => t !== null)
+        const start = starts.length ? Math.min(...starts) : 0
+        const end = ends.length ? Math.max(...ends) : 0
+        // windows at the start, the end and evenly between, so a tf edge that stops or starts partway shows up
+        const windows: [number, number][] = []
+        const span = end - start
+        if (span <= TF_WINDOWS * TF_WINDOW) {
+            windows.push([start, end])
+        } else {
+            for (let i = 0; i < TF_WINDOWS; i++) {
+                const from = start + (span - TF_WINDOW) * i / (TF_WINDOWS - 1)
+                windows.push([from, from + TF_WINDOW])
+            }
+        }
+        const sampledEvery = windows.length > 1 ? (span - TF_WINDOW) / (TF_WINDOWS - 1) : 0
         for (const name of names) {
             const stream = streams.find((s) => s.name === name)!
             const isStatic = name.endsWith("_static")
             const decode = stream.encoding === "cdr" ? decodeCdrFrames : decodeLcmFrames
-            const window = isStatic ? {} : { endTime: BigInt(Math.round((stream.start! + TF_SECONDS) * 1e9)) }
+            const ranges: ([number, number] | null)[] = isStatic ? [null] : windows
+            for (const [index, range] of ranges.entries()) {
+                const window = range
+                    ? {
+                        startTime: BigInt(Math.floor(range[0] * 1e9)),
+                        endTime: BigInt(Math.ceil(range[1] * 1e9)),
+                    }
+                    : {}
+                try {
+                    for await (const message of reader.readMessages({ topics: [stream.channel.topic], ...window })) {
+                        samples.push({
+                            time: Number(message.logTime) / 1e9,
+                            edges: decode(message.data),
+                            static: isStatic,
+                            window: index,
+                        })
+                    }
+                } catch {
+                    // an undecodable tf channel: no tree
+                }
+            }
+        }
+        const headerFrames = new Map<string, string>()
+        for (const stream of streams) {
+            if (names.includes(stream.name) || !stream.count || !["cdr", "lcm"].includes(stream.encoding)) {
+                continue
+            }
+            const read = stream.encoding === "cdr" ? readCdrFrameId : readLcmFrameId
             try {
-                for await (const message of reader.readMessages({ topics: [stream.channel.topic], ...window })) {
-                    edgeLists.push(decode(message.data))
+                for await (const message of reader.readMessages({ topics: [stream.channel.topic] })) {
+                    const frame = read(message.data)
+                    if (frame) {
+                        headerFrames.set(stream.name, frame)
+                    }
+                    break // the first message is enough; a stream does not change frame
                 }
             } catch {
-                // an undecodable tf channel: no tree
+                // an undecodable first message: no frame to check
             }
         }
         const plain = streams.map(({ channel: _channel, ...rest }) => rest)
+        const coverage = windows.length > 1
+            ? `${TF_WINDOWS} windows of ${TF_WINDOW} s, every ${Math.round(sampledEvery)} s`
+            : "all of it"
         return finish(
             "mcap",
             plain,
-            buildTree(names.length ? names.join(" + ") : null, TF_SECONDS, edgeLists.length, edgeLists),
+            buildTree(names.length ? names.join(" + ") : null, coverage, samples),
+            (name) => timesByName.get(name) ?? [],
+            headerFrames,
+            sampledEvery,
+            windows.length > 1 ? TF_WINDOW : 0,
         )
     } finally {
         mcap.close()

@@ -16,11 +16,23 @@ export type StreamInfo = {
     gapRatio: number
 }
 
+export type TfEdge = {
+    parent: string
+    child: string
+    count: number
+    first: number
+    last: number
+    /** 0 when static */
+    hz: number
+    static: boolean
+}
+
 export type TfTree = {
     source: string | null
-    seconds: number
+    /** how much of it was read: "all of it", "16 windows of 1 s, every 31 s" */
+    coverage: string
     messages: number
-    edges: { parent: string; child: string; count: number }[]
+    edges: TfEdge[]
     roots: string[]
     conflicts: { frame: string; parents: { parent: string; count: number }[] }[]
 }
@@ -33,8 +45,19 @@ export type Inspection = {
     messages: number
     streams: StreamInfo[]
     tf: TfTree
+    /** what looks wrong, worst first (backend/recordings/warnings.ts) */
+    warnings: Warning[]
     summary: string
     error?: string
+}
+
+export type Warning = {
+    kind: string
+    message: string
+    detail: string
+    stream?: string
+    frame?: string
+    at?: number
 }
 
 export type OpenTarget = {
@@ -198,10 +221,14 @@ export const api = {
     jobs: () => call<{ jobs: Job[] }>("GET", "api/jobs"),
     cancelJob: (id: string) => call("DELETE", `api/jobs/${enc(id)}`),
     open: (id: string, target: string, show = true) =>
-        call<{ opened: string; app?: string }>("POST", `api/recordings/${enc(id)}/open`, {
-            target,
-            show,
-        }),
+        call<{ opened: string; app?: string }>(
+            "POST",
+            `api/recordings/${enc(id)}/open`,
+            {
+                target,
+                show,
+            },
+        ),
     reveal: (id: string) => call("POST", `api/recordings/${enc(id)}/reveal`, {}),
     upload: (id: string) => call<Upload>("POST", `api/recordings/${enc(id)}/upload`, {}),
     tray: () => call<Tray>("GET", "api/uploads"),

@@ -42,7 +42,10 @@ agent:
           path: "api/recordings/{id}"
           description: >-
               One recording in full: the list fields plus its inspection: every stream's type, encoding, count, rate (hz), p99
-              and largest gap, and the tf frame tree (edges, roots, frames with two parents) — what `dtk data summary` prints
+              and largest gap, the tf frame tree (edges with rate and first/last time, roots, frames with two parents) — what
+              `dtk data summary` prints — and warnings (kind, message, detail, stream/frame, at = seconds in): a broken tf tree
+              (two parents, cycle, separate trees, a stream's frame tf never publishes, transforms that stop early or start
+              late) and streams with outlier gaps, a rate drop, or a late start / early stop
           params: &ref_0
               id: &ref_1
                   type: string

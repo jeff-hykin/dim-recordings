@@ -5,6 +5,8 @@ import type { Config } from "../config.ts"
 import { inspect, type Inspection } from "./inspect.ts"
 import { type FileEntry, type Listed, pairRrds, resolveId, scanFiles } from "./scan.ts"
 
+const INSPECTION_VERSION = 2
+
 export type Recording = Listed & {
     /** when it was recorded: its first message's time when the file has one, else the file's mtime */
     recorded: number
@@ -49,7 +51,8 @@ export class Library {
     }
 
     async #diskPath(key: string) {
-        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key))
+        // the inspection's shape is in the name, so a new one (warnings, tf edge spans) re-reads each file once
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${INSPECTION_VERSION}|${key}`))
         const hex = [...new Uint8Array(digest)].slice(0, 12).map((b) => b.toString(16).padStart(2, "0")).join("")
         return join(this.config.dataDir, "inspections", `${hex}.json`)
     }
@@ -110,7 +113,8 @@ export class Library {
                 duration: null,
                 messages: 0,
                 streams: [],
-                tf: { source: null, seconds: 0, messages: 0, edges: [], roots: [], conflicts: [] },
+                tf: { source: null, coverage: "", messages: 0, edges: [], roots: [], conflicts: [] },
+                warnings: [],
                 summary: "unreadable",
                 error: error instanceof Error ? error.message : String(error),
             }

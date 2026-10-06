@@ -592,7 +592,10 @@ body.science.dark {
 .enc.cdr {
     color: var(--ok);
 }
+/* the whole tree up to 60% of the view, then it scrolls (flex: none, or the panel's column squeezes it to a line) */
 .tree {
+    flex: none;
+    max-height: 60vh;
     margin: 0;
     font-size: 11.5px;
     line-height: 1.5;
@@ -602,8 +605,88 @@ body.science.dark {
     border-radius: var(--radius-sm);
     overflow: auto;
 }
+.tf-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    white-space: pre;
+}
+.tf-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tf-meta {
+    flex: none;
+    color: var(--muted-fg);
+    font-size: 10.5px;
+}
 .tree .root {
     color: var(--primary);
+}
+.tree .bad,
+.tree .bad .tf-meta,
+p.bad {
+    color: var(--alert);
+    font-weight: 600;
+}
+
+/* warnings, first in the summary: red in both themes (Jeff asked for red; the Portal's status amber reads as "uneven") */
+:root {
+    --alert: #c2412f;
+    --alert-fill: rgba(194, 65, 47, 0.08);
+    --alert-line: rgba(194, 65, 47, 0.4);
+}
+body.science.dark {
+    --alert: #ff6b5e;
+    --alert-fill: rgba(255, 107, 94, 0.09);
+    --alert-line: rgba(255, 107, 94, 0.45);
+}
+.warnings {
+    flex: none;
+    border: 1px solid var(--alert-line);
+    border-left-width: 3px;
+    background: var(--alert-fill);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    color: var(--alert);
+}
+.warnings-head {
+    margin: 0 0 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+.warnings ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.warnings li {
+    display: flex;
+    flex-direction: column;
+    font-size: 12.5px;
+    line-height: 1.35;
+}
+.w-message {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.w-detail {
+    font-size: 10.5px;
+    opacity: 0.85;
+    overflow-wrap: anywhere;
+}
+.warnings .w-more {
+    margin-top: 6px;
+    color: var(--alert);
+}
+.no-issues {
+    margin: 0;
 }
 
 /* ── uploads ── */
@@ -741,6 +824,12 @@ body.science.dark {
         border-right: 0;
         border-bottom: 0;
         border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    }
+    /* the Portal's card is translucent: over the list the sheet would show the rows through it */
+    body.science.dark .summary.sheet {
+        background:
+            linear-gradient(var(--card), var(--card)),
+            var(--bg);
     }
     .row.selectable {
         cursor: default;

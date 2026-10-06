@@ -191,3 +191,49 @@ export function decodeCdrFrames(data: Uint8Array): Edge[] {
     }
     return edges
 }
+
+// A message's leading header.frame_id, only when what comes out looks like a frame name (dtk tools/tf_check.js): the
+// layout past the header differs per type and isn't worth guessing at; a missed stream costs a check, a wrong guess trust.
+const FRAME_SHAPED = /^[A-Za-z0-9_./-]+$/
+
+/** CDR: encapsulation(4) + stamp sec(4) + nanosec(4), then the string. */
+export function readCdrFrameId(data: Uint8Array): string | null {
+    if (data.byteLength < 16) {
+        return null
+    }
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+    const little = (view.getUint8(1) & 1) === 1
+    const length = view.getUint32(12, little)
+    if (length < 1 || length > 120 || 16 + length > data.byteLength) {
+        return null
+    }
+    const text = new TextDecoder().decode(data.subarray(16, 16 + length - 1))
+    return FRAME_SHAPED.test(text) ? text : null
+}
+
+/**
+ * LCM: after the fingerprint come seq, the stamp and the frame, but generated classes hoist each variable-length
+ * array's size ahead of it, so the frame's offset depends on the type: a scan, keeping only a NUL-terminated string
+ * (an LCM string counts its terminator), which a stray int with a printable low byte isn't.
+ */
+export function readLcmFrameId(data: Uint8Array): string | null {
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
+    for (const at of [12, 16, 20, 24, 28, 32]) {
+        if (at + 4 > data.length) {
+            continue
+        }
+        const length = view.getInt32(at, false)
+        if (length < 2 || length > 120 || at + 4 + length > data.length) {
+            continue
+        }
+        const bytes = data.subarray(at + 4, at + 4 + length)
+        if (bytes[bytes.length - 1] !== 0) {
+            continue
+        }
+        const text = new TextDecoder().decode(bytes.subarray(0, bytes.length - 1))
+        if (FRAME_SHAPED.test(text)) {
+            return text
+        }
+    }
+    return null
+}

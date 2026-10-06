@@ -1,8 +1,18 @@
-// The selected recording's summary (the right-side panel on a desktop, a full-width sheet on a phone): its streams
-// (type, encoding, count, rate, gaps) and tf frame tree, like `dtk data summary`, plus its note (saved in the app's
-// data, not the file).
+// The selected recording's summary (the right-side panel on a desktop, a full-width sheet on a phone): what looks wrong
+// (in red, first), its streams (type, encoding, count, rate, gaps) and tf frame tree, like `dtk data summary`, plus its
+// note (saved in the app's data, not the file).
 import { useEffect, useRef, useState } from "react"
-import { api, bytes, duration, gap, type Inspection, type Recording, type TfTree } from "../api.ts"
+import {
+    api,
+    bytes,
+    duration,
+    gap,
+    type Inspection,
+    type Recording,
+    type TfEdge,
+    type TfTree,
+    type Warning,
+} from "../api.ts"
 
 // `dtk data summary --html` colors p99 and gap by how many times the stream's average interval they are, on a log scale
 // where 1× (even spacing) is calm and 20× is saturated: log10(ratio) / log10(20). Its three thirds become the theme's
@@ -29,69 +39,157 @@ function Legend() {
     )
 }
 
-function Tree({ tf }: { tf: TfTree }) {
+/** +m:ss after the recording's start */
+function offset(seconds: number): string {
+    const s = Math.max(0, Math.round(seconds))
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const ss = String(s % 60).padStart(2, "0")
+    return h ? `+${h}:${String(m).padStart(2, "0")}:${ss}` : `+${m}:${ss}`
+}
+
+const rate = (hz: number) => hz >= 10 ? `${Math.round(hz)} Hz` : `${hz.toFixed(1)} Hz`
+
+/** What looks wrong, first thing in the summary, in red; nothing wrong is one quiet line. */
+function Warnings({ warnings }: { warnings: Warning[] }) {
+    const [all, setAll] = useState(false)
+    if (!warnings.length) {
+        return (
+            <p className="no-issues small muted" data-testid="no-issues">
+                No issues found
+            </p>
+        )
+    }
+    const LIMIT = 6
+    const shown = all ? warnings : warnings.slice(0, LIMIT)
+    return (
+        <section className="warnings" role="alert" data-testid="warnings">
+            <p className="warnings-head">
+                {warnings.length} {warnings.length === 1 ? "warning" : "warnings"}
+            </p>
+            <ul>
+                {shown.map((w, i) => (
+                    <li key={i} data-kind={w.kind}>
+                        <span className="w-message">{w.message}</span>
+                        <span className="w-detail mono">{w.detail}</span>
+                    </li>
+                ))}
+            </ul>
+            {warnings.length > LIMIT && (
+                <button
+                    type="button"
+                    className="dim-btn sm ghost w-more"
+                    onClick={() => setAll(!all)}
+                >
+                    {all ? "fewer" : `${warnings.length - LIMIT} more`}
+                </button>
+            )}
+        </section>
+    )
+}
+
+/**
+ * The tf frames as an indented tree, each child with its transform's rate (or static) and, when it stops early or
+ * starts late, when; sized to the whole tree up to 60% of the view, then it scrolls.
+ */
+function Tree(
+    { tf, start, warnings }: {
+        tf: TfTree
+        start: number | null
+        warnings: Warning[]
+    },
+) {
     if (!tf.source) {
         return <p className="muted small">No tf stream.</p>
     }
     if (!tf.edges.length) {
-        return (
-            <p className="muted small">
-                No frames in the first {tf.seconds} s of {tf.source}.
-            </p>
-        )
+        return <p className="muted small">No frames in {tf.source}.</p>
     }
-    const children = new Map<string, string[]>()
+    const children = new Map<string, TfEdge[]>()
     for (const edge of tf.edges) {
-        children.set(edge.parent, [
-            ...(children.get(edge.parent) ?? []),
-            edge.child,
-        ])
+        children.set(edge.parent, [...(children.get(edge.parent) ?? []), edge])
     }
     const conflicted = new Set(tf.conflicts.map((c) => c.frame))
-    const lines: { prefix: string; frame: string }[] = []
+    const flagged = new Set(
+        warnings.filter((w) => w.message.startsWith("TF:") && w.frame).map((w) => w.frame!),
+    )
+    const end = Math.max(...tf.edges.map((edge) => edge.last))
+    const lines: { prefix: string; frame: string; edge: TfEdge | null }[] = []
     const walk = (
         frame: string,
+        edge: TfEdge | null,
         prefix: string,
         last: boolean,
         path: Set<string>,
-        depth: number,
     ) => {
+        const depth = path.size
         lines.push({
-            prefix: depth === 0 ? "" : prefix + (last ? "`- " : "|- "),
+            prefix: depth === 0 ? "" : prefix + (last ? "└ " : "├ "),
             frame,
+            edge,
         })
         if (path.has(frame)) {
             return
         }
-        const kids = (children.get(frame) ?? []).sort()
+        const kids = (children.get(frame) ?? []).sort((a, b) => a.child.localeCompare(b.child))
         kids.forEach((kid, i) =>
             walk(
+                kid.child,
                 kid,
-                depth === 0 ? "" : prefix + (last ? "   " : "|  "),
+                depth === 0 ? "" : prefix + (last ? "  " : "│ "),
                 i === kids.length - 1,
                 new Set(path).add(frame),
-                depth + 1,
             )
         )
     }
     const roots = tf.roots.length ? tf.roots : [tf.edges[0].parent]
-    roots.forEach((root) => walk(root, "", true, new Set(), 0))
+    roots.forEach((root) => walk(root, null, "", true, new Set()))
+    const frames = new Set(tf.edges.flatMap((edge) => [edge.parent, edge.child])).size
+    const meta = (edge: TfEdge | null) => {
+        if (!edge) {
+            return ""
+        }
+        if (edge.static) {
+            return "static"
+        }
+        const parts = [edge.hz > 0 ? rate(edge.hz) : `${edge.count}×`]
+        if (
+            start !== null &&
+            end - edge.last > Math.max(1, edge.hz > 0 ? 10 / edge.hz : 1)
+        ) {
+            parts.push(`until ${offset(edge.last - start)}`)
+        }
+        return parts.join(" · ")
+    }
     return (
         <>
             <p className="muted small mono">
-                {tf.source} · first {tf.seconds} s · {tf.messages} msgs
+                {tf.source} · {frames} frames · {tf.messages.toLocaleString()} {tf.messages === 1 ? "msg" : "msgs"}
+                {tf.coverage && tf.coverage !== "all of it" ? ` · read ${tf.coverage}` : ""}
             </p>
-            <pre className="tree mono">
-                {lines.map((line, i) => (
-                    <div key={i} className={conflicted.has(line.frame) ? "warn" : i === 0 || !line.prefix ? "root" : ""}>
-                        <span className="muted">{line.prefix}</span>
-                        {line.frame}
-                        {conflicted.has(line.frame) && <span className="warn"> (2 parents)</span>}
-                    </div>
-                ))}
-            </pre>
+            <div className="tree mono" data-testid="tf-tree">
+                {lines.map((line, i) => {
+                    const bad = conflicted.has(line.frame) || flagged.has(line.frame)
+                    return (
+                        <div
+                            key={i}
+                            className={`tf-line ${bad ? "bad" : !line.prefix ? "root" : ""}`}
+                        >
+                            <span
+                                className="tf-name"
+                                title={line.edge ? `${line.edge.parent} → ${line.frame}` : line.frame}
+                            >
+                                <span className="muted">{line.prefix}</span>
+                                {line.frame}
+                                {conflicted.has(line.frame) && <span>(2 parents)</span>}
+                            </span>
+                            <span className="tf-meta">{meta(line.edge)}</span>
+                        </div>
+                    )
+                })}
+            </div>
             {tf.conflicts.map((c) => (
-                <p key={c.frame} className="small warn mono">
+                <p key={c.frame} className="small bad mono">
                     {c.frame} ← {c.parents.map((p) => `${p.parent} (${p.count})`).join(" | ")}
                 </p>
             ))}
@@ -156,6 +254,7 @@ export function SummaryPanel(
                     {sheet ? "Close" : "✕"}
                 </button>
             </header>
+            {inspection && <Warnings warnings={inspection.warnings ?? []} />}
             <dl className="facts">
                 <dt>size</dt>
                 <dd className="mono">{bytes(recording.size)}</dd>
@@ -273,7 +372,13 @@ export function SummaryPanel(
             )}
             {inspection && <Legend />}
             <p className="dim-label">tf frames</p>
-            {inspection && <Tree tf={inspection.tf} />}
+            {inspection && (
+                <Tree
+                    tf={inspection.tf}
+                    start={inspection.start}
+                    warnings={inspection.warnings ?? []}
+                />
+            )}
         </aside>
     )
     return sheet
