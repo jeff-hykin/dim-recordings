@@ -218,6 +218,7 @@ export function Library() {
     const openMenu = (recording: Recording | RrdFile, testId: string) => (
         <HoverMenu
             label="Open ▾"
+            className="primary"
             testId={testId}
             items={recording.opens.map((o) => ({
                 label: o.label,
@@ -241,9 +242,10 @@ export function Library() {
                 >
                     Open
                 </button>
+                <span className="action-sep" aria-hidden="true" />
                 <button
                     type="button"
-                    className="dim-btn sm danger"
+                    className="dim-btn sm danger delete"
                     onClick={() => setDialog({ kind: "delete", recording: rrd })}
                 >
                     Delete
@@ -357,52 +359,55 @@ export function Library() {
                         </button>
                     )}
                     {openMenu(recording, `open-${recording.id}`)}
-                    {link
-                        ? (
-                            <a
-                                className="dim-btn sm primary"
-                                href={link}
-                                target="_blank"
-                                rel="noreferrer"
-                                title="uploaded: open it in the console"
-                            >
-                                View ↗
-                            </a>
-                        )
-                        : (
-                            <button
-                                type="button"
-                                className="dim-btn sm"
-                                disabled={!!liveUpload &&
-                                    (liveUpload.state === "queued" ||
-                                        liveUpload.state === "uploading")}
-                                onClick={() => upload(recording)}
-                            >
-                                {liveUpload?.state === "queued" && tray &&
-                                        (tray.waitingForLogin || !tray.account.loggedIn)
-                                    ? "Waiting for login"
-                                    : liveUpload?.state === "uploading" ||
-                                            liveUpload?.state === "queued"
-                                    ? "Uploading…"
-                                    : "Upload"}
-                            </button>
-                        )}
+                    <div className="action-group" role="group" aria-label="manage">
+                        {link
+                            ? (
+                                <a
+                                    className="dim-btn sm"
+                                    href={link}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title="uploaded: open it in the console"
+                                >
+                                    View ↗
+                                </a>
+                            )
+                            : (
+                                <button
+                                    type="button"
+                                    className="dim-btn sm"
+                                    disabled={!!liveUpload &&
+                                        (liveUpload.state === "queued" ||
+                                            liveUpload.state === "uploading")}
+                                    onClick={() => upload(recording)}
+                                >
+                                    {liveUpload?.state === "queued" && tray &&
+                                            (tray.waitingForLogin || !tray.account.loggedIn)
+                                        ? "Waiting for login"
+                                        : liveUpload?.state === "uploading" ||
+                                                liveUpload?.state === "queued"
+                                        ? "Uploading…"
+                                        : "Upload"}
+                                </button>
+                            )}
+                        <button
+                            type="button"
+                            className="dim-btn sm"
+                            onClick={() => setDialog({ kind: "rename", recording })}
+                        >
+                            Rename
+                        </button>
+                        <HoverMenu
+                            label="⋯"
+                            className="more"
+                            items={actions(recording)}
+                            testId={`more-${recording.id}`}
+                        />
+                    </div>
+                    <span className="action-sep" aria-hidden="true" />
                     <button
                         type="button"
-                        className="dim-btn sm"
-                        onClick={() => setDialog({ kind: "rename", recording })}
-                    >
-                        Rename
-                    </button>
-                    <HoverMenu
-                        label="⋯"
-                        items={actions(recording)}
-                        testId={`more-${recording.id}`}
-                    />
-                    <span className="action-gap" />
-                    <button
-                        type="button"
-                        className="dim-btn sm danger"
+                        className="dim-btn sm danger delete"
                         data-testid={`delete-${recording.id}`}
                         onClick={() => setDialog({ kind: "delete", recording })}
                     >

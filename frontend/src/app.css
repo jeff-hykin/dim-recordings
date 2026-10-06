@@ -120,14 +120,14 @@ a.dim-btn {
 }
 /* with the summary open, the streams column gives way to it */
 .library.with-summary .row {
-    grid-template-columns: 96px minmax(120px, 1fr) 64px 64px 124px auto;
+    grid-template-columns: 128px minmax(120px, 1fr) 64px 64px 124px auto;
     gap: 12px;
 }
 /* a narrower desktop: size and duration give way too (the summary shows both), and the actions wrap before they
    would push Delete out of view */
 @media (max-width: 1400px) {
     .library.with-summary .row {
-        grid-template-columns: 96px minmax(120px, 1fr) 124px auto;
+        grid-template-columns: 128px minmax(120px, 1fr) 124px auto;
     }
     .library.with-summary .row > :nth-child(3),
     .library.with-summary .row > :nth-child(4) {
@@ -141,11 +141,11 @@ a.dim-btn {
     display: none;
 }
 .library.with-summary .thumb {
-    width: 96px;
+    width: 128px;
 }
 .row {
     display: grid;
-    grid-template-columns: 136px minmax(180px, 1.6fr) 76px 84px 172px minmax(140px, 1.2fr) auto;
+    grid-template-columns: 176px minmax(180px, 1.6fr) 76px 84px 172px minmax(140px, 1.2fr) auto;
     align-items: center;
     gap: 14px;
     padding: 8px 6px;
@@ -222,11 +222,54 @@ a.dim-btn {
 .name .dim-badge {
     color: var(--muted-fg);
 }
+/* a row's actions: Open (primary), then Upload · Rename · ⋯ (secondary), then Delete apart; one height, one width */
 .row-actions {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
     justify-content: flex-end;
+}
+.row-actions .dim-btn {
+    height: 28px;
+    min-width: 72px;
+    padding: 0 12px;
+}
+.row-actions .dim-btn.more {
+    width: 28px;
+    min-width: 28px;
+    padding: 0;
+}
+.action-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+.action-sep {
+    flex: none;
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+}
+/* Delete is red in both themes (Portal's --danger is its amber) */
+.row-actions .dim-btn.delete {
+    --delete: #c2412f;
+    color: var(--delete);
+    border-color: color-mix(in srgb, var(--delete) 45%, transparent);
+}
+body.science.dark .row-actions .dim-btn.delete {
+    --delete: #f0645a;
+}
+.row-actions .dim-btn.delete:hover {
+    border-color: var(--delete);
+    background: color-mix(in srgb, var(--delete) 10%, transparent);
+}
+/* Portal: a hovered action gets a glowing outline, white for the secondary ones, red for Delete */
+body.science.dark .row-actions .dim-btn:not(.primary):not(.delete):hover {
+    border-color: var(--fg);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
+}
+body.science.dark .row-actions .dim-btn.delete:hover {
+    box-shadow: 0 0 10px color-mix(in srgb, var(--delete) 45%, transparent);
 }
 .rrd {
     display: flex;
@@ -239,10 +282,6 @@ a.dim-btn {
 .rrd > .mono:first-child {
     overflow: hidden;
     text-overflow: ellipsis;
-}
-/* Delete stands apart from the everyday actions */
-.action-gap {
-    flex: 0 0 14px;
 }
 .rrd .row-actions {
     margin-left: auto;
@@ -275,8 +314,8 @@ a.dim-btn {
 
 /* ── previews ── */
 .thumb {
-    width: 128px;
-    max-height: 96px;
+    width: 168px;
+    max-height: 120px;
     aspect-ratio: 16 / 9;
     background-color: var(--muted);
     background-repeat: no-repeat;
@@ -784,7 +823,7 @@ body.science.dark {
     /* with the summary open too (that rule's six columns would push the actions out of a phone's width) */
     .row,
     .library.with-summary .row {
-        grid-template-columns: 96px minmax(0, 1fr) auto;
+        grid-template-columns: 120px minmax(0, 1fr) auto;
     }
     .row > :nth-child(3),
     .row > :nth-child(4),
@@ -800,7 +839,7 @@ body.science.dark {
         flex-wrap: wrap;
     }
     .thumb {
-        width: 96px;
+        width: 120px;
     }
     .library-body {
         flex-direction: column;
@@ -834,12 +873,12 @@ body.science.dark {
     .row.selectable {
         cursor: default;
     }
-    .action-gap {
-        flex: 1;
-    }
-    /* right-aligned on whichever line the wrap leaves it */
-    .row-actions > .danger {
+    /* right-aligned on whichever line the wrap leaves it, so the divider before it goes */
+    .row-actions > .delete {
         margin-left: auto;
+    }
+    .row-actions > .action-sep {
+        display: none;
     }
     .tray {
         left: 8px;
