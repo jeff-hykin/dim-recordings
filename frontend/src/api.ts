@@ -75,8 +75,55 @@ export type Thumb =
         height: number
         stream: string
     }
+    | {
+        /** no camera: the odometry path from above, fitted into [0, 1] (y up) */
+        state: "path"
+        stream: string
+        points: [number, number][]
+        width: number
+        height: number
+        length: number
+    }
     | { state: "none"; reason: string }
     | { state: "pending" }
+
+export type DriveFile = {
+    path: string
+    relative: string
+    drive: string
+    name: string
+    format: "db" | "mcap"
+    size: number
+    modified: number
+    thumbnail: Thumb
+}
+
+export type Drive = {
+    mount: string
+    name: string
+    key: string
+    files: DriveFile[]
+    free: number | null
+    total: number | null
+}
+
+export type Transfer = {
+    id: string
+    source: string
+    name: string
+    mode: "copy" | "move"
+    state: "queued" | "running" | "done" | "failed" | "cancelled"
+    done: number
+    total: number
+    result: string | null
+    error: string | null
+}
+
+export type DrivesResponse = {
+    drives: Drive[]
+    destination: { dir: string; free: number | null; total: number | null }
+    transfers: Transfer[]
+}
 
 export type RrdFile = {
     id: string
@@ -234,6 +281,14 @@ export const api = {
     tray: () => call<Tray>("GET", "api/uploads"),
     removeUpload: (id: string) => call("DELETE", `api/uploads/${enc(id)}`),
     retryUpload: (id: string) => call("POST", `api/uploads/${enc(id)}/retry`, {}),
+    drives: () => call<DrivesResponse>("GET", "api/drives"),
+    rescanDrives: () => call("POST", "api/drives/rescan", {}),
+    driveThumbnailUrl: (path: string, version: number) => `api/drives/thumbnail?path=${enc(path)}&v=${version}`,
+    transfer: (paths: string[], mode: "copy" | "move", name?: string) =>
+        call<{ transfers: Transfer[] }>("POST", "api/drives/transfer", { paths, mode, ...(name ? { name } : {}) }),
+    cancelTransfer: (id: string) => call("DELETE", `api/drives/transfer/${enc(id)}`),
+    renameOnDrive: (path: string, name: string) =>
+        call<{ path: string; name: string }>("POST", "api/drives/rename", { path, name }),
 }
 
 /** Desktop's own pages, from /apps/<name>/ */

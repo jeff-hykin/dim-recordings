@@ -21,6 +21,12 @@ services.library.listeners.add((event) => {
     if (event.type === "recordings" || event.type === "thumbnail" || jobMoved) {
         stateChanged("recordings")
     }
+    if (
+        event.type === "thumbnail" ||
+        (event.type === "transfer" && (event.transfer as { state?: string })?.state !== "running")
+    ) {
+        stateChanged("drives")
+    }
     if (event.type !== "recordings") {
         publishEvent(event)
     }
@@ -43,6 +49,14 @@ try {
 }
 if (!Deno.args.includes("--no-thumbnails")) {
     services.thumbnails.start()
+}
+// plugged-in drives: the transfer dialog's list follows them (state/drives), and their recordings get previews
+services.drives.onChange = () => {
+    stateChanged("drives")
+    services.thumbnails.poke()
+}
+if (!Deno.args.includes("--no-drives")) {
+    services.drives.start()
 }
 console.error(`recordings: ${config.recordingsDir}, data: ${config.dataDir}, desktop: ${config.desktopUrl || "-"}`)
 

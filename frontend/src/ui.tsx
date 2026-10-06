@@ -237,14 +237,49 @@ export function HoverMenu(
 }
 
 // ── the preview: plays by itself while on screen; the pointer's x scrubs it ──
+/** "12 m", "1.4 km" */
+function metres(value: number) {
+    return value >= 1000 ? `${(value / 1000).toFixed(1)} km` : `${value < 10 ? value.toFixed(1) : Math.round(value)} m`
+}
+
+/** A recording with no camera: its odometry path from above (start dot, end ring), in the theme's colors. */
+export function PathThumbnail({ thumb }: { thumb: Extract<Thumb, { state: "path" }> }) {
+    // the unit box drawn into a 16:9 frame with a margin; svg y runs down, the path's y runs up
+    const [w, h, pad] = [160, 90, 9]
+    const side = Math.min(w, h) - 2 * pad
+    const [ox, oy] = [(w - side) / 2, (h - side) / 2]
+    const at = ([x, y]: [number, number]) => [ox + x * side, oy + (1 - y) * side] as const
+    const line = thumb.points.map((p, i) => `${i ? "L" : "M"}${at(p).map((v) => v.toFixed(1)).join(" ")}`).join("")
+    const [sx, sy] = at(thumb.points[0])
+    const [ex, ey] = at(thumb.points[thumb.points.length - 1])
+    const extent = Math.max(thumb.width, thumb.height)
+    return (
+        <div
+            className="thumb path-thumb"
+            title={`${thumb.stream}: ${metres(thumb.length)} of path, ${metres(thumb.width)} × ${
+                metres(thumb.height)
+            } (no camera: the odometry from above)`}
+        >
+            <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet" aria-label="odometry path from above">
+                <rect x={ox} y={oy} width={side} height={side} className="path-frame" />
+                <path d={line} className="path-line" />
+                <circle cx={sx} cy={sy} r="3.2" className="path-start" />
+                <circle cx={ex} cy={ey} r="3.4" className="path-end" />
+            </svg>
+            <span className="path-scale mono">{metres(extent)}</span>
+        </div>
+    )
+}
+
 export function Thumbnail(
-    { id, thumb, version }: { id: string; thumb: Thumb; version: number },
+    { id, thumb, version, src }: { id: string; thumb: Thumb; version: number; src?: string },
 ) {
     const box = useRef<HTMLDivElement>(null)
     const [frame, setFrame] = useState(0)
     const [visible, setVisible] = useState(false)
     const [scrubbing, setScrubbing] = useState(false)
     const frames = thumb.state === "ready" ? thumb.frames : 0
+    const url = src ?? api.thumbnailUrl(id, version)
     useEffect(() => {
         if (!box.current) {
             return
@@ -266,6 +301,9 @@ export function Thumbnail(
         )
         return () => clearInterval(timer)
     }, [frames, visible, scrubbing])
+    if (thumb.state === "path") {
+        return <PathThumbnail thumb={thumb} />
+    }
     if (thumb.state !== "ready") {
         return (
             <div
@@ -300,7 +338,7 @@ export function Thumbnail(
                         strokeWidth="2"
                     />
                 </svg>
-                <span>{thumb.state === "none" ? "no camera" : "preview…"}</span>
+                <span>{thumb.state === "none" ? "no preview" : "preview…"}</span>
             </div>
         )
     }
@@ -310,7 +348,7 @@ export function Thumbnail(
             className="thumb"
             data-frame={frame}
             style={{
-                backgroundImage: `url(${api.thumbnailUrl(id, version)})`,
+                backgroundImage: `url(${url})`,
                 backgroundSize: `${frames * 100}% auto`,
                 backgroundPositionY: "center",
                 backgroundPositionX: `${frames > 1 ? (frame / (frames - 1)) * 100 : 0}%`,

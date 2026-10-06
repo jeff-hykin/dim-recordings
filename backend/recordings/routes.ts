@@ -4,6 +4,8 @@ import { HttpError, type Route } from "../http.ts"
 import { deleteRecording, duplicateRecording, renameRecording } from "./actions.ts"
 import { conversions, Jobs, type Target } from "./convert.ts"
 import { which } from "./foxglove.ts"
+import type { Transfers } from "./drive_routes.ts"
+import type { Drives } from "./drives.ts"
 import { Library, NotFound, type Recording } from "./library.ts"
 import { environment, openIn, type OpenTarget, openTargets, reveal } from "./open.ts"
 import { type Order, sections, type SortKey } from "./sort.ts"
@@ -11,7 +13,14 @@ import { Thumbnailer } from "./thumb_worker.ts"
 import { ffmpeg } from "./thumbnails.ts"
 import { type Uploaded, Uploads } from "./uploads.ts"
 
-export type Services = { library: Library; jobs: Jobs; thumbnails: Thumbnailer; uploads: Uploads }
+export type Services = {
+    library: Library
+    jobs: Jobs
+    thumbnails: Thumbnailer
+    uploads: Uploads
+    drives: Drives
+    transfers: Transfers
+}
 
 const ID = {
     id: { type: "string", required: true, description: "recording id: its path inside the recordings folder" },

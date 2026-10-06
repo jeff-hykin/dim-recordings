@@ -249,7 +249,10 @@ class Writer {
         if (depth === dims.length) {
             return type in schemas ? this.struct(type, value ?? {}) : this.primitive(type, value)
         }
-        for (const item of value ?? []) {
+        // a fixed-size array is always its full size (missing items are zero), a variable one is what's given
+        const dim = dims[depth]
+        const items = typeof dim === "number" ? Array.from({ length: dim }, (_, i) => value?.[i]) : value ?? []
+        for (const item of items) {
             this.value(type, dims, depth + 1, item)
         }
     }

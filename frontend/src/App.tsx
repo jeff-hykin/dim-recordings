@@ -1,4 +1,5 @@
-// Hash routes: `#/` the library, `#/replay/<id>` the Replayer (views/Replay.tsx).
+// Hash routes: `#/` the library, `#/transfer` the library with the transfer dialog open (Desktop's "Transfer
+// recordings" notification opens this), `#/replay/<id>` the Replayer (views/Replay.tsx).
 import { lazy, Suspense, useEffect, useState } from "react"
 import { Library } from "./views/Library.tsx"
 import { Toasts } from "./ui.tsx"
@@ -7,15 +8,22 @@ import { Toasts } from "./ui.tsx"
 // after the theme's, as they do in the Controller
 const Replay = lazy(() => import("./views/Replay.tsx").then((module) => ({ default: module.Replay })))
 
-export type Route = { view: "library" } | { view: "replay"; id: string }
+export type Route = { view: "library"; transfer?: boolean } | { view: "replay"; id: string }
 
 export function parseRoute(hash: string): Route {
     const match = hash.match(/^#\/replay\/(.+)$/)
-    return match ? { view: "replay", id: decodeURIComponent(match[1]) } : { view: "library" }
+    if (match) {
+        return { view: "replay", id: decodeURIComponent(match[1]) }
+    }
+    return /^#\/transfer\/?$/.test(hash) ? { view: "library", transfer: true } : { view: "library" }
 }
 
 export function go(route: Route) {
-    location.hash = route.view === "replay" ? `#/replay/${encodeURIComponent(route.id)}` : "#/"
+    location.hash = route.view === "replay"
+        ? `#/replay/${encodeURIComponent(route.id)}`
+        : route.transfer
+        ? "#/transfer"
+        : "#/"
 }
 
 export function App() {
@@ -33,7 +41,7 @@ export function App() {
                         <Replay id={route.id} />
                     </Suspense>
                 )
-                : <Library />}
+                : <Library transfer={!!route.transfer} />}
             <Toasts />
         </>
     )

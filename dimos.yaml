@@ -18,8 +18,9 @@ agent:
     description: >-
         Recordings: the robot recordings in Desktop's recordings folder (.db memory2 SQLite, .mcap, and the .rrd files made
         from them): list and sort them, inspect their streams and tf tree, keep notes, preview their main camera, rename,
-        delete, duplicate, convert between formats, open them (Replayer, Map Editor, Foxglove, Rerun) and upload them to the
-        Dimensional cloud. GET api/recordings is the overview.
+        delete, duplicate, convert between formats, open them (Replayer, Map Editor, Foxglove, Rerun), upload them to the
+        Dimensional cloud, and bring recordings in from a plugged-in USB drive (GET api/drives, POST api/drives/transfer).
+        GET api/recordings is the overview.
     endpoints:
         - method: GET
           path: api/recordings
@@ -172,6 +173,68 @@ agent:
           description: >-
               The preview job: which recording it's working on, and the last results with their wall and CPU time (it runs one
               recording at a time under nice -n 19, pausing between frames)
+        # transfers from a plugged-in drive (backend/recordings/drive_routes.ts)
+        - method: GET
+          path: api/drives
+          description: >-
+              Plugged-in removable drives (USB sticks, SD cards) that have recordings on them: each drive's name, mount,
+              free space and its .mcap / .db files (path, size, modified, preview state), plus the recordings folder's
+              free space and the transfers so far
+          role: context
+        - method: POST
+          path: api/drives/rescan
+          description: >-
+              Look for drives again and re-read the recordings on each
+        - method: GET
+          path: api/drives/thumbnail
+          description: >-
+              A drive recording's preview sprite (a jpeg, like api/recordings/{id}/thumbnail)
+          params:
+              path:
+                  type: string
+                  description: "the file's path on the drive"
+                  required: true
+        - method: POST
+          path: api/drives/transfer
+          description: >-
+              Copy or move recordings from a plugged-in drive into the recordings folder. Never overwrites (a taken name
+              becomes "name 2"), refuses when there isn't room, and runs one file at a time; returns the transfers,
+              which GET api/drives follows
+          params:
+              paths:
+                  type: array
+                  items:
+                      type: string
+                  description: "files on the drive"
+                  required: true
+              mode:
+                  type: string
+                  description: "copy (default) | move (deletes it from the drive once copied)"
+              name:
+                  type: string
+                  description: "a new name for the copy (only with one path)"
+        - method: DELETE
+          path: "api/drives/transfer/{id}"
+          description: >-
+              Cancel a transfer (a half-copied file is removed; the drive's file is untouched)
+          params:
+              id:
+                  type: string
+                  description: "the transfer id"
+                  required: true
+        - method: POST
+          path: api/drives/rename
+          description: >-
+              Rename a recording on a plugged-in drive, in place (keeps its extension; refuses a taken name)
+          params:
+              path:
+                  type: string
+                  description: "the file's path on the drive"
+                  required: true
+              name:
+                  type: string
+                  description: "the new name"
+                  required: true
         # the Replayer (backend/replay/routes.ts)
         - method: GET
           path: "api/replay/{id}"

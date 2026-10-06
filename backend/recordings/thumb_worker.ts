@@ -2,11 +2,16 @@
 // kept under the app data dir by the file's identity (format + size + mtime, so a rename keeps it).
 import { join } from "node:path"
 import { Library } from "./library.ts"
+import { type PathPreview, pathPreview } from "./path_preview.ts"
 import type { FileEntry } from "./scan.ts"
 import { buildThumbnail, ffmpeg, PAUSE_BETWEEN_RECORDINGS_MS, type ThumbMeta } from "./thumbnails.ts"
 
+/** What a recording with no camera was marked before odometry paths: it's looked at again once. */
+const OLD_NO_CAMERA = "no camera stream"
+
 export type ThumbState =
     | { state: "ready"; frames: number; width: number; height: number; stream: string }
+    | ({ state: "path" } & PathPreview)
     | { state: "none"; reason: string }
     | { state: "pending" }
 
@@ -22,6 +27,9 @@ export class Thumbnailer {
         error?: string
     }[] = []
     #wake: (() => void) | null = null
+
+    /** files outside the recordings folder that want a preview too (a plugged-in drive's), done first */
+    extra: () => FileEntry[] = () => []
 
     constructor(public library: Library) {}
 
@@ -41,8 +49,14 @@ export class Thumbnailer {
             return { state: "ready", frames: meta.frames, width: meta.width, height: meta.height, stream: meta.stream }
         } catch {
             try {
+                const path = JSON.parse(await Deno.readTextFile(`${folder}.path.json`)) as PathPreview
+                return { state: "path", ...path }
+            } catch {
+                // no path either
+            }
+            try {
                 const none = JSON.parse(await Deno.readTextFile(`${folder}.none.json`)) as { reason: string }
-                return { state: "none", reason: none.reason }
+                return none.reason === OLD_NO_CAMERA ? { state: "pending" } : { state: "none", reason: none.reason }
             } catch {
                 return { state: "pending" }
             }
@@ -88,13 +102,10 @@ export class Thumbnailer {
 
     /** Builds the next missing preview; false when there's nothing to do. */
     async #one(): Promise<boolean> {
-        if (!ffmpeg()) {
-            return false
-        }
-        const files = (await this.library.files()).filter((file) => file.format !== "rrd")
+        const library = (await this.library.files()).filter((file) => file.format !== "rrd")
         // newest first: what the user just recorded is what they look for
-        files.sort((a, b) => b.modified - a.modified)
-        for (const file of files) {
+        library.sort((a, b) => b.modified - a.modified)
+        for (const file of [...this.extra(), ...library]) {
             if ((await this.stateOf(file)).state !== "pending") {
                 continue
             }
@@ -103,11 +114,26 @@ export class Thumbnailer {
             const started = performance.now()
             try {
                 const inspection = await this.library.inspection(file)
-                const meta = await buildThumbnail(file.path, file.format as "db" | "mcap", inspection, folder)
-                if (!meta) {
-                    await Deno.writeTextFile(`${folder}.none.json`, JSON.stringify({ reason: "no camera stream" }))
+                const cameras = inspection.streams.some((s) => /(^|\.)(Image|CompressedImage)$/.test(s.type) && s.count)
+                if (cameras && !ffmpeg()) {
+                    continue // stays pending until there's an ffmpeg
                 }
-                this.#record(file.id, meta, (performance.now() - started) / 1000)
+                const meta = cameras
+                    ? await buildThumbnail(file.path, file.format as "db" | "mcap", inspection, folder)
+                    : null
+                // no camera: the odometry path from above, when it has one
+                const path = meta ? null : await pathPreview(file.path)
+                if (path) {
+                    await Deno.writeTextFile(`${folder}.path.json`, JSON.stringify(path))
+                } else if (!meta) {
+                    await Deno.writeTextFile(
+                        `${folder}.none.json`,
+                        JSON.stringify({
+                            reason: cameras ? "no readable camera frames" : "no camera, and it didn't move",
+                        }),
+                    )
+                }
+                this.#record(file.id, meta, (performance.now() - started) / 1000, undefined, path?.stream)
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error)
                 await Deno.writeTextFile(
@@ -124,20 +150,24 @@ export class Thumbnailer {
         return false
     }
 
-    #record(id: string, meta: ThumbMeta | null, wallSeconds: number, error?: string) {
+    #record(id: string, meta: ThumbMeta | null, wallSeconds: number, error?: string, pathStream?: string) {
         const entry = {
             id,
             at: Date.now() / 1000,
-            stream: meta?.stream ?? null,
+            stream: meta?.stream ?? pathStream ?? null,
             wallSeconds,
             appCpuSeconds: meta?.stats.appCpuSeconds ?? 0,
             ...(error ? { error } : {}),
         }
         this.log = [entry, ...this.log].slice(0, 50)
         console.error(
-            `thumbnails: ${id} ${meta ? `${meta.frames} frames of ${meta.stream}` : error ?? "no camera"} in ${
-                wallSeconds.toFixed(1)
-            } s (app cpu ${entry.appCpuSeconds.toFixed(2)} s)`,
+            `thumbnails: ${id} ${
+                meta
+                    ? `${meta.frames} frames of ${meta.stream}`
+                    : pathStream
+                    ? `path from ${pathStream}`
+                    : error ?? "no camera"
+            } in ${wallSeconds.toFixed(1)} s (app cpu ${entry.appCpuSeconds.toFixed(2)} s)`,
         )
     }
 }

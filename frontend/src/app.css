@@ -357,6 +357,44 @@ body.science.dark .row-actions .dim-btn.delete:hover {
     }
 }
 
+/* a recording with no camera: its odometry path from above (ui.tsx PathThumbnail) */
+.thumb.path-thumb {
+    cursor: default;
+    background: var(--bg);
+}
+.path-thumb svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.path-thumb .path-frame {
+    fill: none;
+    stroke: var(--hair);
+    stroke-width: 1;
+}
+.path-thumb .path-line {
+    fill: none;
+    stroke: var(--primary);
+    stroke-width: 1.6;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+.path-thumb .path-start {
+    fill: var(--ok);
+}
+.path-thumb .path-end {
+    fill: none;
+    stroke: var(--fg);
+    stroke-width: 1.6;
+}
+.path-thumb .path-scale {
+    position: absolute;
+    right: 4px;
+    bottom: 2px;
+    font-size: 9px;
+    color: var(--muted-fg);
+}
+
 /* ── menus ── */
 .menu-wrap {
     position: relative;
@@ -903,4 +941,95 @@ body.science.dark {
 }
 .dim-toasts {
     bottom: calc(24px + var(--dim-inset-bottom));
+}
+
+/* ── the transfer dialog (views/Transfer.tsx) ── */
+.dialog.transfer-dialog {
+    width: min(860px, calc(100vw - 32px));
+    max-height: calc(100vh - 64px - var(--dim-inset-bottom, 0px));
+    gap: 10px;
+}
+.transfer-head,
+.transfer-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.transfer-head .section-head {
+    margin: 0;
+}
+.transfer-dialog > p {
+    margin: 0;
+}
+.transfer-list {
+    overflow-y: auto;
+    min-height: 0;
+    flex: 1;
+}
+.transfer-drive .group-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+.transfer-row {
+    display: grid;
+    grid-template-columns: auto 168px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--hair);
+}
+.transfer-row.picked {
+    background: var(--primary-soft);
+}
+.transfer-row .thumb {
+    width: 168px;
+}
+.transfer-name {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+.transfer-name > .mono:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.transfer-actions {
+    display: flex;
+    gap: 6px;
+}
+.transfer-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.transfer-progress .dim-progress {
+    flex: 1;
+    max-width: 220px;
+}
+.transfer-state.done {
+    color: var(--ok);
+}
+.transfer-state.failed {
+    color: var(--danger);
+}
+.transfer-state.cancelled {
+    color: var(--muted-fg);
+}
+.transfer-empty {
+    margin: 12px 0;
+    line-height: 1.5;
+}
+@media (max-width: 900px) {
+    .transfer-row {
+        grid-template-columns: auto 96px 1fr;
+    }
+    .transfer-row .thumb {
+        width: 96px;
+    }
+    .transfer-actions {
+        grid-column: 2 / -1;
+    }
 }

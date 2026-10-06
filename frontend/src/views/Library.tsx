@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import {
     api,
     bytes,
+    type DrivesResponse,
     duration,
     type Job,
     type ListResponse,
@@ -21,6 +22,7 @@ import { EmptyState } from "../EmptyState.tsx"
 import { inDesktopShell, openApp } from "../dim-app/desktop.js"
 import { ConfirmDialog, HoverMenu, type MenuItem, RenameDialog, Thumbnail, toast } from "../ui.tsx"
 import { SummaryPanel } from "./SummaryPanel.tsx"
+import { TransferDialog } from "./Transfer.tsx"
 import { UploadTray, useTray } from "./Uploads.tsx"
 
 const SORTS: { key: SortKey; label: string }[] = [
@@ -68,7 +70,7 @@ type DialogState =
     | { kind: "delete"; recording: Recording | RrdFile }
     | null
 
-export function Library() {
+export function Library({ transfer = false }: { transfer?: boolean }) {
     const [sort, setSort] = useState<SortKey>(saved("sort", "date"))
     const [order, setOrder] = useState<Order>(saved("order", "desc"))
     const [jobs, setJobs] = useState<Record<string, Job>>({})
@@ -80,6 +82,9 @@ export function Library() {
     const [login, setLogin] = useState(false)
     const [thumbVersion, setThumbVersion] = useState(1)
     const { tray, error: trayError, refresh: refreshTray } = useTray()
+    // plugged-in drives with recordings: a Transfer button while there are any (state/drives)
+    const [drives] = useBackendState<DrivesResponse>("api/drives", { key: "drives" })
+    const onDrives = drives?.drives.reduce((sum, drive) => sum + drive.files.length, 0) ?? 0
 
     // the list is backend state: GET api/recordings, re-GET when the backend's stateChanged("recordings") arrives
     // (zenoh, frontend topic state/recordings) and after the zenoh-web connection comes back
@@ -122,7 +127,10 @@ export function Library() {
     useEffect(() => {
         const keydown = (event: KeyboardEvent) => {
             const target = event.target as Element | null
-            if (dialog || target?.closest?.("input, textarea, select, [contenteditable=true], [role=dialog]")) {
+            if (
+                dialog || transfer ||
+                target?.closest?.("input, textarea, select, [contenteditable=true], [role=dialog]")
+            ) {
                 return
             }
             if (event.key === "Escape" && selected) {
@@ -144,7 +152,7 @@ export function Library() {
         }
         addEventListener("keydown", keydown)
         return () => removeEventListener("keydown", keydown)
-    }, [selectable.join("\n"), selected, phone, dialog])
+    }, [selectable.join("\n"), selected, phone, dialog, transfer])
 
     const open = (recording: Recording | RrdFile, target: string) => {
         if (target === "replayer") {
@@ -448,6 +456,17 @@ export function Library() {
                         </button>
                     ))}
                 </div>
+                {onDrives > 0 && (
+                    <button
+                        type="button"
+                        className="dim-btn sm primary"
+                        data-testid="transfer-button"
+                        title={`recordings on ${drives?.drives.map((d) => d.name).join(", ")}`}
+                        onClick={() => go({ view: "library", transfer: true })}
+                    >
+                        Transfer recordings · {onDrives}
+                    </button>
+                )}
                 <button
                     type="button"
                     className={`dim-btn sm ${trayOpen ? "on" : ""}`}
@@ -521,6 +540,7 @@ export function Library() {
                     onClose={() => setTrayOpen(false)}
                 />
             )}
+            {transfer && <TransferDialog onClose={() => go({ view: "library" })} />}
             {dialog?.kind === "rename" && (
                 <RenameDialog
                     name={dialog.recording.name}
