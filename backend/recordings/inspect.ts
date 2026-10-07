@@ -5,6 +5,7 @@ import { openDb } from "./sqlite.ts"
 import { decodeCdrFrames, decodeLcmFrames, type Edge, readCdrFrameId, readLcmFrameId, unwrapBlob } from "./messages.ts"
 import { logTimesFromIndexes, openMcap } from "./mcap.ts"
 import { type EdgeSpan, streamWarnings, tfWarnings, type Warning } from "./warnings.ts"
+import { reachable } from "./slow_fs.ts"
 
 export type StreamInfo = {
     name: string
@@ -272,8 +273,8 @@ function finish(
 const TF_WINDOWS = 16
 const TF_WINDOW = 1
 
-export function inspectDb(path: string): Inspection {
-    const db = openDb(path)
+export async function inspectDb(path: string): Promise<Inspection> {
+    const db = await openDb(path)
     try {
         const rows = db.prepare("SELECT name, config FROM _streams ORDER BY name").all() as {
             name: string
@@ -479,6 +480,7 @@ export async function inspectMcap(path: string): Promise<Inspection> {
 
 /** Decides by the file's first bytes, not its name (an .mcap starts with \x89MCAP). */
 export async function formatOf(path: string): Promise<"db" | "mcap" | "rrd" | null> {
+    await reachable(path) // a recording on a drive that isn't answering fails here, off the main thread
     const file = await Deno.open(path, { read: true })
     try {
         const head = new Uint8Array(16)
@@ -505,7 +507,7 @@ export async function inspect(path: string): Promise<Inspection> {
         return await inspectMcap(path)
     }
     if (format === "db") {
-        return inspectDb(path)
+        return await inspectDb(path)
     }
     throw new Error(`not a .db or .mcap recording: ${path}`)
 }

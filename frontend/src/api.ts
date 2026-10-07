@@ -105,6 +105,9 @@ export type Drive = {
     files: DriveFile[]
     free: number | null
     total: number | null
+    /** "not-responding": the drive didn't answer (macOS asking to allow access, or it's stuck) */
+    state: "ready" | "not-responding"
+    problem: string | null
 }
 
 export type Transfer = {

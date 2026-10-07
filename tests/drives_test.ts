@@ -111,14 +111,14 @@ Deno.test("scanDrive: .mcap/.db a few folders down, hidden and system folders sk
     await write("$RECYCLE.BIN/x.mcap")
     await write("photo.jpg")
     await write("empty.mcap", 0) // a recorder that's just opened it
-    const found = scanDrive(root).map((file) => file.relative).sort()
+    const found = (await scanDrive(root)).map((file) => file.relative).sort()
     assertEquals(found, [
         "a/b/c/d/deep.mcap",
         "rec_1.mcap",
         "recordings/lite_record_1788895012.mcap",
         "recordings/walk.db",
     ])
-    const one = scanDrive(root).find((file) => file.name === "walk.db")!
+    const one = (await scanDrive(root)).find((file) => file.name === "walk.db")!
     assertEquals(one.drive, root)
     assertEquals(one.format, "db")
     assertEquals(one.path, join(root, "recordings/walk.db"))
@@ -135,6 +135,8 @@ Deno.test("Drives: a drive from DIM_RECORDINGS_DRIVES is scanned and announced o
         const drives = new Drives(data, (drive) => {
             announced.push(drive.mount)
         })
+        // only the test's stick, not whatever is plugged into this machine
+        drives.candidates = () => Promise.resolve([stick])
         await drives.poll()
         await drives.poll()
         assertEquals(announced, [stick])
@@ -145,6 +147,7 @@ Deno.test("Drives: a drive from DIM_RECORDINGS_DRIVES is scanned and announced o
         const again = new Drives(data, (drive) => {
             announced.push(drive.mount)
         })
+        again.candidates = () => Promise.resolve([stick])
         await again.poll()
         assertEquals(announced, [stick])
         const notice = driveNotification("dim-recordings", drives.list()[0])
@@ -177,7 +180,7 @@ Deno.test("transfer: copy keeps the mtime, never overwrites, move deletes the so
     // the name is taken: "walk 2.mcap", and the first copy is untouched
     const second = await transferFile(source, folder, { mode: "copy" })
     assertEquals(second, join(folder, "walk 2.mcap"))
-    assertEquals(uniqueTarget(folder, "walk.mcap"), join(folder, "walk 3.mcap"))
+    assertEquals(await uniqueTarget(folder, "walk.mcap"), join(folder, "walk 3.mcap"))
 
     // move: the copy, then the source goes; a .db's -wal comes along
     const db = join(stick, "drive.db")

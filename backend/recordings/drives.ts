@@ -6,10 +6,12 @@
 // boot volume's link is skipped). Linux: /media/<user>/*, /run/media/<user>/* and /media/* (lite_record's automount),
 // with `lsblk`'s RM / HOTPLUG when it's there. $DIM_RECORDINGS_DRIVES (paths separated by ":") adds folders that count
 // as drives, for tests and odd mounts. Polled every few seconds by listing those folders: nothing heavier runs unless a
-// new one appears.
+// new one appears. Every call into a drive is async and bounded (slow_fs.ts): a drive that doesn't answer is listed as
+// not responding and looked at again once its call comes back, and the rest of the app keeps working.
 import { basename, join } from "node:path"
 import type { FileEntry } from "./scan.ts"
 import { formatOfName } from "./scan.ts"
+import { fs, NotResponding, within } from "./slow_fs.ts"
 import { diskSpace } from "./transfer.ts"
 
 export type DriveFile = FileEntry & {
@@ -28,6 +30,9 @@ export type Drive = {
     free: number | null
     total: number | null
     scanned: number
+    /** "not-responding": a call into it didn't come back (macOS asking to allow access, or a stuck drive) */
+    state: "ready" | "not-responding"
+    problem: string | null
 }
 
 // ── macOS: diskutil ──
@@ -118,14 +123,17 @@ const SKIP_DIRS = new Set([
  * The .mcap / .db recordings under `root`: `maxDepth` folders down (a lite_record rig writes into a folder or two on
  * the stick), hidden and system folders skipped, at most `maxEntries` directory entries looked at.
  */
-export function scanDrive(root: string, maxDepth = 4, maxEntries = 20000): DriveFile[] {
+export async function scanDrive(root: string, maxDepth = 4, maxEntries = 20000): Promise<DriveFile[]> {
     const found: DriveFile[] = []
     let seen = 0
-    const walk = (relativeDir: string, depth: number) => {
-        let entries: Deno.DirEntry[]
+    const walk = async (relativeDir: string, depth: number) => {
+        let entries: Awaited<ReturnType<typeof fs.readDir>>
         try {
-            entries = [...Deno.readDirSync(join(root, relativeDir))]
-        } catch {
+            entries = await fs.readDir(join(root, relativeDir))
+        } catch (error) {
+            if (error instanceof NotResponding) {
+                throw error // the drive stopped answering: the whole read is off, not a partial list
+            }
             return
         }
         for (const item of entries) {
@@ -138,7 +146,7 @@ export function scanDrive(root: string, maxDepth = 4, maxEntries = 20000): Drive
             const relative = relativeDir ? `${relativeDir}/${item.name}` : item.name
             if (item.isDirectory) {
                 if (depth < maxDepth) {
-                    walk(relative, depth + 1)
+                    await walk(relative, depth + 1)
                 }
                 continue
             }
@@ -148,7 +156,7 @@ export function scanDrive(root: string, maxDepth = 4, maxEntries = 20000): Drive
             }
             const path = join(root, relative)
             try {
-                const stat = Deno.statSync(path)
+                const stat = await fs.stat(path)
                 if (stat.size === 0) {
                     continue // a recorder that's just opened it
                 }
@@ -157,18 +165,21 @@ export function scanDrive(root: string, maxDepth = 4, maxEntries = 20000): Drive
                     name: item.name,
                     format,
                     size: stat.size,
-                    modified: (stat.mtime?.getTime() ?? 0) / 1000,
+                    modified: (stat.mtime ?? 0) / 1000,
                     path,
                     symlink: false,
                     relative,
                     drive: root,
                 })
-            } catch {
+            } catch (error) {
+                if (error instanceof NotResponding) {
+                    throw error
+                }
                 // gone mid-scan
             }
         }
     }
-    walk("", 0)
+    await walk("", 0)
     return found.sort((a, b) => b.modified - a.modified)
 }
 
@@ -183,24 +194,24 @@ async function output(command: string, args: string[]): Promise<string | null> {
     }
 }
 
-function listDirs(parent: string): string[] {
+async function listDirs(parent: string): Promise<string[]> {
     try {
-        return [...Deno.readDirSync(parent)].filter((e) => (e.isDirectory || e.isSymlink) && !e.name.startsWith("."))
+        return (await fs.readDir(parent)).filter((e) => (e.isDirectory || e.isSymlink) && !e.name.startsWith("."))
             .map((e) => join(parent, e.name))
     } catch {
         return []
     }
 }
 
-/** The folders that might be drives right now (cheap: a few readdirs). */
-export function candidateMounts(os = Deno.build.os, user = Deno.env.get("USER") ?? ""): string[] {
+/** The folders that might be drives right now (cheap: a few readdirs of the mount folders, not of the drives). */
+export async function candidateMounts(os = Deno.build.os, user = Deno.env.get("USER") ?? ""): Promise<string[]> {
     const extra = (Deno.env.get("DIM_RECORDINGS_DRIVES") ?? "").split(":").filter(Boolean)
     if (os === "darwin") {
-        return [...listDirs("/Volumes"), ...extra]
+        return [...await listDirs("/Volumes"), ...extra]
     }
-    const mediaUser = user ? listDirs(`/media/${user}`) : []
-    const media = listDirs("/media").filter((dir) => basename(dir) !== user)
-    return [...mediaUser, ...(user ? listDirs(`/run/media/${user}`) : []), ...media, ...extra]
+    const mediaUser = user ? await listDirs(`/media/${user}`) : []
+    const media = (await listDirs("/media")).filter((dir) => basename(dir) !== user)
+    return [...mediaUser, ...(user ? await listDirs(`/run/media/${user}`) : []), ...media, ...extra]
 }
 
 export type Notify = (drive: Drive) => Promise<void> | void
@@ -210,9 +221,13 @@ export class Drives {
     /** keys already notified, kept on disk so an app restart with the stick still in doesn't announce it again */
     #notified: Set<string>
     #removable = new Map<string, boolean>()
+    /** mounts with a look still out (a drive that hangs gets one call at a time, not one more per poll) */
+    #looking = new Map<string, Promise<void>>()
     #timer: number | undefined
     #polling = false
     onChange: () => void = () => {}
+    /** where drives might be mounted (tests swap in their own) */
+    candidates: () => Promise<string[]> = () => candidateMounts()
 
     constructor(public dataDir: string, public notify: Notify, public intervalMs = 5000) {
         try {
@@ -232,8 +247,9 @@ export class Drives {
         clearInterval(this.#timer)
     }
 
+    /** Drives with recordings on them, and drives that aren't answering (so the page can say so). */
     list(): Drive[] {
-        return [...this.drives.values()].filter((drive) => drive.files.length > 0)
+        return [...this.drives.values()].filter((drive) => drive.files.length > 0 || drive.state !== "ready")
     }
 
     files(): DriveFile[] {
@@ -255,7 +271,7 @@ export class Drives {
         }
         let removable = false
         try {
-            if (Deno.realPathSync(mount) === "/") {
+            if (await fs.realPath(mount) === "/") {
                 removable = false // macOS's /Volumes/Macintosh HD
             } else if (Deno.build.os === "darwin") {
                 const plist = await output("diskutil", ["info", "-plist", mount])
@@ -267,21 +283,29 @@ export class Drives {
                     ? parseLsblk(json).some((device) => device.removable && device.mounts.includes(mount))
                     : true
             }
-        } catch {
+        } catch (error) {
+            if (error instanceof NotResponding) {
+                throw error // not known yet: asked again once the drive answers
+            }
             removable = false
         }
         this.#removable.set(mount, removable)
         return removable
     }
 
-    /** Looks at the mounts once: new drives are scanned (and announced), gone ones dropped. */
+    /** Looks at the mounts once: new drives are scanned (and announced), gone ones dropped. Never waits on a drive
+     * longer than slow_fs's timeout. */
     async poll(): Promise<void> {
         if (this.#polling) {
             return
         }
         this.#polling = true
         try {
-            const present = new Set(candidateMounts())
+            const listed = await within(this.candidates(), "listing the mounted drives").catch(() => null)
+            if (!listed) {
+                return // the mount folder itself isn't answering: keep what's known, try again next poll
+            }
+            const present = new Set(listed)
             let changed = false
             for (const mount of [...this.drives.keys()]) {
                 if (!present.has(mount)) {
@@ -291,16 +315,15 @@ export class Drives {
                 }
             }
             for (const mount of present) {
-                if (this.drives.has(mount) || !(await this.#isRemovable(mount))) {
+                const known = this.drives.get(mount)
+                // a drive already read, a folder that isn't one, a stuck drive whose call is still out: nothing to do
+                if (
+                    known?.state === "ready" || this.#removable.get(mount) === false ||
+                    (known?.state === "not-responding" && this.#looking.has(mount))
+                ) {
                     continue
                 }
-                const drive = await this.scan(mount)
-                changed = true
-                if (drive.files.length && !this.#notified.has(drive.key)) {
-                    this.#notified.add(drive.key)
-                    this.#saveNotified()
-                    await Promise.resolve(this.notify(drive)).catch((error) => console.error("drives: notify", error))
-                }
+                await this.#look(mount)
             }
             if (changed) {
                 this.onChange()
@@ -310,12 +333,53 @@ export class Drives {
         }
     }
 
-    /** (Re)reads one drive's recordings and free space. */
+    /** Whether `mount` is a drive, and its recordings; a drive that doesn't answer in time is listed as not
+     * responding, and its look carries on in the background (it lands, and announces, when the call comes back). */
+    async #look(mount: string): Promise<void> {
+        let look = this.#looking.get(mount)
+        if (!look) {
+            look = (async () => {
+                if (!(await this.#isRemovable(mount))) {
+                    return
+                }
+                const drive = await this.scan(mount)
+                this.onChange()
+                if (drive.files.length && !this.#notified.has(drive.key)) {
+                    this.#notified.add(drive.key)
+                    this.#saveNotified()
+                    await Promise.resolve(this.notify(drive)).catch((error) => console.error("drives: notify", error))
+                }
+            })().catch((error) => console.error("drives:", mount, error)).finally(() => this.#looking.delete(mount))
+            this.#looking.set(mount, look)
+        }
+        try {
+            await within(look, `reading ${mount}`)
+        } catch (error) {
+            if (!(error instanceof NotResponding) || this.drives.get(mount)?.state === "not-responding") {
+                return
+            }
+            this.drives.set(mount, {
+                mount,
+                name: basename(mount),
+                key: `${mount}|stuck`,
+                files: [],
+                free: null,
+                total: null,
+                scanned: Date.now() / 1000,
+                state: "not-responding",
+                problem: "not responding: macOS may be asking on this Mac to allow access to it, or the drive is stuck",
+            })
+            console.error(`drives: ${mount} isn't answering; looking again once it does`)
+            this.onChange()
+        }
+    }
+
+    /** (Re)reads one drive's recordings and free space (no time limit: callers bound it). */
     async scan(mount: string): Promise<Drive> {
         let mounted = 0
         try {
-            const stat = Deno.statSync(mount)
-            mounted = (stat.birthtime ?? stat.ctime ?? stat.mtime)?.getTime() ?? 0
+            const stat = await fs.stat(mount)
+            mounted = stat.birthtime ?? stat.ctime ?? stat.mtime ?? 0
         } catch {
             // vanished
         }
@@ -324,18 +388,24 @@ export class Drives {
             mount,
             name: basename(mount),
             key: `${mount}|${mounted}`,
-            files: scanDrive(mount),
+            files: await scanDrive(mount),
             free: space?.free ?? null,
             total: space?.total ?? null,
             scanned: Date.now() / 1000,
+            state: "ready",
+            problem: null,
         }
         this.drives.set(mount, drive)
         return drive
     }
 
+    /** Re-reads every drive (each bounded like a poll's look). */
     async rescan(): Promise<void> {
         for (const mount of [...this.drives.keys()]) {
-            await this.scan(mount)
+            const drive = this.drives.get(mount)
+            if (drive?.state === "ready") {
+                await within(this.scan(mount), `reading ${mount}`).catch((error) => console.error("drives:", error))
+            }
         }
         await this.poll()
         this.onChange()

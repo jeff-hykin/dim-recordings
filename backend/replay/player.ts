@@ -20,6 +20,7 @@ import {
 import { encode as lcmEncode, schemas } from "./lcm.ts"
 import { atOrBefore, openSource, type Source, type StreamMeta } from "./source.ts"
 import type { Thumbs } from "./thumbs.ts"
+import { reachable } from "../recordings/slow_fs.ts"
 
 export type Mode = "play" | "scrub" | "pause"
 /** how a subscription wants its messages: dimos LCM bytes, a decoded image, a decoded cloud, or only the header */
@@ -47,6 +48,7 @@ type Open = {
 const open = new Map<string, Open>()
 
 async function identityOf(path: string): Promise<string> {
+    await reachable(path)
     const stat = await Deno.stat(path)
     return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtime?.getTime()}`
 }

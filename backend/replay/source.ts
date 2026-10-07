@@ -78,7 +78,7 @@ export function atOrBefore(times: Float64Array, t: number): number {
 export async function openSource(path: string): Promise<Source> {
     const format = await formatOf(path)
     if (format === "db") {
-        return new DbSource(path)
+        return new DbSource(path, await openDb(path))
     }
     if (format === "mcap") {
         return await McapSource.open(path)
@@ -94,8 +94,8 @@ class DbSource implements Source {
     #db: DatabaseSync
     #indexes = new Map<string, StreamIndex & { ids: Float64Array }>()
 
-    constructor(readonly path: string) {
-        this.#db = openDb(path)
+    constructor(readonly path: string, db: DatabaseSync) {
+        this.#db = db
         const rows = this.#db.prepare(
             "SELECT name, config FROM _streams ORDER BY name",
         ).all() as {

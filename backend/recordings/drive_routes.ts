@@ -224,7 +224,7 @@ export function driveRoutes(
             },
             handler: async ({ path, name }) => {
                 const file = find(path)
-                const target = renameRecording(file.path, String(name))
+                const target = await renameRecording(file.path, String(name))
                 await drives.scan(file.drive)
                 drives.onChange()
                 return { ok: true, path: target, name: basename(target), folder: dirname(target) }

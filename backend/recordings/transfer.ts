@@ -4,24 +4,16 @@
 // inspection (cached by format + size + mtime) come along. A .db's SQLite sidecars travel with it.
 import { basename, join } from "node:path"
 import { stem } from "./scan.ts"
+import { exists, fs, reachable } from "./slow_fs.ts"
 
 const SIDECARS = ["-wal", "-shm"]
 const CHUNK = 8 << 20
 
-function exists(path: string) {
-    try {
-        Deno.lstatSync(path)
-        return true
-    } catch {
-        return false
-    }
-}
-
 /** `name` in `dir`, else "stem 2.ext", "stem 3.ext", ...: never a name that's taken. */
-export function uniqueTarget(dir: string, name: string): string {
+export async function uniqueTarget(dir: string, name: string): Promise<string> {
     const extension = name.includes(".") ? name.slice(name.lastIndexOf(".")) : ""
     let candidate = join(dir, name)
-    for (let n = 2; exists(candidate); n++) {
+    for (let n = 2; await exists(candidate); n++) {
         candidate = join(dir, `${stem(name)} ${n}${extension}`)
     }
     return candidate
@@ -57,11 +49,14 @@ export function parseDf(text: string): { free: number; total: number } | null {
 export type TransferProgress = { done: number; total: number }
 
 /** The files that make up a recording: itself plus a .db's sidecars. */
-export function partsOf(path: string): string[] {
-    return [path, ...(path.toLowerCase().endsWith(".db") ? SIDECARS.map((s) => path + s).filter(exists) : [])]
+export async function partsOf(path: string): Promise<string[]> {
+    const sidecars = path.toLowerCase().endsWith(".db") ? SIDECARS.map((s) => path + s) : []
+    const present = await Promise.all(sidecars.map(exists))
+    return [path, ...sidecars.filter((_, i) => present[i])]
 }
 
 async function copyOne(from: string, to: string, onBytes: (n: number) => void, cancel: () => boolean) {
+    await reachable(from)
     const source = await Deno.open(from, { read: true })
     const target = await Deno.open(to, { write: true, createNew: true })
     try {
@@ -85,9 +80,9 @@ async function copyOne(from: string, to: string, onBytes: (n: number) => void, c
         source.close()
         target.close()
     }
-    const stat = await Deno.stat(from)
+    const stat = await fs.stat(from)
     if (stat.mtime) {
-        await Deno.utime(to, stat.atime ?? stat.mtime, stat.mtime)
+        await Deno.utime(to, new Date(stat.mtime), new Date(stat.mtime))
     }
 }
 
@@ -105,8 +100,8 @@ export async function transferFile(
         cancel?: () => boolean
     },
 ): Promise<string> {
-    const parts = partsOf(source)
-    const sizes = parts.map((part) => Deno.statSync(part).size)
+    const parts = await partsOf(source)
+    const sizes = await Promise.all(parts.map(async (part) => (await fs.stat(part)).size))
     const total = sizes.reduce((a, b) => a + b, 0)
     const space = await diskSpace(dir)
     if (space && space.free < total + 64 * 1024 * 1024) {
@@ -116,7 +111,7 @@ export async function transferFile(
             } GB free`,
         )
     }
-    const target = uniqueTarget(dir, options.name ?? basename(source))
+    const target = await uniqueTarget(dir, options.name ?? basename(source))
     const temporary = (part: string) => join(dir, `.${basename(target)}${part.slice(source.length)}.transferring`)
     let done = 0
     const cancel = options.cancel ?? (() => false)
@@ -128,16 +123,16 @@ export async function transferFile(
             }, cancel)
         }
         for (const [i, part] of parts.entries()) {
-            if (Deno.statSync(temporary(part)).size !== sizes[i]) {
+            if ((await Deno.stat(temporary(part))).size !== sizes[i]) {
                 throw new Error(`${basename(part)} copied short`)
             }
         }
         // the name was free when picked; take it now only if it still is
-        if (exists(target)) {
+        if (await exists(target)) {
             throw new Error(`${basename(target)} appeared meanwhile`)
         }
         for (const part of parts) {
-            Deno.renameSync(temporary(part), target + part.slice(source.length))
+            await Deno.rename(temporary(part), target + part.slice(source.length))
         }
     } catch (error) {
         for (const part of parts) {
@@ -147,7 +142,8 @@ export async function transferFile(
     }
     if (options.mode === "move") {
         for (const part of parts) {
-            Deno.removeSync(part)
+            await reachable(part)
+            await Deno.remove(part)
         }
     }
     return target

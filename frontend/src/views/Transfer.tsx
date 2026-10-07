@@ -146,10 +146,20 @@ export function TransferDialog({ onClose }: { onClose: () => void }) {
                             <h3 className="group-head">
                                 {drive.name}
                                 <span className="muted small mono">
-                                    {drive.mount} · {drive.files.length} recording{drive.files.length === 1 ? "" : "s"}
+                                    {drive.state === "not-responding"
+                                        ? drive.mount
+                                        : `${drive.mount} · ${drive.files.length} recording${
+                                            drive.files.length === 1 ? "" : "s"
+                                        }`}
                                     {drive.free !== null && ` · ${bytes(drive.free)} free`}
                                 </span>
                             </h3>
+                            {drive.state === "not-responding" && (
+                                <p className="small transfer-state failed" data-drive-stuck>
+                                    Not responding. If macOS is asking on this Mac whether to allow access to the drive,
+                                    answer it there; the list fills in once it does.
+                                </p>
+                            )}
                             {drive.files.map((file) => (
                                 <div
                                     key={file.path}

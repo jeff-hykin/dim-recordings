@@ -1,5 +1,6 @@
 // Opening an .mcap for indexed reads (summary section, per-topic time ranges), the same way dtk's tools do.
 import { lz4, McapIndexedReader, zstdDecompress } from "../deps.ts"
+import { reachable } from "./slow_fs.ts"
 
 export type McapFile = {
     reader: McapIndexedReader
@@ -9,6 +10,7 @@ export type McapFile = {
 }
 
 export async function openMcap(path: string): Promise<McapFile> {
+    await reachable(path)
     const file = await Deno.open(path, { read: true })
     const size = (await file.stat()).size
     // the reader asks for several ranges at once; one seek+read at a time keeps them from interleaving

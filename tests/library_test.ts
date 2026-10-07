@@ -81,7 +81,7 @@ Deno.test("library: recorded = first message time, notes survive a rename, cache
     assertEquals(walk.recorded, T0)
     assertEquals(walk.recordedFrom, "messages")
     library.setNote("walk.db", "stairs, twice")
-    renameRecording(walk.path, "stairs")
+    await renameRecording(walk.path, "stairs")
     library.moveNote("walk.db", "stairs.db")
     // a new Library (a restart) reads the notes back from the data dir
     const again = new Library({ recordingsDir: dir, dataDir: data, desktopUrl: "", appName: "dim-recordings" })
@@ -98,13 +98,13 @@ for (const name of ["walk.db", "drive.mcap"]) {
         const path = join(dir, name)
         const extension = name.slice(name.indexOf("."))
         await Deno.writeTextFile(`${path}-wal`, "")
-        const renamed = renameRecording(path, "renamed")
+        const renamed = await renameRecording(path, "renamed")
         assertEquals(renamed, join(dir, `renamed${extension}`))
         assert(!(await exists(path)))
         assert(await exists(`${renamed}-wal`))
-        assertThrows(() => renameRecording(renamed, "../escape"))
+        await assertRejects(() => renameRecording(renamed, "../escape"))
         await Deno.writeTextFile(join(dir, `taken${extension}`), "")
-        assertThrows(() => renameRecording(renamed, `taken${extension}`), Error, "already exists")
+        await assertRejects(() => renameRecording(renamed, `taken${extension}`), Error, "already exists")
 
         const copy = await duplicateRecording(renamed)
         assertEquals(copy, join(dir, `renamed copy${extension}`))
@@ -112,7 +112,7 @@ for (const name of ["walk.db", "drive.mcap"]) {
         assertEquals(await duplicateRecording(renamed), join(dir, `renamed copy 2${extension}`))
         assertEquals((await inspect(copy)).messages, (await inspect(renamed)).messages)
 
-        deleteRecording(renamed)
+        await deleteRecording(renamed)
         assert(!(await exists(renamed)))
         assert(!(await exists(`${renamed}-wal`)))
     })
@@ -125,7 +125,7 @@ Deno.test("delete on a symlink removes the link, never the target", async () => 
     await Deno.symlink(join(elsewhere, "walk.db"), join(dir, "walk.db"))
     const listed = await scanFiles(dir)
     assertEquals(listed.find((f) => f.id === "walk.db")!.symlink, true)
-    deleteRecording(join(dir, "walk.db"))
+    await deleteRecording(join(dir, "walk.db"))
     assert(await exists(join(elsewhere, "walk.db")))
 })
 

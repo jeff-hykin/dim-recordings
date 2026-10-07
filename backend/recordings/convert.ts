@@ -217,7 +217,7 @@ export class Jobs {
                                 await Deno.remove(lastStdout).catch(() => {})
                             })
                         } else {
-                            Deno.renameSync(partial!, output)
+                            await Deno.rename(partial!, output)
                         }
                         job.state = "done"
                         job.result = output

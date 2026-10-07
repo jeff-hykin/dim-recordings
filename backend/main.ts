@@ -5,6 +5,7 @@ import { loadConfig } from "./config.ts"
 import { dimosApp } from "./dimos_app.ts"
 import { handle, publishEvent, stateChanged } from "./http.ts"
 import { buildRoutes, DESCRIPTION } from "./routes.ts"
+import { within } from "./recordings/slow_fs.ts"
 import { makeServices } from "./services.ts"
 
 function flag(name: string): string | undefined {
@@ -31,33 +32,38 @@ services.library.listeners.add((event) => {
         publishEvent(event)
     }
 })
-// a new file in the folder: tell the pages, look for preview work
-try {
-    Deno.mkdirSync(config.recordingsDir, { recursive: true })
-    ;(async () => {
-        let timer: number | undefined
-        for await (const _event of Deno.watchFs(config.recordingsDir, { recursive: true })) {
-            clearTimeout(timer)
-            timer = setTimeout(() => {
-                stateChanged("recordings")
-                services.thumbnails.poke()
-            }, 800)
-        }
-    })()
-} catch (error) {
-    console.error(`not watching ${config.recordingsDir}:`, error)
+/** The background work, started once the server is listening: nothing here may hold up a request (a recordings
+ * folder or drive macOS is asking about only delays its own part; slow_fs.ts). */
+async function startBackground() {
+    // a new file in the folder: tell the pages, look for preview work
+    try {
+        await within(Deno.mkdir(config.recordingsDir, { recursive: true }), `opening ${config.recordingsDir}`)
+        ;(async () => {
+            let timer: number | undefined
+            for await (const _event of Deno.watchFs(config.recordingsDir, { recursive: true })) {
+                clearTimeout(timer)
+                timer = setTimeout(() => {
+                    stateChanged("recordings")
+                    services.thumbnails.poke()
+                }, 800)
+            }
+        })().catch((error) => console.error(`stopped watching ${config.recordingsDir}:`, error))
+    } catch (error) {
+        console.error(`not watching ${config.recordingsDir}:`, error)
+    }
+    if (!Deno.args.includes("--no-thumbnails")) {
+        services.thumbnails.start()
+    }
+    // plugged-in drives: the transfer dialog's list follows them (state/drives), and their recordings get previews
+    services.drives.onChange = () => {
+        stateChanged("drives")
+        services.thumbnails.poke()
+    }
+    if (!Deno.args.includes("--no-drives")) {
+        services.drives.start()
+    }
 }
-if (!Deno.args.includes("--no-thumbnails")) {
-    services.thumbnails.start()
-}
-// plugged-in drives: the transfer dialog's list follows them (state/drives), and their recordings get previews
-services.drives.onChange = () => {
-    stateChanged("drives")
-    services.thumbnails.poke()
-}
-if (!Deno.args.includes("--no-drives")) {
-    services.drives.start()
-}
+
 console.error(`recordings: ${config.recordingsDir}, data: ${config.dataDir}, desktop: ${config.desktopUrl || "-"}`)
 
 const frontend = flag("frontend") ?? new URL("../frontend/dist", import.meta.url).pathname
@@ -103,3 +109,4 @@ if (socket) {
 } else {
     Deno.serve({ port: Number(flag("port") ?? 8787) }, serve)
 }
+startBackground()

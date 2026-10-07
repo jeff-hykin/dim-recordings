@@ -156,7 +156,7 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             },
             handler: async ({ id, name }) => {
                 const recording = await find(String(id))
-                const target = renameRecording(recording.path, String(name))
+                const target = await renameRecording(recording.path, String(name))
                 const newId = target.slice(library.dir.length + 1)
                 library.moveNote(recording.id, newId)
                 library.emit({ type: "recordings", reason: "rename", id: newId })
@@ -171,7 +171,7 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             params: ID,
             handler: async ({ id }) => {
                 const recording = await find(String(id))
-                deleteRecording(recording.path)
+                await deleteRecording(recording.path)
                 library.setNote(recording.id, "")
                 library.emit({ type: "recordings", reason: "delete", id })
                 return { ok: true }

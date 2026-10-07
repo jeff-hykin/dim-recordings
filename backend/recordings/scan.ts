@@ -2,6 +2,7 @@
 // base name: go2.db + go2.rrd), and .rrd files nothing claims as standalone rows. Walks one sub-folder deep, like
 // Desktop's /recordings (src/recordings.rs), and uses the same ids: the path relative to the folder.
 import { join } from "node:path"
+import { type FileInfo, fs, NotResponding } from "./slow_fs.ts"
 
 export type Format = "db" | "mcap" | "rrd"
 
@@ -36,6 +37,25 @@ export function stem(name: string): string {
     return name.replace(/\.(db|mcap|rrd)$/i, "")
 }
 
+/** symlinked recordings whose target didn't answer (on a drive macOS is asking about): left out of listings for a
+ * minute rather than waited on again by each one */
+const waiting = new Set<string>()
+
+async function targetStat(path: string): Promise<FileInfo> {
+    if (waiting.has(path)) {
+        throw new Error(`${path}: still waiting on its drive`)
+    }
+    try {
+        return await fs.stat(path)
+    } catch (error) {
+        if (error instanceof NotResponding) {
+            waiting.add(path)
+            Deno.unrefTimer(setTimeout(() => waiting.delete(path), 60_000))
+        }
+        throw error
+    }
+}
+
 async function entry(root: string, relative: string): Promise<FileEntry | null> {
     const name = relative.split("/").pop()!
     const format = formatOfName(name)
@@ -44,8 +64,9 @@ async function entry(root: string, relative: string): Promise<FileEntry | null> 
     }
     const path = join(root, relative)
     try {
-        const link = await Deno.lstat(path)
-        const stat = link.isSymlink ? await Deno.stat(path) : link
+        const link = await fs.lstat(path)
+        // a symlink can point onto a drive that isn't answering: it's left out of this listing, not waited on
+        const stat = link.isSymlink ? await targetStat(path) : link
         if (!stat.isFile) {
             return null
         }
@@ -54,7 +75,7 @@ async function entry(root: string, relative: string): Promise<FileEntry | null> 
             name,
             format,
             size: stat.size,
-            modified: (stat.mtime?.getTime() ?? 0) / 1000,
+            modified: (stat.mtime ?? 0) / 1000,
             path,
             symlink: link.isSymlink,
         }
@@ -66,9 +87,9 @@ async function entry(root: string, relative: string): Promise<FileEntry | null> 
 export async function scanFiles(root: string): Promise<FileEntry[]> {
     const found: FileEntry[] = []
     const walk = async (relativeDir: string, depth: number) => {
-        let entries: Deno.DirEntry[] = []
+        let entries: Awaited<ReturnType<typeof fs.readDir>> = []
         try {
-            entries = [...Deno.readDirSync(join(root, relativeDir))]
+            entries = await fs.readDir(join(root, relativeDir))
         } catch {
             return
         }

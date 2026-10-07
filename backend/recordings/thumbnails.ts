@@ -105,8 +105,8 @@ function isImageStream(stream: StreamInfo) {
     return /(^|\.)(Image|CompressedImage)$/.test(stream.type) && stream.count > 0
 }
 
-function dbSource(path: string, inspection: Inspection): Source {
-    const db = openDb(path)
+async function dbSource(path: string, inspection: Inspection): Promise<Source> {
+    const db = await openDb(path)
     const decode = (blob: Uint8Array) => withSize(decodeLcmImage(unwrapBlob(new Uint8Array(blob))))
     const frameAt = (stream: string, time: number) => {
         const quoted = stream.replaceAll('"', '""')
@@ -296,7 +296,7 @@ export async function buildThumbnail(
 ): Promise<ThumbMeta | null> {
     const started = performance.now()
     const cpuBefore = process.cpuUsage()
-    const source = format === "db" ? dbSource(path, inspection) : await mcapSource(path, inspection)
+    const source = format === "db" ? await dbSource(path, inspection) : await mcapSource(path, inspection)
     let ffmpegRuns = 0
     try {
         const main = pickMainCamera(await source.candidates())
