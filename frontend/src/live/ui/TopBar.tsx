@@ -36,7 +36,8 @@ export function TopBar(
             >
                 <Icon name="arrow-left" size={16} />
             </button>
-            <img className="brand" src="./icon.svg" alt="" />
+            {/* inside Desktop, its window bar already shows the app's icon */}
+            {window.parent === window && <img className="brand" src="./icon.svg" alt="" />}
             <span className="title dim-title">Replayer</span>
             <span className="dim-badge dim-mono recording-pill" title={detail}>
                 {name}

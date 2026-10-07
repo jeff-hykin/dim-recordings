@@ -505,8 +505,13 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
             <aside className="list" aria-label="Recordings">
                 <header>
                     <div className="row">
-                        <span className="dim-title">Recordings</span>
-                        <span className="grow" />
+                        {/* inside Desktop, its window bar already names the app, so the buttons start the row */}
+                        {window.parent === window && (
+                            <>
+                                <span className="dim-title">Recordings</span>
+                                <span className="grow" />
+                            </>
+                        )}
                         {onDrives > 0 && (
                             <button
                                 type="button"
