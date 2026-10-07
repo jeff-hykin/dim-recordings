@@ -73,7 +73,7 @@ function desktopUrlFromServer() {
     }
     try {
         const app = globalThis.Deno?.env.get("DIMOS_APP")
-        return (app && JSON.parse(app).desktopUrl) || (globalThis.Deno?.env.get("DIMOS_DESKTOP_URL") ?? null)
+        return (app && JSON.parse(app).desktopUrl) || null
     } catch {
         return null
     }
