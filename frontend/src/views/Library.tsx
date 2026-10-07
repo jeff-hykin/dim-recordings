@@ -18,10 +18,10 @@ import {
     when,
 } from "../api.ts"
 import { go } from "../App.tsx"
-import { appEvents } from "../dim-app/events.js"
-import { useBackendState } from "../dim-app/react.js"
+import { appEvents } from "../dim-app/source/events.js"
+import { useBackendState } from "../dim-app/source/react.js"
 import { EmptyState } from "../EmptyState.tsx"
-import { inDesktopShell, openApp } from "../dim-app/desktop.js"
+import { inDesktopShell, openApp } from "../dim-app/source/desktop.js"
 import { ConfirmDialog, type FloatAt, FloatMenu, type MenuItem, RenameDialog, Thumbnail, toast } from "../ui.tsx"
 import { Inspector, type InspectorActions } from "./Inspector.tsx"
 import { TransferDialog } from "./Transfer.tsx"

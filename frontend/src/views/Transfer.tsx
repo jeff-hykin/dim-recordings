@@ -3,8 +3,8 @@
 // ticked together) or rename on the drive. Never overwrites; says when there isn't room.
 import { useEffect, useState } from "react"
 import { api, bytes, type DriveFile, type DrivesResponse, type Transfer } from "../api.ts"
-import { appEvents } from "../dim-app/events.js"
-import { useBackendState } from "../dim-app/react.js"
+import { appEvents } from "../dim-app/source/events.js"
+import { useBackendState } from "../dim-app/source/react.js"
 import { ConfirmDialog, RenameDialog, Thumbnail, toast } from "../ui.tsx"
 
 const fail = (error: unknown) => toast(String((error as Error)?.message ?? error), "danger")

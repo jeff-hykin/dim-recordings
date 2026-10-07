@@ -5,7 +5,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js"
 import { Store } from "../store.ts"
 import { focusDistance, splatBackground } from "./pointMaterial.ts"
-import { themeColors } from "../../../dim-app/theme.js"
+import { themeColors } from "../../../dim-app/source/theme.js"
 import { FRAME_BUDGET_MS, splatFallback } from "./rendering.ts"
 import { SmoothFollow } from "./follow.ts"
 

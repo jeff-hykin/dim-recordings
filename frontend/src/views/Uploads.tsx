@@ -2,9 +2,9 @@
 // Desktop's own page in an iframe (`/dimos/cloud/login/page`, NosyPuma upload_api.md).
 import { useEffect, useRef, useState } from "react"
 import { api, bytes, desktopPath, type Tray, type Upload } from "../api.ts"
-import { isDark } from "../dim-app/theme.js"
-import { useBackendState } from "../dim-app/react.js"
-import { getZenoh } from "../dim-app/zenoh.js"
+import { isDark } from "../dim-app/source/theme.js"
+import { useBackendState } from "../dim-app/source/react.js"
+import { getZenoh } from "../dim-app/source/zenoh.js"
 
 const PHASES: Record<string, string> = {
     preparing: "preparing",
