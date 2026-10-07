@@ -32,7 +32,7 @@ export interface SubscribeOptions {
     priority?: number
     maxHz?: number
     minQuality?: number
-    /** dimos-pointcloud2 → a decoded cloud; *-image / *-depth → a decoded frame; none → LCM bytes */
+    /** dimos_lcm_pointcloud2 → a decoded cloud; *_image / *_depth → a decoded frame; none → LCM bytes */
     encoding?: string
 }
 

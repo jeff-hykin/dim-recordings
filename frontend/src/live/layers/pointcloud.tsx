@@ -1,4 +1,4 @@
-// sensor_msgs.PointCloud2: lidar scans and maps. The gateway's dimos-pointcloud2 encoding sends quantized xyz (+ u8
+// sensor_msgs.PointCloud2: lidar scans and maps. The gateway's dimos_lcm_pointcloud2 encoding sends quantized xyz (+ u8
 // intensity); the points go straight into preallocated GPU buffers (a ring when accumulating) and are colored in
 // the shader, so a new scan costs one buffer upload and nothing is allocated per frame.
 import * as THREE from "three"
@@ -122,7 +122,7 @@ class CloudLayer {
             {
                 delivery: "latest",
                 maxHz: settings.maxHz,
-                encoding: "dimos-pointcloud2",
+                encoding: "dimos_lcm_pointcloud2",
                 ...(settings.detail === "full" ? { minQuality: 1 } : {}),
             },
             (message) => {

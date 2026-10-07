@@ -78,7 +78,7 @@ export class VideoSources {
         let ticket = 0
         const stop = this.connection.subscribe(topic.key, {
             delivery: "latest",
-            encoding: isDepthTopic(topic) ? "dimos-depth" : "dimos-image",
+            encoding: isDepthTopic(topic) ? "dimos_lcm_depth" : "dimos_lcm_image",
         }, async (message) => {
             const frame = message.decoded as Frame | undefined
             if (!frame) {
