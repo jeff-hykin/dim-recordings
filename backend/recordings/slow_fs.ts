@@ -93,6 +93,22 @@ function startWorker(): Worker {
     return started
 }
 
+/** Called when a call that was given up on comes back after all (macOS's question answered, the drive woke up). */
+const unstuckListeners = new Set<() => void>()
+export function onUnstuck(listener: () => void): () => void {
+    unstuckListeners.add(listener)
+    return () => unstuckListeners.delete(listener)
+}
+
+function retire(stuck: Worker) {
+    stuck.onmessage = () => {
+        stuck.terminate()
+        for (const listener of unstuckListeners) {
+            listener()
+        }
+    }
+}
+
 function send(id: number) {
     const call = pending.get(id)!
     worker ??= startWorker()
@@ -107,8 +123,11 @@ function offThread<T>(op: string, path: string, what: string, ms = fsTimeoutMs()
             if (!pending.delete(id)) {
                 return
             }
-            // the worker is stuck in this call: drop it, and hand the calls queued behind it to a fresh one
-            worker?.terminate()
+            // the worker is stuck in this call: retire it (it ends once the call comes back, which says the path
+            // answers again), and hand the calls queued behind it to a fresh one
+            if (worker) {
+                retire(worker)
+            }
             worker = null
             for (const queued of pending.keys()) {
                 send(queued)

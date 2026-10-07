@@ -11,7 +11,7 @@
 import { basename, join } from "node:path"
 import type { FileEntry } from "./scan.ts"
 import { formatOfName } from "./scan.ts"
-import { fs, NotResponding, within } from "./slow_fs.ts"
+import { fs, NotResponding, onUnstuck, within } from "./slow_fs.ts"
 import { diskSpace } from "./transfer.ts"
 
 export type DriveFile = FileEntry & {
@@ -223,6 +223,9 @@ export class Drives {
     #removable = new Map<string, boolean>()
     /** mounts with a look still out (a drive that hangs gets one call at a time, not one more per poll) */
     #looking = new Map<string, Promise<void>>()
+    /** a drive that didn't answer is asked again after a growing pause (each ask that hangs holds a thread), or as soon
+     * as a call that was given up on comes back */
+    #retry = new Map<string, { at: number; pause: number }>()
     #timer: number | undefined
     #polling = false
     onChange: () => void = () => {}
@@ -238,6 +241,10 @@ export class Drives {
     }
 
     start() {
+        onUnstuck(() => {
+            this.#retry.clear()
+            this.poll()
+        })
         this.poll()
         this.#timer = setInterval(() => this.poll(), this.intervalMs)
         Deno.unrefTimer(this.#timer)
@@ -319,7 +326,8 @@ export class Drives {
                 // a drive already read, a folder that isn't one, a stuck drive whose call is still out: nothing to do
                 if (
                     known?.state === "ready" || this.#removable.get(mount) === false ||
-                    (known?.state === "not-responding" && this.#looking.has(mount))
+                    (known?.state === "not-responding" &&
+                        (this.#looking.has(mount) || Date.now() < (this.#retry.get(mount)?.at ?? 0)))
                 ) {
                     continue
                 }
@@ -349,15 +357,22 @@ export class Drives {
                     this.#saveNotified()
                     await Promise.resolve(this.notify(drive)).catch((error) => console.error("drives: notify", error))
                 }
-            })().catch((error) => console.error("drives:", mount, error)).finally(() => this.#looking.delete(mount))
+            })().finally(() => this.#looking.delete(mount))
+            look.catch(() => {}) // looked at below, and by the polls that find it still out
             this.#looking.set(mount, look)
         }
-        try {
-            await within(look, `reading ${mount}`)
-        } catch (error) {
-            if (!(error instanceof NotResponding) || this.drives.get(mount)?.state === "not-responding") {
-                return
-            }
+        let failure: unknown = null
+        await within(look, `reading ${mount}`).catch((error) => failure = error)
+        if (failure && !(failure instanceof NotResponding)) {
+            console.error("drives:", mount, failure)
+        }
+        if (this.drives.get(mount)?.state === "ready") {
+            this.#retry.delete(mount)
+        } else if (failure instanceof NotResponding || this.drives.get(mount)?.state === "not-responding") {
+            const pause = Math.min((this.#retry.get(mount)?.pause ?? 15_000) * 2, 300_000)
+            this.#retry.set(mount, { at: Date.now() + pause, pause })
+        }
+        if (failure instanceof NotResponding && this.drives.get(mount)?.state !== "not-responding") {
             this.drives.set(mount, {
                 mount,
                 name: basename(mount),

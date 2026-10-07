@@ -4,7 +4,7 @@
 import { assert, assertEquals, assertRejects } from "@std/assert"
 import { join } from "node:path"
 import { type Drive, Drives } from "../backend/recordings/drives.ts"
-import { fs, NotResponding, stopWorker, within } from "../backend/recordings/slow_fs.ts"
+import { fs, NotResponding, onUnstuck, stopWorker, within } from "../backend/recordings/slow_fs.ts"
 import { openDb } from "../backend/recordings/sqlite.ts"
 import { tempDir } from "./fixtures.ts"
 
@@ -81,6 +81,8 @@ Deno.test({
         Deno.env.set("DIM_RECORDINGS_FS_TIMEOUT_MS", "300")
         let ticks = 0
         const ticker = setInterval(() => ticks++, 20)
+        let unstuck = false
+        const stopListening = onUnstuck(() => unstuck = true)
         try {
             await assertRejects(() => openDb(fifo), NotResponding)
             assert(ticks >= 5, `the event loop stalled (${ticks} ticks in 300 ms)`)
@@ -94,6 +96,12 @@ Deno.test({
             stopWorker()
             // the dropped worker's open is still waiting: a writer from another process lets it finish
             await new Deno.Command("sh", { args: ["-c", 'printf x > "$0"', fifo] }).output()
+            // and the retired worker, its call back, says the path answers again
+            for (let i = 0; i < 50 && !unstuck; i++) {
+                await new Promise((resolve) => setTimeout(resolve, 20))
+            }
+            stopListening()
+            assert(unstuck, "the retired worker never said its call came back")
         }
     },
 })
