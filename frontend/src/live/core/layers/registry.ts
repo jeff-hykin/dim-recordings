@@ -16,7 +16,7 @@ export interface LayerContext {
     connection: Connection
     /** shared camera streams */
     video: VideoSources
-    /** every topic on the bridge right now */
+    /** every topic on the gateway right now */
     topics(): Topic[]
     /** the active robot profile (fork-specific defaults) */
     profile: RobotProfile

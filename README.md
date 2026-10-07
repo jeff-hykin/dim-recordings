@@ -47,9 +47,9 @@ Each of these is an HTTP endpoint (`backend/recordings/routes.ts`, `backend/repl
 
 ## Backend → page
 
-Desktop's rule (its docs/events.md): the page asks over HTTP and hears back over zenoh, on its one zenoh-web connection
-(dim-app's `getZenoh()`). The backend publishes through Desktop's relay (`POST /desktop/frontend/<name>/<topic>`,
-dim-app's `frontend_publish.js`, vendored in `backend/dim-app/`):
+Desktop's rule (its docs/events.md): the page asks over HTTP and hears back over zenoh, on its one zenoh-gateway
+connection (dim-app's `getZenoh()`). The backend publishes through Desktop's relay
+(`POST /desktop/frontend/<name>/<topic>`, dim-app's `frontend_publish.js`, vendored in `backend/dim-app/`):
 
 - `state/recordings` — `stateChanged("recordings")` on a rename, delete, duplicate, note, inspection, preview, finished
   conversion or a change in the folder; the list (`useBackendState`) re-GETs `api/recordings`.
@@ -69,7 +69,7 @@ back, with drop-to-latest and thumbnail-while-scrubbing), not an event feed.
 | `backend/recordings/`             | scan + rrd pairing, inspection (`dtk data summary`'s logic), sorting and date sections, actions, conversion jobs, previews, open targets, uploads                   |
 | `backend/replay/`                 | the Replayer: lazy sources over a .db / .mcap (`source.ts`), the playback websocket (`player.ts`), thumbnails, in-place stream edits (`edit_db.ts`, `edit_mcap.ts`) |
 | `frontend/src/views/`             | `Library.tsx` (the list), `SummaryPanel.tsx`, `Uploads.tsx`, `Replay.tsx` (the Replayer)                                                                            |
-| `frontend/src/live/`              | dim-controller's frontend (cbcd274), its bridge connection swapped for the playback websocket (`core/transport.ts`, `core/video.ts`)                                |
+| `frontend/src/live/`              | dim-controller's frontend (cbcd274), its gateway connection swapped for the playback websocket (`core/transport.ts`, `core/video.ts`)                               |
 | `frontend/src/replay/`            | the Replayer's timeline                                                                                                                                             |
 | `frontend/src/dim-app/`           | dim-app (theme, zenoh connection, useBackendState, events), vendored at the tag in `VERSION`; `backend/dim-app/`: its relay publisher                               |
 | `scripts/replay_rss.ts`           | the backend's peak memory while a recording is opened, scrubbed end to end and played                                                                               |

@@ -1,4 +1,4 @@
-// Keeps the TF tree fed: every tf2_msgs.TFMessage topic on the bridge, always (the tf layer only draws it).
+// Keeps the TF tree fed: every tf2_msgs.TFMessage topic on the gateway, always (the tf layer only draws it).
 // A topic named like tf_static is treated as static (exempt from staleness).
 import { decode } from "./lcm/lcm.ts"
 import type { Connection } from "./transport.ts"

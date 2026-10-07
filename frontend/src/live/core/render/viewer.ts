@@ -13,7 +13,7 @@ export interface RenderStats {
     fps: number
     /** CPU time of one frame: layer updates + render submit (ms, mean) */
     frameMs: number
-    /** bridge timestamp → the frame that drew it (ms, p50 / p95 over the last second) */
+    /** gateway timestamp → the frame that drew it (ms, p50 / p95 over the last second) */
     latencyP50: number | null
     latencyP95: number | null
     /** message arrival in the page → the frame that drew it (ms, p50) */

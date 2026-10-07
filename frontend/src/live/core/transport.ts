@@ -1,4 +1,4 @@
-// The Replayer's stand-in for the Controller's bridge connection (same interface, so the Controller's layers, TF feed
+// The Replayer's stand-in for the Controller's gateway connection (same interface, so the Controller's layers, TF feed
 // and panels run unchanged): topics are the recording's streams, `subscribe` asks the backend's playback websocket
 // (backend/replay/player.ts) for a stream, and the clock is the playhead, not the wall. The page owns the playhead:
 // each animation frame it tells the backend where it is (`at`) and in which mode (play / scrub / pause), one request
@@ -6,7 +6,7 @@
 import { Store } from "./store.ts"
 
 export interface Topic {
-    /** dimos/<stream>/<type>, like the live bridge's keys */
+    /** dimos/<stream>/<type>, like the live gateway's keys */
     key: string
     /** the stream name with a leading slash, e.g. /lidar */
     name: string
@@ -21,7 +21,7 @@ export interface Message {
     /** the message's recording time, in ms */
     timestamp: number
     seq: number
-    /** codec subscriptions: a cloud ({positions, intensity}) or a frame (see video.ts) */
+    /** encoding subscriptions: a cloud ({positions, intensity}) or a frame (see video.ts) */
     decoded?: unknown
     /** "low" while scrubbing (thumbnail image, thinned cloud), else "full" */
     quality?: "low" | "full"
@@ -33,7 +33,7 @@ export interface SubscribeOptions {
     maxHz?: number
     minQuality?: number
     /** dimos-pointcloud2 → a decoded cloud; *-image / *-depth → a decoded frame; none → LCM bytes */
-    codec?: string
+    encoding?: string
 }
 
 export const Priority = { low: 0, normal: 1, high: 2 }
@@ -295,10 +295,10 @@ export class Connection {
         const stream = topic ? topic.name.slice(1) : key
         const heavy = topic &&
             /(Image|CompressedImage|PointCloud2)$/.test(topic.type)
-        const codec = options.codec ?? ""
-        const as: As = codec.endsWith("pointcloud2")
+        const encoding = options.encoding ?? ""
+        const as: As = encoding.endsWith("pointcloud2")
             ? "cloud"
-            : /(image|depth)$/.test(codec)
+            : /(image|depth)$/.test(encoding)
             ? "image"
             : heavy
             ? "header"
@@ -321,7 +321,7 @@ export class Connection {
         }
     }
 
-    /** the playhead in ms: what the Controller calls the bridge clock (message timestamps are in it) */
+    /** the playhead in ms: what the Controller calls the gateway clock (message timestamps are in it) */
     bridgeNow(): number {
         return this.playhead.get().t * 1000
     }

@@ -1,7 +1,7 @@
 // A stored message → what the page draws. The page's layers are the Controller's, which read dimos LCM; so a .db blob
 // goes out as its LCM bytes (lz4 unwrapped), a CDR .mcap message is re-encoded as LCM, and the two heavy kinds go out
 // pre-digested: images as the encoded frame (jpeg/png) or raw pixels, point clouds as float32 xyz + u8 intensity
-// (what the bridge's dimos-pointcloud2 codec gives the live view), each in a full and a low ("thumbnail") quality.
+// (what the gateway's dimos-pointcloud2 encoding gives the live view), each in a full and a low ("thumbnail") quality.
 import { cdrReader, unwrapBlob } from "../recordings/messages.ts"
 import { decode as lcmDecode, encode as lcmEncode, schemas } from "./lcm.ts"
 import type { StreamMeta } from "./source.ts"

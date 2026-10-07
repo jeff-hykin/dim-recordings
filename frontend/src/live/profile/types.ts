@@ -59,14 +59,14 @@ export interface RobotProfile {
     /** the fixed frame to view in; "" picks one from the TF tree (world, map, odom, ...) */
     fixedFrame: string
     drive: {
-        /** candidates in preference order; the first one on the bridge wins, else the first */
+        /** candidates in preference order; the first one on the gateway wins, else the first */
         cmdVelTopics: string[]
         speeds: Speeds
         /** Shift multiplies linear speed by `linear` and angular by `angular` */
         boost: { linear: number; angular: number }
         /** commands per second while a control is held */
         publishHz: number
-        /** the bridge publishes a zero twist after this long without hearing from the page */
+        /** the gateway publishes a zero twist after this long without hearing from the page */
         deadmanMs: number
         /** KeyboardEvent.code → action */
         keys: Record<string, KeyAction>
@@ -75,7 +75,7 @@ export interface RobotProfile {
     }
     controls: Control[]
     cameras: {
-        /** image topics to show first, in preference order (the first on the bridge wins) */
+        /** image topics to show first, in preference order (the first on the gateway wins) */
         preferred: string[]
         /** image topic → its CameraInfo topic, when the names don't make it obvious */
         cameraInfo: Record<string, string>

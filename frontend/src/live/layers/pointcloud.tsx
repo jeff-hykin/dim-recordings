@@ -1,4 +1,4 @@
-// sensor_msgs.PointCloud2: lidar scans and maps. The bridge's dimos-pointcloud2 codec sends quantized xyz (+ u8
+// sensor_msgs.PointCloud2: lidar scans and maps. The gateway's dimos-pointcloud2 encoding sends quantized xyz (+ u8
 // intensity); the points go straight into preallocated GPU buffers (a ring when accumulating) and are colored in
 // the shader, so a new scan costs one buffer upload and nothing is allocated per frame.
 import * as THREE from "three"
@@ -22,7 +22,7 @@ export interface CloudSettings {
     /** accumulate: ring capacity */
     maxPoints: number
     maxHz: number
-    /** "full": every point; "auto": the bridge thins clouds when bandwidth is short */
+    /** "full": every point; "auto": the gateway thins clouds when bandwidth is short */
     detail: "full" | "auto"
 }
 
@@ -49,7 +49,7 @@ const DEFAULTS: CloudSettings = {
 
 const SPLAT_BUDGET = 3_000_000
 
-/** How often the cloud's frame_id is re-read from one raw message (the codec output carries no header). */
+/** How often the cloud's frame_id is re-read from one raw message (the encoding output carries no header). */
 const FRAME_RECHECK_MS = 30_000
 
 class CloudLayer {
@@ -122,7 +122,7 @@ class CloudLayer {
             {
                 delivery: "latest",
                 maxHz: settings.maxHz,
-                codec: "dimos-pointcloud2",
+                encoding: "dimos-pointcloud2",
                 ...(settings.detail === "full" ? { minQuality: 1 } : {}),
             },
             (message) => {
@@ -181,7 +181,7 @@ class CloudLayer {
         ).setUsage(THREE.DynamicDrawUsage)
         const time = new THREE.BufferAttribute(new Float32Array(capacity), 1)
             .setUsage(THREE.DynamicDrawUsage)
-        // u8 like the bridge sends it (the shader reads 0..255 as a float): 17 bytes a point with position and time
+        // u8 like the gateway sends it (the shader reads 0..255 as a float): 17 bytes a point with position and time
         const intensity = new THREE.BufferAttribute(new Uint8Array(capacity), 1)
             .setUsage(THREE.DynamicDrawUsage)
         this.#geometry.dispose()

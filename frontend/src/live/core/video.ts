@@ -1,5 +1,5 @@
 // Camera streams, shared: a panel and the 3D projection of the same topic use one subscription. The live Controller
-// gets an H.264 track from the bridge; the Replayer gets frames from the backend (a jpeg/png as recorded, or raw
+// gets an H.264 track from the gateway; the Replayer gets frames from the backend (a jpeg/png as recorded, or raw
 // pixels), drawn into one canvas per topic that panels copy and the 3D view uses as a texture. While scrubbing the
 // frames are thumbnails (`quality: "low"`); playing or paused they're full resolution. Depth arrives as raw 16UC1 /
 // 32FC1 and is colorized by the panel / the 3D view (render/depth.ts), as in the Controller.
@@ -78,7 +78,7 @@ export class VideoSources {
         let ticket = 0
         const stop = this.connection.subscribe(topic.key, {
             delivery: "latest",
-            codec: isDepthTopic(topic) ? "dimos-depth" : "dimos-image",
+            encoding: isDepthTopic(topic) ? "dimos-depth" : "dimos-image",
         }, async (message) => {
             const frame = message.decoded as Frame | undefined
             if (!frame) {

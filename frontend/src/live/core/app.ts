@@ -1,4 +1,4 @@
-// The Controller's core, wired to a recording instead of the bridge: the replay connection (transport.ts), TF, the
+// The Controller's core, wired to a recording instead of the gateway: the replay connection (transport.ts), TF, the
 // 3D view, layers and camera streams. What the live Controller has and a replay must not: drive (WASD, sticks, arm),
 // the agent link, location labels, the recorder, battery alerts; none of them are here. The UI reads the stores;
 // window.__lv exposes this for tests, as in the Controller.

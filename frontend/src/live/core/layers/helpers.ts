@@ -37,7 +37,7 @@ export function placeInFixedFrame(
     return true
 }
 
-/** Subscribes to a topic's raw bytes and hands each decoded message (plus the bridge timestamp) to `onMessage`. */
+/** Subscribes to a topic's raw bytes and hands each decoded message (plus the gateway timestamp) to `onMessage`. */
 export function subscribeDecoded(
     context: LayerContext,
     topic: Topic,

@@ -1,4 +1,4 @@
-// Render numbers, for tuning and for the latency claim: fps, CPU per frame, bridge→screen latency, points drawn.
+// Render numbers, for tuning and for the latency claim: fps, CPU per frame, gateway→screen latency, points drawn.
 import type { ViewerApp } from "../core/app.ts"
 import { useStore } from "../core/store.ts"
 
