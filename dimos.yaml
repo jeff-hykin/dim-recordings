@@ -1,5 +1,5 @@
 title: Recordings
-dimos-desktop-api: ">=2 <3"
+spec-version: v1.0 # the dimos.yaml spec version this file follows
 # Desktop's dimos-server endpoints the uploads go through (the app's own api/uploads relays them; the login panel
 # frames /dimos/cloud/login/page)
 dimos-api:
