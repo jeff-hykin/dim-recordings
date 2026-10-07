@@ -1,39 +1,43 @@
 title: Recordings
 spec-version: v1.0 # the dimos.yaml spec version this file follows
-# Desktop's dimos-server endpoints the uploads go through (the app's own api/uploads relays them; the login panel
-# frames /dimos/cloud/login/page)
-dimos-api:
-    - GET /dimos/uploads
-    - POST /dimos/uploads
-    - DELETE /dimos/uploads/{id}
-    - POST /dimos/uploads/{id}/retry
-    - GET /dimos/uploads/uploaded
-    - GET /dimos/cloud/account
-    - POST /dimos/cloud/login
-    - GET /dimos/cloud/login/page
-    - POST /api/open-app
-    - POST /apps/dim-map-builder/api/open
-    - POST /apps/dim-rerun/api/open
-    - GET /api/apps
-# the dim-app SDK's zenoh client (backend state, events): /zenoh-web and how it finds it
-zenoh-web: ">=0.4 <0.5"
-# what its server answers only its own pages (its agent: endpoints are the public API)
-private:
-    - api/state/*
-    - api/recordings/*
-    - api/replay/*
-    - api/drives/*
-    - api/jobs/*
-    - api/uploads/*
-    - api/thumbnails/*
-    - api/notes/*
-    - api/open-app
-    - api/apps
-    - api/events/*
+uses:
+    # the dimos gateway's endpoints the uploads go through (the app's own api/uploads relays them; the login panel
+    # frames /dimos/cloud/login/page)
+    "@dimos-gateway":
+        - GET /uploads
+        - POST /uploads
+        - DELETE /uploads/{id}
+        - POST /uploads/{id}/retry
+        - GET /uploads/uploaded
+        - GET /cloud/account
+        - POST /cloud/login
+        - GET /cloud/login/page
+    "@desktop-gateway":
+        - POST /api/open-app
+        - GET /api/apps
+    # the dim-app SDK's zenoh client (backend state, events): the zenoh bridge and how it finds it
+    "@zenoh-gateway": ">=0.4 <0.5"
+    dim-map-builder:
+        - POST api/open
+    dim-rerun:
+        - POST api/open
 caches:
     - url: "https://dimos-desktop.cachix.org"
       key: "dimos-desktop.cachix.org-1:A4P35aGJGmCan92LWyamtSFXMqaVE+VRFYnrJ8QMTeQ="
-agent:
+provides:
+    # what its server answers only its own pages (its endpoints: below are the public API)
+    private:
+        - api/state/*
+        - api/recordings/*
+        - api/replay/*
+        - api/drives/*
+        - api/jobs/*
+        - api/uploads/*
+        - api/thumbnails/*
+        - api/notes/*
+        - api/open-app
+        - api/apps
+        - api/events/*
     description: >-
         Recordings: the robot recordings in Desktop's recordings folder (.db memory2 SQLite, .mcap, and the .rrd files made
         from them): list and sort them, inspect their streams and tf tree, keep notes, preview their main camera, rename,

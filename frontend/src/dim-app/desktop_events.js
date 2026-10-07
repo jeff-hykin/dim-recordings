@@ -2,13 +2,13 @@
 // its `type`: apps, endpoints, blueprints, runs, notification, notifications, ui-settings, recordings, job, error, …),
 // and the dimos server's on `<ns>/dimos/events/<type>`.
 //
-//     import { onDesktopEvent } from "https://esm.sh/gh/jeff-hykin/dim-app@v0.16.0/desktop_events.js"
+//     import { onDesktopEvent } from "https://esm.sh/gh/jeff-hykin/dim-app@v0.17.0/desktop_events.js"
 //     const off = onDesktopEvent("endpoints", (event) => refreshTools())   // or "*" for every event
 //     off()                                                                // unsubscribe
 //
-// Browser: a subscription on the page's one zenoh-web connection (zenoh.js's getZenoh()). Events published while that
+// Browser: a subscription on the page's one zenoh-gateway connection (zenoh.js's getZenoh()). Events published while that
 // connection was down are gone; `onDesktopReconnect(callback)` says when to re-GET. Deno (an app's backend, which has
-// no zenoh-web): Desktop's deprecated `GET /api/events` stream from DIMOS_APP's desktopUrl (Server-Sent Events, kept by
+// no zenoh-gateway): Desktop's deprecated `GET /api/events` stream from DIMOS_APP's desktopUrl (Server-Sent Events, kept by
 // Desktop for one release), reconnecting with backoff (0.5 s doubling to 10 s). Never throws.
 
 import { getZenoh } from "./zenoh.js"
@@ -147,7 +147,7 @@ export function onDimosEvent(type, callback) {
     return getZenoh().subscribeDimos(type, callback)
 }
 
-/** Browser: `callback()` when the page's zenoh-web connection is back after being lost (re-GET what you show). */
+/** Browser: `callback()` when the page's zenoh-gateway connection is back after being lost (re-GET what you show). */
 export function onDesktopReconnect(callback) {
     return getZenoh().onReconnect(callback)
 }
