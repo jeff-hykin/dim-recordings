@@ -1,5 +1,6 @@
 // Small shared pieces: toasts, the confirm / rename dialogs, a hover dropdown, the preview thumbnail.
-import { type ReactNode, useEffect, useRef, useState } from "react"
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { api, type Thumb } from "./api.ts"
 
 // ── toasts ──
@@ -374,5 +375,98 @@ export function Thumbnail(
                 style={{ width: `${((frame + 1) / frames) * 100}%` }}
             />
         </div>
+    )
+}
+
+// ── a floating menu: a row's context menu (at the pointer) or a button's dropdown (under it) ──
+export type FloatAt = { x: number; y: number } | { anchor: HTMLElement }
+
+/** Closes on a choice, a press elsewhere, Escape, a resize, or a scroll that moves its anchor. */
+export function FloatMenu({ at, items, onClose }: { at: FloatAt; items: MenuItem[]; onClose: () => void }) {
+    const box = useRef<HTMLDivElement>(null)
+    const [place, setPlace] = useState<{ left: number; top: number } | null>(null)
+    useLayoutEffect(() => {
+        const el = box.current
+        if (!el) {
+            return
+        }
+        const rect = "anchor" in at ? at.anchor.getBoundingClientRect() : null
+        let left = rect ? rect.right - el.offsetWidth : (at as { x: number }).x
+        let top = rect ? rect.bottom + 4 : (at as { y: number }).y
+        left = Math.max(8, Math.min(left, innerWidth - el.offsetWidth - 8))
+        if (top + el.offsetHeight > innerHeight - 8) {
+            top = Math.max(8, (rect ? rect.top - 4 : top) - el.offsetHeight)
+        }
+        setPlace({ left, top })
+    }, [at])
+    useEffect(() => {
+        const anchor = "anchor" in at ? at.anchor : null
+        const anchorTop = anchor?.getBoundingClientRect().top
+        anchor?.setAttribute("aria-expanded", "true")
+        const press = (event: PointerEvent) => {
+            const target = event.target as Node
+            if (!box.current?.contains(target) && !anchor?.contains(target)) {
+                onClose()
+            }
+        }
+        const key = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                event.stopPropagation()
+                onClose()
+            }
+        }
+        const scroll = (event: Event) => {
+            if (box.current?.contains(event.target as Node)) {
+                return
+            }
+            if (!anchor || Math.abs(anchor.getBoundingClientRect().top - (anchorTop ?? 0)) > 2) {
+                onClose()
+            }
+        }
+        addEventListener("pointerdown", press)
+        addEventListener("keydown", key, true)
+        addEventListener("scroll", scroll, true)
+        addEventListener("resize", onClose)
+        return () => {
+            anchor?.setAttribute("aria-expanded", "false")
+            removeEventListener("pointerdown", press)
+            removeEventListener("keydown", key, true)
+            removeEventListener("scroll", scroll, true)
+            removeEventListener("resize", onClose)
+        }
+    }, [at, onClose])
+    return createPortal(
+        <div
+            ref={box}
+            className="float-menu menu dim-card"
+            role="menu"
+            style={place ?? { left: 0, top: 0, visibility: "hidden" }}
+            onContextMenu={(event) => event.preventDefault()}
+        >
+            {items.map((item, index) =>
+                "separator" in item
+                    ? <div key={index} className="menu-sep" />
+                    : "heading" in item
+                    ? <div key={index} className="menu-heading">{item.heading}</div>
+                    : (
+                        <button
+                            key={index}
+                            type="button"
+                            role="menuitem"
+                            className={`menu-item ${item.danger ? "danger" : ""}`}
+                            disabled={item.disabled}
+                            title={item.disabled ? item.hint : undefined}
+                            onClick={() => {
+                                onClose()
+                                item.onSelect()
+                            }}
+                        >
+                            <span>{item.label}</span>
+                            {item.hint && <span className="menu-hint">{item.hint}</span>}
+                        </button>
+                    )
+            )}
+        </div>,
+        document.body,
     )
 }

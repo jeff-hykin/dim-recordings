@@ -57,6 +57,15 @@ const enc = encodeURIComponent
 export const replayApi = {
     overview: (id: string) => call<Overview>("GET", `api/replay/${enc(id)}`),
     timeline: (id: string, bins: number) => call<Timeline>("GET", `api/replay/${enc(id)}/timeline?bins=${bins}`),
+    /** a pose stream's route: [t, x, y, z] in its frame */
+    path: (id: string, stream: string, maxPoints = 1200) =>
+        call<{ stream: string; frame: string; points: [number, number, number, number][] }>(
+            "GET",
+            `api/replay/${enc(id)}/path?stream=${enc(stream)}&maxPoints=${maxPoints}`,
+        ),
+    /** one camera frame at t seconds after the recording's start */
+    frameUrl: (id: string, stream: string, t: number) =>
+        `api/replay/${enc(id)}/frame?stream=${enc(stream)}&t=${t.toFixed(2)}`,
     renameStream: (id: string, stream: string, name: string) =>
         call<{ seconds: number }>(
             "POST",

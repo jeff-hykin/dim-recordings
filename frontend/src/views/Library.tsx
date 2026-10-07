@@ -1,6 +1,8 @@
-// The recordings list: sort, date sections, previews, the Summary panel, Open / actions menus, conversions and
-// uploads. Every action is a backend endpoint (api.ts), the same ones Desktop's agent calls.
-import { useEffect, useState } from "react"
+// The recordings: a list on the left (search, a warnings filter, sort, date sections with previews; a row's context
+// menu, ⋯ or a long press offers Select, which ticks several for one Upload / Delete) and the selected recording in
+// the Inspector on the right (a phone shows one at a time). Every action is a backend endpoint (api.ts), the same ones
+// Desktop's agent calls.
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
     api,
     bytes,
@@ -20,15 +22,17 @@ import { appEvents } from "../dim-app/events.js"
 import { useBackendState } from "../dim-app/react.js"
 import { EmptyState } from "../EmptyState.tsx"
 import { inDesktopShell, openApp } from "../dim-app/desktop.js"
-import { ConfirmDialog, HoverMenu, type MenuItem, RenameDialog, Thumbnail, toast } from "../ui.tsx"
-import { SummaryPanel } from "./SummaryPanel.tsx"
+import { ConfirmDialog, type FloatAt, FloatMenu, type MenuItem, RenameDialog, Thumbnail, toast } from "../ui.tsx"
+import { Inspector, type InspectorActions } from "./Inspector.tsx"
 import { TransferDialog } from "./Transfer.tsx"
 import { UploadTray, useTray } from "./Uploads.tsx"
 
-const SORTS: { key: SortKey; label: string }[] = [
-    { key: "date", label: "Date" },
-    { key: "size", label: "Size" },
-    { key: "duration", label: "Duration" },
+const SORTS: { key: SortKey; order: Order; label: string }[] = [
+    { key: "date", order: "desc", label: "Newest" },
+    { key: "date", order: "asc", label: "Oldest" },
+    { key: "size", order: "desc", label: "Largest" },
+    { key: "duration", order: "desc", label: "Longest" },
+    { key: "name", order: "asc", label: "Name" },
 ]
 
 function saved<T extends string>(key: string, fallback: T): T {
@@ -46,8 +50,8 @@ function save(key: string, value: string) {
     }
 }
 
-// a phone (the same breakpoint as app.css): the summary is a sheet a row's Summary button opens, not a side panel
-const PHONE = "(max-width: 900px)"
+// a phone (the same breakpoint as app.css): the list or the inspector, one at a time
+const PHONE = "(max-width: 760px)"
 function usePhone() {
     const [phone, setPhone] = useState(() => matchMedia(PHONE).matches)
     useEffect(() => {
@@ -59,25 +63,29 @@ function usePhone() {
     return phone
 }
 
-// a click on a row's own controls (buttons, menus, links) is that control's, not a selection
-const ownControl = (target: EventTarget | null) =>
-    target instanceof Element && !!target.closest("button, a, input, textarea, select, label, .menu-wrap, .rrd")
-
 const fail = (error: unknown) => toast(String((error as Error)?.message ?? error), "danger")
 
+type Item = Recording | RrdFile
 type DialogState =
-    | { kind: "rename"; recording: Recording | RrdFile }
-    | { kind: "delete"; recording: Recording | RrdFile }
+    | { kind: "rename"; recording: Item }
+    | { kind: "delete"; recordings: Item[] }
     | null
 
 export function Library({ transfer = false }: { transfer?: boolean }) {
     const [sort, setSort] = useState<SortKey>(saved("sort", "date"))
     const [order, setOrder] = useState<Order>(saved("order", "desc"))
+    const [query, setQuery] = useState("")
+    const [onlyWarnings, setOnlyWarnings] = useState(false)
     const [jobs, setJobs] = useState<Record<string, Job>>({})
     const [dialog, setDialog] = useState<DialogState>(null)
-    // the selected recording: its summary shows in the side panel (desktop) or the sheet (phone)
     const [selected, setSelected] = useState<string | null>(null)
+    const [renaming, setRenaming] = useState(false)
+    // multi-select: null when off, else the ticked ids and the last one ticked (shift-click ranges from it)
+    const [picking, setPicking] = useState<{ ids: Set<string>; anchor: string | null } | null>(null)
+    const [menu, setMenu] = useState<{ at: FloatAt; items: MenuItem[] } | null>(null)
+    const [sortMenu, setSortMenu] = useState<HTMLElement | null>(null)
     const phone = usePhone()
+    const [showDetail, setShowDetail] = useState(false)
     const [trayOpen, setTrayOpen] = useState(false)
     const [login, setLogin] = useState(false)
     const [thumbVersion, setThumbVersion] = useState(1)
@@ -87,7 +95,6 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
     const onDrives = drives?.drives.reduce((sum, drive) => sum + drive.files.length, 0) ?? 0
 
     // the list is backend state: GET api/recordings, re-GET when the backend's stateChanged("recordings") arrives
-    // (zenoh, frontend topic state/recordings) and after the zenoh-web connection comes back
     const [data, { error: listError }] = useBackendState<ListResponse>(
         `api/recordings?sort=${sort}&order=${order}&tz=${new Date().getTimezoneOffset()}`,
         { key: "recordings" },
@@ -116,45 +123,74 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
         )
     }, [])
 
-    const all = data?.sections.flatMap((s) => s.recordings) ?? []
-    const summaryRecording = selected ? all.find((r) => r.id === selected && r.format !== "rrd") : undefined
-    const uploadsByPath = new Map<string, Upload>(
-        (tray?.uploads ?? []).map((u) => [u.path, u]),
+    // the sections, filtered by the search (name, note, streams) and the warnings chip
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    const matches = (r: Recording) =>
+        (!onlyWarnings || (r.warnings ?? 0) > 0) &&
+        words.every((word) => `${r.name} ${r.note} ${r.summary ?? ""}`.toLowerCase().includes(word))
+    const sections = useMemo(
+        () =>
+            (data?.sections ?? [])
+                .map((s) => ({ ...s, recordings: s.recordings.filter(matches) }))
+                .filter((s) => s.recordings.length),
+        [data, query, onlyWarnings],
     )
+    const everything = data?.sections.flatMap((s) => s.recordings) ?? []
+    const shown = sections.flatMap((s) => s.recordings)
+    const flagged = everything.filter((r) => (r.warnings ?? 0) > 0).length
+    const current = selected ? everything.find((r) => r.id === selected) : undefined
+    const inspected = current && current.format !== "rrd" ? current : undefined
+    const uploadsByPath = new Map<string, Upload>((tray?.uploads ?? []).map((u) => [u.path, u]))
+    const waitingForLogin = !!tray && (tray.waitingForLogin || !tray.account.loggedIn)
 
-    // ↑ / ↓ move the selection through the list (desktop), Esc closes the summary; not while typing or in a dialog
-    const selectable = all.filter((r) => r.format !== "rrd").map((r) => r.id)
+    // on a wide screen something is always selected: the first recording until one is picked
+    useEffect(() => {
+        if (!phone && !current && shown.length) {
+            setSelected(shown.find((r) => r.format !== "rrd")?.id ?? shown[0].id)
+        }
+    }, [phone, current?.id, shown.map((r) => r.id).join("\n")])
+    // a rename moves the id: follow it
+    const select = (id: string) => {
+        setSelected(id)
+        setRenaming(false)
+        setShowDetail(true)
+    }
+
+    // ↑ / ↓ move through the list; Esc leaves Select; not while typing or in a dialog or menu
     useEffect(() => {
         const keydown = (event: KeyboardEvent) => {
             const target = event.target as Element | null
-            if (
-                dialog || transfer ||
-                target?.closest?.("input, textarea, select, [contenteditable=true], [role=dialog]")
-            ) {
+            if (dialog || transfer || menu || target?.closest?.("input, textarea, select, [contenteditable]")) {
                 return
             }
-            if (event.key === "Escape" && selected) {
-                setSelected(null)
+            if (event.key === "Escape" && picking) {
+                setPicking(null)
                 return
             }
-            if (phone || (event.key !== "ArrowDown" && event.key !== "ArrowUp") || !selectable.length) {
+            if (event.key === "Escape" && phone && showDetail) {
+                setShowDetail(false)
+                return
+            }
+            if ((event.key !== "ArrowDown" && event.key !== "ArrowUp") || !shown.length || picking) {
+                return
+            }
+            if (target?.closest?.("[data-testid=preview]")) {
                 return
             }
             event.preventDefault()
-            const index = selected ? selectable.indexOf(selected) : -1
+            const ids = shown.map((r) => r.id)
+            const index = selected ? ids.indexOf(selected) : -1
             const next = index < 0
-                ? (event.key === "ArrowDown" ? 0 : selectable.length - 1)
-                : Math.max(0, Math.min(selectable.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)))
-            setSelected(selectable[next])
-            document.querySelector(`.row[data-id="${CSS.escape(selectable[next])}"]`)?.scrollIntoView({
-                block: "nearest",
-            })
+                ? (event.key === "ArrowDown" ? 0 : ids.length - 1)
+                : Math.max(0, Math.min(ids.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)))
+            setSelected(ids[next])
+            document.querySelector(`.item[data-id="${CSS.escape(ids[next])}"]`)?.scrollIntoView({ block: "nearest" })
         }
         addEventListener("keydown", keydown)
         return () => removeEventListener("keydown", keydown)
-    }, [selectable.join("\n"), selected, phone, dialog, transfer])
+    }, [shown.map((r) => r.id).join("\n"), selected, phone, dialog, transfer, menu, picking, showDetail])
 
-    const open = (recording: Recording | RrdFile, target: string) => {
+    const open = (recording: Item, target: string) => {
         if (target === "replayer") {
             go({ view: "replay", id: recording.id })
             return
@@ -173,38 +209,84 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
             fail,
         )
     }
-    const upload = async (recording: Recording) => {
-        try {
-            await api.upload(recording.id)
+    /** queues each (Desktop's dimos gateway uploads them one at a time) and opens the tray */
+    const upload = async (recordings: Recording[]) => {
+        const todo = recordings.filter((r) => {
+            const live = uploadsByPath.get(r.path)
+            return !live || (live.state !== "queued" && live.state !== "uploading")
+        })
+        if (!todo.length) {
+            setTrayOpen(true)
+            return
+        }
+        let queued = 0
+        for (const recording of todo) {
+            try {
+                await api.upload(recording.id)
+                queued++
+            } catch (e) {
+                fail(e)
+            }
+        }
+        if (queued) {
+            toast(queued === 1 ? `uploading ${todo[0].name}` : `queued ${queued} uploads`, "ok")
             setTrayOpen(true)
             if (tray && !tray.account.loggedIn) {
                 setLogin(true)
             }
-            refreshTray()
-        } catch (e) {
-            fail(e)
         }
+        refreshTray()
     }
-    const copyPath = (recording: Recording | RrdFile) => {
+    const remove = async (recordings: Item[]) => {
+        let gone = 0
+        for (const recording of recordings) {
+            try {
+                await api.remove(recording.id)
+                gone++
+            } catch (e) {
+                fail(e)
+            }
+        }
+        if (gone) {
+            toast(gone === 1 ? `deleted ${recordings[0].name}` : `deleted ${gone} recordings`, "ok")
+        }
+        setPicking(null)
+    }
+    const rename = (recording: Item, name: string) =>
+        api.rename(recording.id, name).then(
+            (r) => {
+                toast(`renamed to ${r.id}`, "ok")
+                if (selected === recording.id) {
+                    setSelected(r.id)
+                }
+                setRenaming(false)
+            },
+            (e) => {
+                fail(e)
+                setRenaming(false)
+            },
+        )
+    const copyPath = (recording: Item) => {
         navigator.clipboard.writeText(recording.path).then(
             () => toast("path copied", "ok"),
             () => toast(recording.path, "info"),
         )
     }
 
-    const actions = (recording: Recording): MenuItem[] => [
+    const opensMenu = (recording: Item): MenuItem[] =>
+        recording.opens.filter((o) => o.target !== "replayer").map((o) => ({
+            label: o.label,
+            hint: o.ok ? undefined : o.reason,
+            disabled: !o.ok,
+            onSelect: () => open(recording, o.target),
+        }))
+    const moreMenu = (recording: Recording): MenuItem[] => [
         {
             label: "Duplicate",
-            onSelect: () =>
-                api.duplicate(recording.id).then(
-                    (r) => toast(`made ${r.id}`, "ok"),
-                    fail,
-                ),
+            onSelect: () => api.duplicate(recording.id).then((r) => toast(`made ${r.id}`, "ok"), fail),
         },
-        { separator: true },
-        { heading: "Convert to" },
         ...recording.conversions.map((c) => ({
-            label: `.${c.to}`,
+            label: `Convert to .${c.to}`,
             hint: c.ok ? undefined : c.reason,
             disabled: !c.ok ||
                 Object.values(jobs).some((j) => j.recording === recording.id && j.state === "running"),
@@ -214,211 +296,184 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                     fail,
                 ),
         })),
+        ...recording.rrds.flatMap((rrd): MenuItem[] => [
+            { separator: true },
+            { heading: rrd.name },
+            { label: "Open in Rerun", onSelect: () => open(rrd, "rerun"), disabled: !rrd.opens[0]?.ok },
+            { label: "Delete .rrd", danger: true, onSelect: () => setDialog({ kind: "delete", recordings: [rrd] }) },
+        ]),
         { separator: true },
         { label: "Copy path", onSelect: () => copyPath(recording) },
-        {
-            label: "Show in folder",
-            onSelect: () => api.reveal(recording.id).then(() => {}, fail),
-        },
+        { label: "Show in folder", onSelect: () => api.reveal(recording.id).then(() => {}, fail) },
     ]
 
-    const openMenu = (recording: Recording | RrdFile, testId: string) => (
-        <HoverMenu
-            label="Open ▾"
-            className="primary"
-            testId={testId}
-            items={recording.opens.map((o) => ({
-                label: o.label,
-                hint: o.ok ? undefined : o.reason,
-                disabled: !o.ok,
-                onSelect: () => open(recording, o.target),
-            }))}
-        />
-    )
-
-    const rrdButtons = (rrd: RrdFile) => {
-        const target = rrd.opens[0]
-        return (
-            <div className="row-actions">
-                <button
-                    type="button"
-                    className="dim-btn sm"
-                    disabled={!target?.ok}
-                    title={target?.reason}
-                    onClick={() => open(rrd, "rerun")}
-                >
-                    Open
-                </button>
-                <span className="action-sep" aria-hidden="true" />
-                <button
-                    type="button"
-                    className="dim-btn sm danger delete"
-                    onClick={() => setDialog({ kind: "delete", recording: rrd })}
-                >
-                    Delete
-                </button>
-            </div>
-        )
+    const pickedItems = picking ? everything.filter((r) => picking.ids.has(r.id)) : []
+    const pickedRecordings = pickedItems.filter((r): r is Recording => r.format !== "rrd")
+    const startPicking = (id: string) => setPicking({ ids: new Set([id]), anchor: id })
+    const toggle = (id: string, range: boolean) => {
+        setPicking((current) => {
+            const ids = new Set(current?.ids ?? [])
+            const order = shown.map((r) => r.id)
+            if (range && current?.anchor) {
+                const [a, b] = [order.indexOf(current.anchor), order.indexOf(id)].sort((x, y) => x - y)
+                if (a >= 0) {
+                    order.slice(a, b + 1).forEach((x) => ids.add(x))
+                    return { ids, anchor: current.anchor }
+                }
+            }
+            ids.has(id) ? ids.delete(id) : ids.add(id)
+            return { ids, anchor: id }
+        })
     }
 
-    const row = (recording: Recording, section: string | null) => {
-        const running = Object.values(jobs).filter((j) => j.recording === recording.id && j.state === "running")
+    const rowMenu = (recording: Item, at: FloatAt) => {
+        if (picking) {
+            const list = picking.ids.size ? pickedItems : [recording]
+            const recordings = list.filter((r): r is Recording => r.format !== "rrd")
+            setMenu({
+                at,
+                items: [
+                    { heading: `${list.length} selected` },
+                    { label: "Upload", disabled: !recordings.length, onSelect: () => upload(recordings) },
+                    { label: "Delete…", danger: true, onSelect: () => setDialog({ kind: "delete", recordings: list }) },
+                    { separator: true },
+                    {
+                        label: "Select all",
+                        onSelect: () => setPicking({ ids: new Set(shown.map((r) => r.id)), anchor: null }),
+                    },
+                    { label: "Done selecting", hint: "Esc", onSelect: () => setPicking(null) },
+                ],
+            })
+            return
+        }
+        const items: MenuItem[] = [
+            { label: "Select", hint: "pick several", onSelect: () => startPicking(recording.id) },
+            { separator: true },
+        ]
         if (recording.format === "rrd") {
-            return (
-                <div className="row rrd-row" key={recording.id} data-id={recording.id}>
-                    <div className="thumb placeholder none rrd-thumb">
-                        <span>.rrd</span>
-                    </div>
-                    <div className="name-cell">
-                        <span className="name mono">
-                            <span className="name-text">{recording.name}</span>
-                        </span>
-                        <span className="muted small">rerun recording</span>
-                    </div>
-                    <div className="mono num">{bytes(recording.size)}</div>
-                    <div className="mono num muted">—</div>
-                    <div className="mono">{when(recording.recorded, section)}</div>
-                    <div className="muted small">—</div>
-                    {rrdButtons(recording as unknown as RrdFile)}
-                </div>
+            items.push(...opensMenu(recording))
+        } else {
+            items.push(
+                { label: "Replay", onSelect: () => open(recording, "replayer") },
+                {
+                    label: "Rename",
+                    onSelect: () => {
+                        select(recording.id)
+                        setRenaming(true)
+                    },
+                },
+                { label: "Upload", onSelect: () => upload([recording as Recording]) },
             )
         }
-        const liveUpload = uploadsByPath.get(recording.path)
-        const link = liveUpload?.state === "done" ? liveUpload.link : recording.uploaded?.link
+        items.push(
+            { separator: true },
+            { label: "Delete…", danger: true, onSelect: () => setDialog({ kind: "delete", recordings: [recording] }) },
+        )
+        setMenu({ at, items })
+    }
+
+    const longPress = useRef<{ timer?: number; fired?: boolean }>({})
+    const row = (recording: Item, section: string | null) => {
+        const isRrd = recording.format === "rrd"
+        const r = recording as Recording
+        const warningCount = isRrd ? 0 : r.warnings ?? 0
+        const live = isRrd ? undefined : uploadsByPath.get(recording.path)
+        const ticked = !!picking?.ids.has(recording.id)
         return (
             <div
-                className={`row selectable ${selected === recording.id ? "active" : ""}`}
                 key={recording.id}
+                className={`item ${!picking && selected === recording.id ? "on" : ""} ${ticked ? "picked" : ""}`}
                 data-id={recording.id}
-                aria-selected={selected === recording.id}
-                onClick={(event) => !phone && !ownControl(event.target) && setSelected(recording.id)}
+                data-testid={`item-${recording.id}`}
+                aria-selected={picking ? ticked : selected === recording.id}
+                onClick={(event) => {
+                    if (longPress.current.fired) {
+                        longPress.current.fired = false
+                        return
+                    }
+                    if ((event.target as Element).closest(".kebab")) {
+                        return
+                    }
+                    if (picking) {
+                        toggle(recording.id, event.shiftKey)
+                    } else {
+                        select(recording.id)
+                    }
+                }}
+                onContextMenu={(event) => {
+                    event.preventDefault()
+                    rowMenu(recording, { x: event.clientX, y: event.clientY })
+                }}
+                onPointerDown={(event) => {
+                    if (event.pointerType === "mouse") {
+                        return
+                    }
+                    const { clientX: x, clientY: y } = event
+                    clearTimeout(longPress.current.timer)
+                    longPress.current.timer = setTimeout(() => {
+                        longPress.current.fired = true
+                        rowMenu(recording, { x, y })
+                    }, 500)
+                }}
+                onPointerUp={() => clearTimeout(longPress.current.timer)}
+                onPointerCancel={() => clearTimeout(longPress.current.timer)}
+                onPointerMove={(event) => {
+                    if (Math.abs(event.movementX) + Math.abs(event.movementY) > 6) {
+                        clearTimeout(longPress.current.timer)
+                    }
+                }}
             >
-                <Thumbnail
-                    id={recording.id}
-                    thumb={recording.thumbnail}
-                    version={thumbVersion}
-                />
-                <div className="name-cell">
-                    <span className="name mono" title={recording.path}>
-                        <span className="name-text">{recording.name}</span>
-                        {recording.symlink && (
-                            <span className="dim-badge" title="a symlink to a file elsewhere">
-                                link
-                            </span>
-                        )}
-                    </span>
-                    {recording.note && (
-                        <span className="note-line small">
-                            {recording.note.split("\n")[0]}
+                <i className="ck" aria-hidden="true" />
+                {isRrd
+                    ? (
+                        <div className="thumb placeholder none rrd-thumb">
+                            <span>.rrd</span>
+                        </div>
+                    )
+                    : <Thumbnail id={recording.id} thumb={r.thumbnail} version={thumbVersion} />}
+                <div className="t">
+                    <div className="n" title={recording.path}>{recording.name}</div>
+                    <div className="m">
+                        {isRrd
+                            ? `rerun · ${bytes(recording.size)}`
+                            : `${r.inspected ? duration(r.duration) : "…"} · ${bytes(recording.size)} · ${
+                                when(r.recorded, section)
+                            }`}
+                    </div>
+                    {live && (live.state === "uploading" || live.state === "queued") && (
+                        <div className="m up">{live.state === "queued" ? "queued for upload" : "uploading…"}</div>
+                    )}
+                </div>
+                <div className="s">
+                    {!isRrd && (
+                        <span
+                            className="st"
+                            title={r.warnings === null
+                                ? "not read yet"
+                                : warningCount
+                                ? `${warningCount} warnings`
+                                : "no issues found"}
+                        >
+                            {r.error ? <span className="warn">!</span> : warningCount
+                                ? (
+                                    <span className="warn">
+                                        <i className="dot warn" /> {warningCount}
+                                    </span>
+                                )
+                                : <i className={`dot ${r.warnings === null ? "off" : ""}`} />}
                         </span>
                     )}
-                    {running.map((job) => (
-                        <div className="job" key={job.id}>
-                            <span className="small muted">→ .{job.to}</span>
-                            <div
-                                className={`dim-progress ${job.progress ? "" : "indeterminate"}`}
-                            >
-                                <span style={{ width: `${(job.progress || 0.3) * 100}%` }} />
-                            </div>
-                            <span className="small muted job-phase" title={job.phase}>
-                                {job.phase}
-                            </span>
-                            <button
-                                type="button"
-                                className="dim-btn ghost sm"
-                                onClick={() => api.cancelJob(job.id)}
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    ))}
-                    {recording.rrds.map((rrd) => (
-                        <div className="rrd" key={rrd.id} data-id={rrd.id}>
-                            <span className="mono small">↳ {rrd.name}</span>
-                            <span className="mono small muted">{bytes(rrd.size)}</span>
-                            {rrdButtons(rrd)}
-                        </div>
-                    ))}
-                </div>
-                <div className="mono num">{bytes(recording.size)}</div>
-                <div className="mono num">
-                    {recording.inspected ? duration(recording.duration) : "…"}
-                </div>
-                <div
-                    className="mono"
-                    title={recording.recordedFrom === "mtime"
-                        ? "the file's time (no timestamps inside)"
-                        : "its first message"}
-                >
-                    {when(recording.recorded, section)}
-                </div>
-                <div className={`small streams-cell ${recording.error ? "error" : ""}`}>
-                    {recording.error ? "unreadable" : recording.summary ?? "reading…"}
-                </div>
-                <div className="row-actions">
-                    {phone && (
-                        <button
-                            type="button"
-                            className="dim-btn sm"
-                            onClick={() => setSelected(recording.id)}
-                        >
-                            Summary
-                        </button>
-                    )}
-                    {openMenu(recording, `open-${recording.id}`)}
-                    <div className="action-group" role="group" aria-label="manage">
-                        {link
-                            ? (
-                                <a
-                                    className="dim-btn sm"
-                                    href={link}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    title="uploaded: open it in the console"
-                                >
-                                    View ↗
-                                </a>
-                            )
-                            : (
-                                <button
-                                    type="button"
-                                    className="dim-btn sm"
-                                    disabled={!!liveUpload &&
-                                        (liveUpload.state === "queued" ||
-                                            liveUpload.state === "uploading")}
-                                    onClick={() => upload(recording)}
-                                >
-                                    {liveUpload?.state === "queued" && tray &&
-                                            (tray.waitingForLogin || !tray.account.loggedIn)
-                                        ? "Waiting for login"
-                                        : liveUpload?.state === "uploading" ||
-                                                liveUpload?.state === "queued"
-                                        ? "Uploading…"
-                                        : "Upload"}
-                                </button>
-                            )}
-                        <button
-                            type="button"
-                            className="dim-btn sm"
-                            onClick={() => setDialog({ kind: "rename", recording })}
-                        >
-                            Rename
-                        </button>
-                        <HoverMenu
-                            label="⋯"
-                            className="more"
-                            items={actions(recording)}
-                            testId={`more-${recording.id}`}
-                        />
-                    </div>
-                    <span className="action-sep" aria-hidden="true" />
                     <button
                         type="button"
-                        className="dim-btn sm danger delete"
-                        data-testid={`delete-${recording.id}`}
-                        onClick={() => setDialog({ kind: "delete", recording })}
+                        className="dim-btn sm ghost kebab"
+                        aria-label="More"
+                        aria-haspopup="menu"
+                        onClick={(event) => {
+                            event.stopPropagation()
+                            rowMenu(recording, { anchor: event.currentTarget })
+                        }}
                     >
-                        Delete
+                        ⋯
                     </button>
                 </div>
             </div>
@@ -426,79 +481,116 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
     }
 
     const active = (tray?.uploads ?? []).filter((u) => u.state === "queued" || u.state === "uploading").length
+    const total = everything.reduce((sum, r) => sum + r.size, 0)
+    const free = drives?.destination.free ?? null
+    const capacity = drives?.destination.total ?? null
+    const sortLabel = SORTS.find((s) => s.key === sort && s.order === order)?.label ??
+        `${sort} ${order === "desc" ? "↓" : "↑"}`
+    const inspectorActions = (recording: Recording): InspectorActions => ({
+        replay: () => open(recording, "replayer"),
+        rename: () => setRenaming(true),
+        upload: () => upload([recording]),
+        remove: () => setDialog({ kind: "delete", recordings: [recording] }),
+        opens: opensMenu(recording),
+        more: moreMenu(recording),
+    })
+    const deleting = dialog?.kind === "delete" ? dialog.recordings : []
+
     return (
-        <div className={`library ${summaryRecording && !phone ? "with-summary" : ""}`}>
-            <header className="bar">
-                <span className="dim-title">Recordings</span>
-                <span className="mono muted small dir" title="the recordings folder">
-                    {data?.dir}
-                </span>
-                <div className="spacer" />
-                <div className="sorts" role="group" aria-label="sort">
-                    {SORTS.map((s) => (
+        <div
+            className={`library inspector-layout ${picking ? "selecting" : ""} ${
+                phone && showDetail && inspected ? "show-detail" : ""
+            }`}
+        >
+            <aside className="list" aria-label="Recordings">
+                <header>
+                    <div className="row">
+                        <span className="dim-title">Recordings</span>
+                        <span className="grow" />
+                        {onDrives > 0 && (
+                            <button
+                                type="button"
+                                className="dim-btn sm primary"
+                                data-testid="transfer-button"
+                                title={`recordings on ${drives?.drives.map((d) => d.name).join(", ")}`}
+                                onClick={() => go({ view: "library", transfer: true })}
+                            >
+                                Transfer · {onDrives}
+                            </button>
+                        )}
                         <button
-                            key={s.key}
                             type="button"
-                            className={`dim-btn sm ${sort === s.key ? "on" : "ghost"}`}
-                            aria-pressed={sort === s.key}
-                            onClick={() => {
-                                if (sort === s.key) {
-                                    const next = order === "desc" ? "asc" : "desc"
-                                    setOrder(next)
-                                    save("order", next)
-                                } else {
-                                    setSort(s.key)
-                                    save("sort", s.key)
-                                }
-                            }}
+                            className={`dim-btn sm ${trayOpen ? "on" : ""}`}
+                            data-testid="uploads-button"
+                            onClick={() => setTrayOpen(!trayOpen)}
                         >
-                            {s.label} {sort === s.key ? (order === "desc" ? "↓" : "↑") : ""}
+                            Uploads{active ? ` · ${active}` : ""}
                         </button>
-                    ))}
-                </div>
-                {onDrives > 0 && (
-                    <button
-                        type="button"
-                        className="dim-btn sm primary"
-                        data-testid="transfer-button"
-                        title={`recordings on ${drives?.drives.map((d) => d.name).join(", ")}`}
-                        onClick={() => go({ view: "library", transfer: true })}
-                    >
-                        Transfer recordings · {onDrives}
-                    </button>
-                )}
-                <button
-                    type="button"
-                    className={`dim-btn sm ${trayOpen ? "on" : ""}`}
-                    onClick={() => setTrayOpen(!trayOpen)}
-                >
-                    Uploads{active ? ` · ${active}` : ""}
-                </button>
-            </header>
-            {error && (
-                <p className="error banner" data-testid="onboard-backend-down">
-                    The Recordings server isn't answering ({error}). It retries by itself; if this stays, close the app
-                    (✕) and open it again.
-                </p>
-            )}
-            <div className="library-body">
-                <div className="table">
-                    <div className="row head">
-                        <span />
-                        <span>name</span>
-                        <span className="num">size</span>
-                        <span className="num">duration</span>
-                        <span>recorded</span>
-                        <span>streams</span>
-                        <span />
                     </div>
-                    {data?.sections.map((section, index) => (
-                        <section key={section.label ?? index} className="group">
-                            {section.label && <h2 className="group-head">{section.label}</h2>}
+                    <input
+                        type="search"
+                        className="dim-input"
+                        placeholder="Search names, notes, topics…"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        data-testid="search"
+                    />
+                    <div className="row">
+                        <div className="chips">
+                            <button
+                                type="button"
+                                className="dim-chip"
+                                aria-pressed={!onlyWarnings}
+                                onClick={() => setOnlyWarnings(false)}
+                            >
+                                All
+                            </button>
+                            <button
+                                type="button"
+                                className="dim-chip warn"
+                                aria-pressed={onlyWarnings}
+                                title="only the recordings with warnings"
+                                onClick={() => setOnlyWarnings(!onlyWarnings)}
+                            >
+                                ⚠ {flagged}
+                            </button>
+                        </div>
+                        <span className="grow" />
+                        <button
+                            type="button"
+                            className="dim-btn sm ghost"
+                            aria-haspopup="menu"
+                            onClick={(event) => setSortMenu(event.currentTarget)}
+                        >
+                            {sortLabel} ▾
+                        </button>
+                    </div>
+                </header>
+                {error && (
+                    <p className="error banner small" data-testid="onboard-backend-down">
+                        The Recordings server isn't answering ({error}). It retries by itself; if this stays, close the
+                        app (✕) and open it again.
+                    </p>
+                )}
+                <div className="items">
+                    {sections.map((section, index) => (
+                        <section key={section.label ?? index}>
+                            {section.label && (
+                                <div className="grp">
+                                    <span className="section-head">{section.label}</span>
+                                    <span className="mono small muted">
+                                        {section.recordings.length} ·{" "}
+                                        {bytes(section.recordings.reduce((sum, r) => sum + r.size, 0))}
+                                    </span>
+                                </div>
+                            )}
                             {section.recordings.map((recording) => row(recording, section.label))}
                         </section>
                     ))}
-                    {data && !all.length && (
+                    {data && everything.length > 0 && !shown.length && (
+                        <p className="muted small nothing">Nothing matches.</p>
+                    )}
+                    {data && !everything.length && (
                         <div className="empty" data-testid="onboard-no-recordings">
                             <EmptyState
                                 label="No recordings"
@@ -521,14 +613,112 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                         </div>
                     )}
                 </div>
-                {summaryRecording && (
-                    <SummaryPanel
-                        recording={summaryRecording}
-                        sheet={phone}
-                        onClose={() => setSelected(null)}
+                {picking
+                    ? (
+                        <div className="selbar" data-testid="selbar">
+                            <div className="count">
+                                {picking.ids.size} selected
+                                <small>{bytes(pickedItems.reduce((sum, r) => sum + r.size, 0))}</small>
+                            </div>
+                            <button
+                                type="button"
+                                className="dim-btn sm"
+                                disabled={!pickedRecordings.length}
+                                onClick={() => upload(pickedRecordings).then(() => setPicking(null))}
+                            >
+                                Upload
+                            </button>
+                            <button
+                                type="button"
+                                className="dim-btn sm delete"
+                                disabled={!pickedItems.length}
+                                onClick={() => setDialog({ kind: "delete", recordings: pickedItems })}
+                            >
+                                Delete
+                            </button>
+                            <button type="button" className="dim-btn sm ghost" onClick={() => setPicking(null)}>
+                                Cancel
+                            </button>
+                        </div>
+                    )
+                    : (
+                        <footer>
+                            <div className="mono small muted totals">
+                                <span>
+                                    {everything.length} {everything.length === 1 ? "recording" : "recordings"} ·{" "}
+                                    {bytes(total)}
+                                </span>
+                                {free !== null && <span>{bytes(free)} free</span>}
+                            </div>
+                            {free !== null && capacity && (
+                                <div className="space" title={data?.dir}>
+                                    <i style={{ width: `${Math.min(100, ((capacity - free) / capacity) * 100)}%` }} />
+                                </div>
+                            )}
+                        </footer>
+                    )}
+            </aside>
+            {inspected
+                ? (
+                    <Inspector
+                        key={inspected.id}
+                        recording={inspected}
+                        actions={inspectorActions(inspected)}
+                        upload={uploadsByPath.get(inspected.path)}
+                        waitingForLogin={waitingForLogin}
+                        jobs={Object.values(jobs)}
+                        version={thumbVersion}
+                        onBack={() => setShowDetail(false)}
+                        renaming={renaming}
+                        onRenamed={(name) => rename(inspected, name)}
+                        onCancelRename={() => setRenaming(false)}
                     />
-                )}
-            </div>
+                )
+                : current
+                ? (
+                    <section className="detail rrd-detail" data-testid="inspector">
+                        <div className="pane">
+                            <p className="name mono">{current.name}</p>
+                            <p className="muted small">a Rerun recording · {bytes(current.size)}</p>
+                            <div className="row-actions">
+                                <button
+                                    type="button"
+                                    className="dim-btn sm primary"
+                                    disabled={!current.opens[0]?.ok}
+                                    title={current.opens[0]?.reason}
+                                    onClick={() => open(current, "rerun")}
+                                >
+                                    Open in Rerun
+                                </button>
+                                <button
+                                    type="button"
+                                    className="dim-btn sm delete"
+                                    onClick={() => setDialog({ kind: "delete", recordings: [current] })}
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                )
+                : <section className="detail empty-detail" />}
+            {menu && <FloatMenu at={menu.at} items={menu.items} onClose={() => setMenu(null)} />}
+            {sortMenu && (
+                <FloatMenu
+                    at={{ anchor: sortMenu }}
+                    onClose={() => setSortMenu(null)}
+                    items={SORTS.map((s) => ({
+                        label: s.label,
+                        hint: s.key === sort && s.order === order ? "✓" : undefined,
+                        onSelect: () => {
+                            setSort(s.key)
+                            setOrder(s.order)
+                            save("sort", s.key)
+                            save("order", s.order)
+                        },
+                    }))}
+                />
+            )}
             {trayOpen && (
                 <UploadTray
                     tray={tray}
@@ -545,33 +735,30 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                 <RenameDialog
                     name={dialog.recording.name}
                     onClose={() => setDialog(null)}
-                    onRename={(name) =>
-                        api.rename(dialog.recording.id, name).then(
-                            (r) => toast(`renamed to ${r.id}`, "ok"),
-                            fail,
-                        )}
+                    onRename={(name) => rename(dialog.recording, name)}
                 />
             )}
             {dialog?.kind === "delete" && (
                 <ConfirmDialog
-                    title="Delete"
+                    title={deleting.length === 1 ? "Delete recording" : `Delete ${deleting.length} recordings`}
                     danger
                     action="Delete"
                     body={
-                        <p>
-                            Delete <span className="mono">{dialog.recording.name}</span>{" "}
-                            ({bytes(dialog.recording.size)})?
-                            {dialog.recording.symlink
-                                ? " It's a link: only the link goes, not the file it points to."
-                                : " This can't be undone."}
-                        </p>
+                        <>
+                            <p>
+                                {bytes(deleting.reduce((sum, r) => sum + r.size, 0))} will be removed from{" "}
+                                <span className="mono">{data?.dir}</span>.
+                                {deleting.some((r) => r.symlink)
+                                    ? " Links go, not the files they point to."
+                                    : " This can't be undone."}
+                            </p>
+                            <div className="names mono small" data-testid="delete-names">
+                                {deleting.map((r) => <div key={r.id}>{r.name}</div>)}
+                            </div>
+                        </>
                     }
                     onClose={() => setDialog(null)}
-                    onConfirm={() =>
-                        api.remove(dialog.recording.id).then(
-                            () => toast(`deleted ${dialog.recording.name}`, "ok"),
-                            fail,
-                        )}
+                    onConfirm={() => remove(deleting)}
                 />
             )}
         </div>

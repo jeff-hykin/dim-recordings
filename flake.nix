@@ -31,7 +31,7 @@
             packages = forAll (pkgs: rec {
                 frontend = pkgs.buildNpmPackage {
                     pname = "dim-recordings-frontend";
-                    version = "0.1.0";
+                    version = "0.2.0";
                     src = ./frontend;
                     # `nix build .#frontend` prints the right hash when package-lock.json changes
                     npmDepsHash = "sha256-w80EzhlEKvWMcdibE5ckyqND3w4BnCqBXLepvu8TVKo=";
@@ -40,7 +40,7 @@
                 # backend/main.ts and its npm packages as one ES module (esbuild; backend/bundle), from package-lock.json
                 backendBundle = pkgs.buildNpmPackage {
                     pname = "dim-recordings-backend";
-                    version = "0.1.0";
+                    version = "0.2.0";
                     src = ./backend;
                     sourceRoot = "backend/bundle";
                     # `nix build .#backendBundle` prints the right hash when backend/bundle/package-lock.json changes

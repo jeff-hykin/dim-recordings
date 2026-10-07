@@ -1,4 +1,4 @@
-// Uploads to the Dimensional cloud: the tray (progress, phase, ETA, cancel/retry) and the login panel, which is
+// Uploads to the Dimensional cloud: the tray (state, elapsed time, progress only when real numbers arrive, cancel/retry) and the login panel, which is
 // Desktop's own page in an iframe (`/dimos/cloud/login/page`, NosyPuma upload_api.md).
 import { useEffect, useRef, useState } from "react"
 import { api, bytes, desktopPath, type Tray, type Upload } from "../api.ts"
@@ -109,11 +109,44 @@ export function LoginPanel(
     )
 }
 
+// when this page first saw each upload running: the elapsed time is what an upload without progress can honestly show
+const startedAt = new Map<string, number>()
+
+/** "42 s", "3 min 05 s", "1 h 02 min" */
+function elapsed(seconds: number) {
+    const s = Math.floor(seconds)
+    if (s < 60) {
+        return `${s} s`
+    }
+    if (s < 3600) {
+        return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s`
+    }
+    return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")} min`
+}
+
+/** The real fraction sent, or null: dimos's upload reports bytes only per part (or not at all), so 0 bytes done means
+ * "unknown", not "nothing sent", and the bar stays indeterminate until a real count arrives. */
+export function uploadFraction(upload: Upload): number | null {
+    return upload.bytesTotal > 0 && upload.bytesDone > 0 ? Math.min(1, upload.bytesDone / upload.bytesTotal) : null
+}
+
 function Row(
     { upload, waitingForLogin, onChange }: { upload: Upload; waitingForLogin: boolean; onChange: () => void },
 ) {
     const running = upload.state === "uploading" || upload.state === "queued"
-    const fraction = upload.bytesTotal > 0 ? upload.bytesDone / upload.bytesTotal : null
+    const fraction = uploadFraction(upload)
+    const [now, setNow] = useState(Date.now())
+    if (upload.state === "uploading" && !startedAt.has(upload.id)) {
+        startedAt.set(upload.id, Date.now())
+    }
+    useEffect(() => {
+        if (upload.state !== "uploading") {
+            return
+        }
+        const timer = setInterval(() => setNow(Date.now()), 1000)
+        return () => clearInterval(timer)
+    }, [upload.state])
+    const since = startedAt.has(upload.id) ? (now - startedAt.get(upload.id)!) / 1000 : 0
     return (
         <div className={`upload ${upload.state}`} data-state={upload.state}>
             <div className="upload-top">
@@ -130,16 +163,20 @@ function Row(
             <div className="upload-bottom small">
                 <span className={upload.state === "failed" ? "error" : "muted"}>
                     {upload.state === "uploading"
-                        ? `${PHASES[upload.phase ?? ""] ?? upload.phase ?? ""} ${
-                            fraction !== null ? `${Math.round(fraction * 100)}%` : ""
-                        }`
+                        ? `${PHASES[upload.phase ?? ""] ?? upload.phase ?? "uploading"}${
+                            fraction !== null ? ` ${Math.round(fraction * 100)}%` : "…"
+                        } · ${elapsed(since)}`
                         : upload.state === "failed"
                         ? upload.error ?? "failed"
                         : upload.state === "queued" && waitingForLogin
                         ? "waiting for login"
                         : upload.state}
-                    {upload.state === "uploading" && upload.rateBps ? ` · ${bytes(upload.rateBps)}/s` : ""}
-                    {upload.state === "uploading" && upload.etaSeconds !== null ? ` · ${eta(upload.etaSeconds)}` : ""}
+                    {upload.state === "uploading" && fraction !== null && upload.rateBps
+                        ? ` · ${bytes(upload.rateBps)}/s`
+                        : ""}
+                    {upload.state === "uploading" && fraction !== null && upload.etaSeconds !== null
+                        ? ` · ${eta(upload.etaSeconds)}`
+                        : ""}
                 </span>
                 <span className="upload-actions">
                     {upload.state === "done" && upload.link && (

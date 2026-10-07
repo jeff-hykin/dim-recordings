@@ -43,6 +43,8 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
         return {
             ...rest,
             messages: inspection?.messages ?? null,
+            // how many things look wrong (the summary's warnings), for the list's flag; null until inspected
+            warnings: inspection ? (inspection.warnings ?? []).length : null,
             inspected: recording.format === "rrd" || !!inspection,
             error: inspection?.error ?? null,
             thumbnail: await thumbnails.stateOf(recording),
@@ -62,8 +64,9 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             path: "api/recordings",
             role: "context",
             description:
-                "The recordings folder: each .db/.mcap recording (name, size, duration, when recorded, a stream summary, note, " +
-                "preview state, what can open it, the .rrd files made from it) and standalone .rrd files, sorted and in " +
+                "The recordings folder: each .db/.mcap recording (name, size, duration, when recorded, a stream summary, " +
+                "how many warnings, note, preview state, what can open it, the .rrd files made from it) and standalone " +
+                ".rrd files, sorted and in " +
                 "date sections (Today, Yesterday, This week, Last week, This month, then by month) when sorted by date",
             params: {
                 sort: { type: "string", description: "date (default) | size | duration | name" },

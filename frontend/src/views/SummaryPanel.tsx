@@ -92,7 +92,7 @@ function Warnings({ warnings }: { warnings: Warning[] }) {
  * The tf frames as an indented tree, each child with its transform's rate (or static) and, when it stops early or
  * starts late, when; sized to the whole tree up to 60% of the view, then it scrolls.
  */
-function Tree(
+export function Tree(
     { tf, start, warnings }: {
         tf: TfTree
         start: number | null

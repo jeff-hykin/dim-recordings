@@ -163,6 +163,8 @@ export type Recording = {
     summary: string | null
     note: string
     messages: number | null
+    /** how many warnings its summary has; null until it's been read */
+    warnings: number | null
     inspected: boolean
     error: string | null
     thumbnail: Thumb
