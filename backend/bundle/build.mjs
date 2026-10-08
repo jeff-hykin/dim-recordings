@@ -20,7 +20,7 @@ await build({
     mainFields: ["module", "main"],
     target: "es2022",
     // dim-app's zenoh.js (vendored for checkTopic) lazily imports the browser's zenoh-gateway client; a backend never does
-    external: ["node:*", "./zenoh_gateway_client.js"],
+    external: ["node:*", "./vendor/zenoh-gateway/zenoh_gateway.js"],
     outfile: "dist/server.js",
     plugins: [npmSpecifier],
     logLevel: "info",
