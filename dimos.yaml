@@ -1,5 +1,5 @@
 title: Recordings
-spec-version: v1.0 # the dimos.yaml spec version this file follows
+spec-version: v1.1 # the dimos.yaml spec version this file follows
 uses:
     # the dimos gateway's endpoints the uploads go through (the app's own api/uploads relays them; the login panel
     # frames /dimos/cloud/login/page)
@@ -17,10 +17,13 @@ uses:
         - GET /api/apps
     # the dim-app SDK's zenoh client (backend state, events): the zenoh bridge and how it finds it
     "@zenoh-gateway": ">=0.5 <0.6"
+    # both optional: without them Recordings opens .rrd files with the `rerun` viewer on PATH, and has no Map Editor
     dim-map-builder:
-        - POST api/open
+        endpoints: [POST api/open]
+        optional: true
     dim-rerun:
-        - POST api/open
+        endpoints: [POST api/open]
+        optional: true
 caches:
     - url: "https://dimos-desktop.cachix.org"
       key: "dimos-desktop.cachix.org-1:A4P35aGJGmCan92LWyamtSFXMqaVE+VRFYnrJ8QMTeQ="
