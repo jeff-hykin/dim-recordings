@@ -610,7 +610,6 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                                     {
                                         label: "Open the Launcher",
                                         app: "launcher",
-                                        params: { kind: "blueprint" },
                                         primary: false,
                                     },
                                 ]}
