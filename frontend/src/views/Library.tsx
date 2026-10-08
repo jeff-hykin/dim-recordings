@@ -506,7 +506,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                 <header>
                     <div className="row">
                         {/* inside Desktop, its window bar already names the app, so the buttons start the row */}
-                        {window.parent === window && (
+                        {globalThis.parent === globalThis.self && (
                             <>
                                 <span className="dim-title">Recordings</span>
                                 <span className="grow" />
@@ -626,7 +626,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                             </div>
                             <button
                                 type="button"
-                                className="dim-btn sm"
+                                className="dim-btn sm upload"
                                 disabled={!pickedRecordings.length}
                                 onClick={() => upload(pickedRecordings).then(() => setPicking(null))}
                             >

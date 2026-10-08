@@ -273,6 +273,20 @@ body.science.dark .row-actions .dim-btn:not(.primary):not(.delete):hover {
 body.science.dark .dim-btn.delete:hover {
     box-shadow: 0 0 10px color-mix(in srgb, var(--delete) 45%, transparent);
 }
+/* Upload is the skin's second accent (--accent-alt, purple; Desktop's /theme.css), drawn like Delete; Portal's off Desktop */
+.dim-btn.upload {
+    --upload: var(--accent-alt, #b89cf0);
+    color: var(--upload);
+    border-color: color-mix(in srgb, var(--upload) 50%, transparent);
+    background: color-mix(in srgb, var(--upload) 8%, transparent);
+}
+.dim-btn.upload:hover {
+    border-color: var(--upload);
+    background: color-mix(in srgb, var(--upload) 12%, transparent);
+}
+body.science.dark .dim-btn.upload:hover {
+    box-shadow: 0 0 10px color-mix(in srgb, var(--upload) 45%, transparent);
+}
 .rrd {
     display: flex;
     align-items: center;

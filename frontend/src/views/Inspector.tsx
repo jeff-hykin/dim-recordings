@@ -610,7 +610,7 @@ export function Inspector(
         { id: "rename", label: "Rename", run: actions.rename },
         link && !busy
             ? { id: "upload", label: "View upload ↗", run: () => globalThis.open(link, "_blank", "noreferrer") }
-            : { id: "upload", label: uploadLabel(upload, waitingForLogin), run: actions.upload },
+            : { id: "upload", label: uploadLabel(upload, waitingForLogin), className: "upload", run: actions.upload },
         { id: "delete", label: "Delete", className: "delete", run: actions.remove },
         ...(actions.opens.length ? [{ id: "open", label: "Open with ▾", run: () => {}, menu: actions.opens }] : []),
     ]
