@@ -3,6 +3,8 @@
 import { lazy, Suspense, useEffect, useState } from "react"
 import { Library } from "./views/Library.tsx"
 import { Toasts } from "./ui.tsx"
+import { EmptyState } from "./EmptyState.tsx"
+import { ViewBoundary } from "./ViewBoundary.tsx"
 
 // the Replayer (three.js, the Controller's view) loads only when a recording is opened in it; its styles then come
 // after the theme's, as they do in the Controller
@@ -35,13 +37,26 @@ export function App() {
     }, [])
     return (
         <>
-            {route.view === "replay"
-                ? (
-                    <Suspense fallback={null}>
-                        <Replay id={route.id} />
-                    </Suspense>
-                )
-                : <Library transfer={!!route.transfer} />}
+            {/* a view that throws says so, and the next route starts clean (React would otherwise unmount the app) */}
+            <ViewBoundary
+                resetKey={JSON.stringify(route)}
+                fallback={(failure) => (
+                    <EmptyState
+                        title="Something went wrong"
+                        tone="warn"
+                        body={failure.message}
+                        actions={[{ label: "Back to the recordings", onClick: () => go({ view: "library" }) }]}
+                    />
+                )}
+            >
+                {route.view === "replay"
+                    ? (
+                        <Suspense fallback={null}>
+                            <Replay id={route.id} />
+                        </Suspense>
+                    )
+                    : <Library transfer={!!route.transfer} />}
+            </ViewBoundary>
             <Toasts />
         </>
     )

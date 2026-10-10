@@ -9,6 +9,7 @@ import type { Topic } from "../core/transport.ts"
 import { isDepthTopic } from "../core/video.ts"
 import { overlayTypeFor } from "../core/layers/registry.ts"
 import { decode } from "../core/lcm/lcm.ts"
+import { WebGLNotice } from "../../ViewBoundary.tsx"
 import { DEFAULT_DEPTH_LOOK, DEPTH_COLORMAPS, DepthCanvas, type DepthLook } from "../core/render/depth.ts"
 import { Icon } from "./icons.tsx"
 
@@ -158,6 +159,7 @@ function CameraPanel(
     const lookRef = useRef(depthLook)
     lookRef.current = depthLook
     const [depthRange, setDepthRange] = useState<[number, number] | null>(null)
+    const [depthFailed, setDepthFailed] = useState(false)
     const overlayCanvas = useRef<HTMLCanvasElement>(null)
     const topic = topics.find((other) => other.key === panel.key) ?? null
     const [size, setSize] = useState({
@@ -174,12 +176,21 @@ function CameraPanel(
             return
         }
         const source = app.video.acquire(topic)
+        let failed = false
         const unsubscribe = depth
             ? source.depth.subscribe(() => {
                 const image = source.depth.get().image
-                if (image && depthHost.current) {
+                if (image && depthHost.current && !failed) {
                     if (!depthRenderer.current) {
-                        depthRenderer.current = new DepthCanvas()
+                        // no WebGL2: the panel says so instead of throwing on every frame
+                        try {
+                            depthRenderer.current = new DepthCanvas()
+                        } catch (error) {
+                            console.warn("depth panel unavailable:", error)
+                            failed = true
+                            setDepthFailed(true)
+                            return
+                        }
                         depthRenderer.current.canvas.className = "camera-media"
                         depthHost.current.prepend(depthRenderer.current.canvas)
                     }
@@ -436,13 +447,19 @@ function CameraPanel(
                 className="camera-body"
                 onClick={mobile && !isMain ? onMain : undefined}
             >
-                {depth ? <div ref={depthHost} className="camera-media depth-host" /> : (
-                    <canvas
-                        ref={video}
-                        className={`camera-media ${size.quality === "low" ? "low" : ""}`}
-                        data-quality={size.quality}
-                    />
-                )}
+                {depth
+                    ? (
+                        <div ref={depthHost} className="camera-media depth-host">
+                            {depthFailed && <WebGLNotice what="Depth view" />}
+                        </div>
+                    )
+                    : (
+                        <canvas
+                            ref={video}
+                            className={`camera-media ${size.quality === "low" ? "low" : ""}`}
+                            data-quality={size.quality}
+                        />
+                    )}
                 <canvas ref={overlayCanvas} className="camera-overlay" />
             </div>
         </div>

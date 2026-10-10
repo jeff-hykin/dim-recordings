@@ -2,6 +2,7 @@
 // tree, camera panels, layers; src/live is its code) playing a recording, with a timeline docked at the bottom. Its
 // backend is backend/replay. Nothing is loaded up front: the page asks for what the playhead needs.
 import { EmptyState } from "../EmptyState.tsx"
+import { ViewBoundary, WebGLNotice } from "../ViewBoundary.tsx"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { go } from "../App.tsx"
 import { ViewerApp } from "../live/core/app.ts"
@@ -77,18 +78,36 @@ export function Replay({ id }: { id: string }) {
             </div>
         )
     }
+    // the backstop: a view that throws anyway says so here instead of blanking the app
     return (
-        <LiveReplay
-            key={`${overview.id}#${version}`}
-            overview={overview}
-            initial={carried.current ?? undefined}
-            expanded={isExpanded}
-            onExpanded={(value) => expanded.set({ expanded: value })}
-            onReload={(playhead) => {
-                carried.current = playhead
-                reload()
-            }}
-        />
+        <ViewBoundary
+            resetKey={`${overview.id}#${version}`}
+            fallback={(failure) => (
+                <div className="replay-page">
+                    <div className="replay-message" data-testid="replay-failed">
+                        <EmptyState
+                            label="Replayer"
+                            tone="warn"
+                            title={`Couldn't show ${overview.name}`}
+                            body={`${failure.message}. This browser may not support what the Replayer draws with (WebGL).`}
+                            actions={[{ label: "Back to the recordings", onClick: () => go({ view: "library" }) }]}
+                        />
+                    </div>
+                </div>
+            )}
+        >
+            <LiveReplay
+                key={`${overview.id}#${version}`}
+                overview={overview}
+                initial={carried.current ?? undefined}
+                expanded={isExpanded}
+                onExpanded={(value) => expanded.set({ expanded: value })}
+                onReload={(playhead) => {
+                    carried.current = playhead
+                    reload()
+                }}
+            />
+        </ViewBoundary>
     )
 }
 
@@ -173,6 +192,7 @@ function LiveReplay({ overview, initial, expanded, onExpanded, onReload }: {
                 >
                     <div className="scene-slot">
                         <div ref={host} className="scene" />
+                        {app?.viewer.glError && <WebGLNotice what="3D view" />}
                         {mainCamera && (
                             <button
                                 type="button"

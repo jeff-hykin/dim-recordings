@@ -1733,3 +1733,15 @@ body.science.dark {
         padding: 8px 14px;
     }
 }
+
+/* a WebGL view that couldn't start (3D, depth panels): its notice, centered where the view would be */
+.webgl-notice {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    text-align: center;
+    font: 12px/1.4 var(--sans);
+    pointer-events: none;
+}
