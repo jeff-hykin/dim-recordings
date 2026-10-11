@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { Toggle, useConfirm, usePrompt, useToast } from "dimos-react"
 import { dimosKey } from "dimos-react"
 import { type Overview, replayApi, type Timeline } from "./api.ts"
-import { drawable, forgetRoutes } from "./layers.tsx"
+import { useStore } from "dimos-react/three"
 import type { StreamInfo } from "./source.ts"
 
 const KIND_LABEL: Record<StreamInfo["kind"], string> = {
@@ -22,11 +22,12 @@ const LOCKED =
 const VALID_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 export function useStreamLanes(
-    { overview, expanded, hidden, onToggle, onEdited }: {
+    { overview, expanded, layers, onEdited }: {
         overview: Overview
         expanded: boolean
-        hidden: Record<string, boolean>
-        onToggle: (key: string, shown: boolean) => void
+        /** dimos-react's LayerManager: a lane's switch is its stream's layer */
+        // deno-lint-ignore no-explicit-any
+        layers: any
         /** a stream edit finished: the page reloads the recording */
         onEdited: (renamed?: { from: string; to: string }) => void
     },
@@ -37,6 +38,7 @@ export function useStreamLanes(
     const confirm = useConfirm()
     const prompt = usePrompt()
     const toast = useToast()
+    const { list: entries } = useStore(layers.entries) as { list: { topic: { key: string }; enabled: boolean }[] }
 
     // per-stream ticks for the visible window (re-asked when zoomed)
     useEffect(() => {
@@ -65,7 +67,6 @@ export function useStreamLanes(
         try {
             const result = await action()
             toast.ok(`${label} (${result.seconds.toFixed(1)} s)`)
-            forgetRoutes()
             onEdited(renamed)
         } catch (error) {
             toast.error(String((error as Error).message ?? error))
@@ -112,7 +113,8 @@ export function useStreamLanes(
                 stream.end > stream.start
             ? `${((stream.count - 1) / (stream.end - stream.start)).toFixed(1)} Hz`
             : ""
-        const shown = drawable(stream) && stream.count > 0 && !hidden[key]
+        const entry = entries.find((other) => other.topic.key === key)
+        const shown = !!entry?.enabled
         const disabled = locked || busy !== null
         return {
             id: stream.name,
@@ -123,14 +125,14 @@ export function useStreamLanes(
             active: shown,
             busy: busy === stream.name,
             ticks: row ? (row.times ? { times: row.times } : { counts: row.counts }) : null,
-            leading: drawable(stream) && stream.count > 0
+            leading: entry
                 ? (
                     <Toggle
                         size="sm"
                         value={shown}
                         aria-label={shown ? `Hide ${stream.name}` : `Draw ${stream.name}`}
                         title={shown ? `Hide ${stream.name}` : `Draw ${stream.name}`}
-                        onChange={(on: boolean) => onToggle(key, on)}
+                        onChange={(on: boolean) => layers.setEnabled(key, on)}
                     />
                 )
                 : undefined,

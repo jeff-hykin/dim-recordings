@@ -16,7 +16,19 @@ import {
     useBackendEvents,
     useMobile,
 } from "dimos-react"
-import { Scene3D, SceneControls, SceneStats, TfTree } from "dimos-react/three"
+import {
+    FrameHighlight,
+    RobotModel,
+    Scene3D,
+    SceneControls,
+    SceneStats,
+    TfFeed,
+    TfFootnote,
+    TfTree,
+    TopicLayers,
+    useLayerManager,
+    useTfIssues,
+} from "dimos-react/three"
 import { useStore } from "../replay/store.ts"
 import { DataSourceProvider } from "dimos-react"
 import { go } from "../App.tsx"
@@ -26,8 +38,8 @@ import { clock, type Overview, replayApi } from "../replay/api.ts"
 import { type Playhead, ReplaySource } from "../replay/source.ts"
 import { useStreamLanes } from "../replay/lanes.tsx"
 import { CameraPanels, type CameraState } from "../replay/cameras.tsx"
-import { SidePanel, type SideTab } from "../replay/side.tsx"
-import { DEFAULT_SETTINGS, ReplayLayers, type ReplaySettings } from "../replay/layers.tsx"
+import { SidePanel, type SideTab, SideTabs } from "../replay/side.tsx"
+import { DEFAULT_SETTINGS, type ReplaySettings } from "../replay/layers.tsx"
 
 export function Replay({ id }: { id: string }) {
     const [overview, setOverview] = useState<Overview | null>(null)
@@ -116,52 +128,16 @@ function LiveReplay({ overview, initial, onReload }: {
     initial?: Partial<Playhead>
     onReload: (playhead: Partial<Playhead>) => void
 }) {
-    const source = useMemo(
-        () => new ReplaySource(overview.id, overview, initial),
-        [overview.id],
-    )
-    const tf = useMemo(() => new TfTree({ now: () => source.now() }), [source])
-    const head = useStore(source.playhead)
-    const mobile = useMobile()
-    const [tab, setTab] = useState<SideTab | null>(
-        () => (matchMedia("(max-width: 720px)").matches ? null : "layers"),
-    )
-    const [expanded, setExpanded] = usePersistentState(
-        "replay.timeline.expanded",
-        false,
-    )
-    const [settings, setSettings] = usePersistentState<ReplaySettings>(
-        "replay.view",
-        DEFAULT_SETTINGS,
-    )
-    // camera panels are remembered per recording (another recording's topics wouldn't be there)
-    const [cameras, setCameras] = usePersistentState<CameraState>(
-        `replay.cameras.${overview.id}`,
-        {
-            panels: [],
-            main: null,
-            seeded: false,
-        },
-    )
-    // a jump (seek, scrub's end, loop) starts over: the TF tree empties (the backend sends the tree as it was then)
-    // and the layers that accumulate are rebuilt
-    const [epoch, setEpoch] = useState(0)
-
+    const source = useMemo(() => new ReplaySource(overview.id, overview, initial), [overview.id])
     useEffect(() => {
         source.start()
         globalThis.__replay = source
-        const onSeek = () => {
-            tf.clear()
-            setEpoch((e) => e + 1)
-        }
-        source.onSeek.add(onSeek)
         // the file changed (a stream edit, here or by the agent): start over on it, at the same moment
         source.onReload = () => {
             const { t, speed, loop } = source.playhead.get()
             onReload({ t, speed, loop })
         }
         return () => {
-            source.onSeek.delete(onSeek)
             source.close()
             if (globalThis.__replay === source) {
                 delete globalThis.__replay
@@ -170,44 +146,65 @@ function LiveReplay({ overview, initial, onReload }: {
     }, [source])
 
     // the agent drives open players: POST api/replay/{id}/control → a `replay` event on the frontend topic `events`
-    useBackendEvents(
-        (
-            message: {
-                type?: string
-                id?: string
-                action?: string
-                t?: number
-                speed?: number
-            },
-        ) => {
-            if (message.type !== "replay" || message.id !== overview.id) {
-                return
-            }
-            if (message.action === "play") {
-                source.play()
-            } else if (message.action === "pause") {
-                source.pause()
-            } else if (message.action === "seek" && typeof message.t === "number") {
-                source.seek(overview.start + message.t)
-            } else if (
-                message.action === "speed" && typeof message.speed === "number"
-            ) {
-                source.playhead.update({
-                    speed: Math.min(16, Math.max(0.05, message.speed)),
-                })
-            }
-        },
-    )
+    useBackendEvents((message: { type?: string; id?: string; action?: string; t?: number; speed?: number }) => {
+        if (message.type !== "replay" || message.id !== overview.id) {
+            return
+        }
+        if (message.action === "play") {
+            source.play()
+        } else if (message.action === "pause") {
+            source.pause()
+        } else if (message.action === "seek" && typeof message.t === "number") {
+            source.seekTo(overview.start + message.t)
+        } else if (message.action === "speed" && typeof message.speed === "number") {
+            source.playhead.update({ speed: Math.min(16, Math.max(0.05, message.speed)) })
+        }
+    })
 
-    const [hidden, setHidden] = usePersistentState<Record<string, boolean>>(
-        `replay.hidden.${overview.id}`,
-        {},
+    return (
+        <DataSourceProvider source={source}>
+            <ReplayView overview={overview} source={source} onReload={onReload} />
+        </DataSourceProvider>
     )
+}
+
+/** whether playback resumes when the scrub in progress ends */
+let resumeAfterScrub = false
+
+function ReplayView({ overview, source, onReload }: {
+    overview: Overview
+    source: ReplaySource
+    onReload: (playhead: Partial<Playhead>) => void
+}) {
+    const tf = useMemo(() => new TfTree(), [source])
+    const head = useStore(source.playhead)
+    const mobile = useMobile()
+    const [tab, setTab] = useState<SideTab | null>(() => (matchMedia("(max-width: 720px)").matches ? null : "layers"))
+    const [expanded, setExpanded] = usePersistentState("replay.timeline.expanded", false)
+    const [settings, setSettings] = usePersistentState<ReplaySettings>("replay.view.v2", DEFAULT_SETTINGS)
+    // the layers: one per stream some dimos-react layer type draws; which are on and their settings persist
+    const layers = useLayerManager({ storagePrefix: "dim-recordings.layers" })
+    const issues = useTfIssues({ tf, layers: () => layers.layerFrames() })
+    const [hovered, setHovered] = useState<string | null>(null)
+    const [activeFixedFrame, setActiveFixedFrame] = useState("")
+    // camera panels are remembered per recording (another recording's topics wouldn't be there)
+    const [cameras, setCameras] = usePersistentState<CameraState>(`replay.cameras.${overview.id}`, {
+        panels: [],
+        main: null,
+        seeded: false,
+    })
+    // a jump (seek, scrub's end, loop): the backend sends the TF tree as it was then, so the old one goes
+    useEffect(() => {
+        const off = source.onSeek(() => tf.clear())
+        return () => {
+            off()
+        }
+    }, [source, tf])
+
     const lanes = useStreamLanes({
         overview,
         expanded,
-        hidden,
-        onToggle: (key, shown) => setHidden((old) => ({ ...old, [key]: !shown })),
+        layers,
         onEdited: (renamed) => {
             if (renamed) {
                 // a camera panel showing a renamed stream follows the new name
@@ -226,129 +223,107 @@ function LiveReplay({ overview, initial, onReload }: {
             onReload({ t, speed, loop })
         },
     })
-    const mainCamera = cameras.main !== null &&
-        cameras.panels.some((panel) => panel.id === cameras.main)
+    const mainCamera = cameras.main !== null && cameras.panels.some((panel) => panel.id === cameras.main)
+    const robotFrame = settings.followFrame || "base_link"
 
     return (
-        <DataSourceProvider source={source}>
-            <div
-                className={`rp-page ${mobile ? "rp-mobile" : ""}`}
-                data-testid="replayer"
+        <div className={`rp-page ${mobile ? "rp-mobile" : ""}`} data-testid="replayer">
+            <TopBar
+                left={
+                    <>
+                        <IconButton
+                            icon="arrow-left"
+                            label="Back to the recordings"
+                            onClick={() => go({ view: "library" })}
+                        />
+                        <Text mono className="rp-title" title={overview.name}>{overview.name}</Text>
+                    </>
+                }
+                right={<SideTabs value={tab} onChange={(next: SideTab) => setTab(tab === next ? null : next)} />}
             >
-                <TopBar
-                    left={
-                        <>
-                            <IconButton
-                                icon="arrow-left"
-                                label="Back to the recordings"
-                                onClick={() => go({ view: "library" })}
-                            />
-                            <Text mono className="rp-title" title={overview.name}>
-                                {overview.name}
-                            </Text>
-                        </>
-                    }
-                    right={
-                        <SidePanel.Tabs
-                            value={tab}
-                            onChange={(next: SideTab) => setTab(tab === next ? null : next)}
-                        />
-                    }
+                <Text muted small mono className="rp-detail">
+                    {bytes(overview.size)} · {clock(overview.end - overview.start)} · {overview.streams.length} streams
+                </Text>
+            </TopBar>
+            <div className={`rp-stage ${mainCamera ? "rp-camera-main" : ""}`}>
+                <Scene3D
+                    className="rp-scene"
+                    tf={tf}
+                    fixedFrame={settings.fixedFrame || undefined}
+                    followFrame={robotFrame}
+                    robotFrame={robotFrame}
+                    follow={settings.follow}
+                    onFollowChange={(follow: boolean) => setSettings((old) => ({ ...old, follow }))}
+                    onViewer={(viewer: { fixedFrame: string; onFrame: (fn: () => void) => () => void }) => {
+                        viewer.onFrame(() =>
+                            setActiveFixedFrame((old) => (old === viewer.fixedFrame ? old : viewer.fixedFrame))
+                        )
+                    }}
                 >
-                    <Text muted small mono className="rp-detail">
-                        {bytes(overview.size)} · {clock(overview.end - overview.start)} · {overview.streams.length}{" "}
-                        streams
-                    </Text>
-                </TopBar>
-                <div className={`rp-stage ${mainCamera ? "rp-camera-main" : ""}`}>
-                    <Scene3D
-                        className="rp-scene"
-                        tf={tf}
-                        clock={() => source.now()}
-                        fixedFrame={settings.fixedFrame || undefined}
-                        followFrame={settings.follow ? settings.followFrame || "base_link" : null}
-                    >
-                        <ReplayLayers
-                            overview={overview}
-                            settings={settings}
-                            hidden={hidden}
-                            epoch={epoch}
-                        />
-                        <SceneControls className="rp-scene-controls">
-                            {mainCamera && (
-                                <IconButton
-                                    icon="expand"
-                                    label="Make the 3D view fullscreen"
-                                    onClick={() => setCameras((old) => ({ ...old, main: null }))}
-                                />
-                            )}
-                        </SceneControls>
-                        {settings.showStats && <SceneStats className="rp-stats" />}
-                        {tab && (
-                            <SidePanel
-                                tab={tab}
-                                onTab={setTab}
-                                onClose={() => setTab(null)}
-                                overview={overview}
-                                settings={settings}
-                                onSettings={(patch) => setSettings((old) => ({ ...old, ...patch }))}
-                                hidden={hidden}
-                                onHidden={setHidden}
+                    <TfFeed />
+                    <TopicLayers manager={layers} />
+                    {settings.robotModel && <RobotModel kind={settings.robotKind} frame={robotFrame} />}
+                    <FrameHighlight frame={hovered} />
+                    <TfFootnote issues={issues} onOpen={() => setTab("tf")} />
+                    <SceneControls className="rp-scene-controls">
+                        {mainCamera && (
+                            <IconButton
+                                icon="expand"
+                                label="Make the 3D view fullscreen"
+                                onClick={() => setCameras((old) => ({ ...old, main: null }))}
                             />
                         )}
-                    </Scene3D>
-                    <CameraPanels
-                        topics={source.topics}
-                        state={cameras}
-                        onState={setCameras}
-                        mobile={mobile}
-                    />
-                    {head.scrubbing && (
-                        <Badge className="rp-scrub-hint" tone="info">
-                            scrubbing · thumbnails until you let go
-                        </Badge>
+                    </SceneControls>
+                    {settings.showStats && <SceneStats className="rp-stats" detailed rttMs={source.rttMs} />}
+                    {tab && (
+                        <SidePanel
+                            tab={tab}
+                            onClose={() => setTab(null)}
+                            layers={layers}
+                            tf={tf}
+                            issues={issues}
+                            activeFixedFrame={activeFixedFrame}
+                            hovered={hovered}
+                            onHover={setHovered}
+                            settings={settings}
+                            onSettings={(patch) => setSettings((old) => ({ ...old, ...patch }))}
+                        />
                     )}
-                </div>
-                <PlaybackBar
-                    className="rp-playback"
-                    data-testid="timeline"
-                    start={overview.start}
-                    end={overview.end}
-                    value={head.t}
-                    playing={head.playing}
-                    scrubbing={head.scrubbing}
-                    onPlayPause={(
-                        play: boolean,
-                    ) => (play ? source.play() : source.pause())}
-                    onScrubStart={() => {
-                        resumeAfterScrub = source.playhead.get().playing
-                        source.playhead.update({ scrubbing: true, playing: false })
-                    }}
-                    onSeek={(t: number) => source.seek(t)}
-                    onScrubEnd={() =>
-                        source.playhead.update({
-                            scrubbing: false,
-                            playing: resumeAfterScrub,
-                        })}
-                    speed={head.speed}
-                    onSpeedChange={(speed: number) => source.playhead.update({ speed })}
-                    loop={head.loop}
-                    onLoopChange={(loop: boolean) => source.playhead.update({ loop })}
-                    expanded={expanded}
-                    onExpandedChange={setExpanded}
-                    lanes={lanes.lanes}
-                    view={lanes.view}
-                    onViewChange={lanes.setView}
-                    keyboard
-                />
-                {lanes.dialogs}
+                </Scene3D>
+                <CameraPanels topics={source.topics} state={cameras} onState={setCameras} mobile={mobile} />
+                {head.scrubbing && (
+                    <Badge className="rp-scrub-hint" tone="info">scrubbing · thumbnails until you let go</Badge>
+                )}
             </div>
-        </DataSourceProvider>
+            <PlaybackBar
+                className="rp-playback"
+                data-testid="timeline"
+                start={overview.start}
+                end={overview.end}
+                value={head.t}
+                playing={head.playing}
+                scrubbing={head.scrubbing}
+                onPlayPause={(play: boolean) => (play ? source.play() : source.pause())}
+                onScrubStart={() => {
+                    resumeAfterScrub = source.playhead.get().playing
+                    source.playhead.update({ scrubbing: true, playing: false })
+                }}
+                onSeek={(t: number) => source.seekTo(t)}
+                onScrubEnd={() => source.playhead.update({ scrubbing: false, playing: resumeAfterScrub })}
+                speed={head.speed}
+                onSpeedChange={(speed: number) => source.playhead.update({ speed })}
+                loop={head.loop}
+                onLoopChange={(loop: boolean) => source.playhead.update({ loop })}
+                expanded={expanded}
+                onExpandedChange={setExpanded}
+                lanes={lanes.lanes}
+                view={lanes.view}
+                onViewChange={lanes.setView}
+                keyboard
+            />
+        </div>
     )
 }
-
-/** whether playback resumes when the scrub in progress ends */
-let resumeAfterScrub = false
 
 declare global {
     var __replay: ReplaySource | undefined

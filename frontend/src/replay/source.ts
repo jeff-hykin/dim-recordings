@@ -6,6 +6,7 @@
 // from Desktop's zenoh-gateway.
 import { dimosKey, keyMatches, parseKey, zenohSource } from "dimos-react"
 import { Store, type TypedStore } from "./store.ts"
+import { replayApi } from "./api.ts"
 
 export type Mode = "play" | "scrub" | "pause"
 export type ConnectionState = "connecting" | "connected" | "degraded" | "lost"
@@ -69,6 +70,8 @@ export const isDepthStream = (name: string) => /depth/i.test(name)
 
 export class ReplaySource {
     readonly kind = "replay"
+    /** dimos-react: the playhead is the data clock (fading, staleness, marker lifetimes follow it) */
+    readonly replay = true
     readonly playhead: TypedStore<Playhead>
     readonly topics: Topic[]
     readonly status = new Store<{ state: ConnectionState; error: string | null }>(
@@ -78,7 +81,7 @@ export class ReplaySource {
         },
     )
     /** fired when the playhead jumps (a seek, a scrub's end, a loop): layers that accumulate start over */
-    readonly onSeek = new Set<() => void>()
+    readonly #seekListeners = new Set<() => void>()
     /** the recording changed on disk (a stream edit): the page re-reads it */
     onReload: (() => void) | null = null
     /** the backend's answer time for the last request (ms) */
@@ -127,6 +130,24 @@ export class ReplaySource {
     }
 
     // ── the data source interface (dimos-react's useDataSource) ──
+
+    /** dimos-react: `listener()` when the playhead jumps (its 3D view resets the layers that gather over time) */
+    onSeek(listener: () => void) {
+        this.#seekListeners.add(listener)
+        return () => this.#seekListeners.delete(listener)
+    }
+
+    /** dimos-react: a pose topic's whole recorded route (`[t, x, y, z]` in its frame), read once from the file */
+    route(key: string) {
+        const topic = parseKey(key)
+        if (!topic) {
+            return Promise.resolve(null)
+        }
+        return replayApi.path(this.recordingId, topic.name.slice(1)).then((path) => ({
+            frame: path.frame,
+            points: path.points,
+        }))
+    }
 
     get state(): ConnectionState {
         return this.status.get().state
@@ -336,7 +357,7 @@ export class ReplaySource {
     pause() {
         this.playhead.update({ playing: false })
     }
-    seek(t: number) {
+    seekTo(t: number) {
         const head = this.playhead.get()
         this.playhead.update({ t: Math.min(head.end, Math.max(head.start, t)) })
     }
@@ -350,7 +371,7 @@ export class ReplaySource {
         const scrubEnded = this.#wasScrubbing && !head.scrubbing
         this.#wasScrubbing = head.scrubbing
         if ((jumped && !head.scrubbing) || scrubEnded) {
-            for (const listener of this.onSeek) {
+            for (const listener of this.#seekListeners) {
                 listener()
             }
         }
