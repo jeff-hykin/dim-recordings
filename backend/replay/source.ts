@@ -5,7 +5,7 @@
 import { lz4, zstdDecompress } from "../deps.ts"
 import { openMcap } from "../recordings/mcap.ts"
 import { openDb } from "../recordings/sqlite.ts"
-import { formatOf, shortType } from "../recordings/inspect.ts"
+import { channelType, formatOf, shortType } from "../recordings/inspect.ts"
 import type { DatabaseSync } from "node:sqlite"
 
 export type Kind = "image" | "cloud" | "tf" | "pose" | "info" | "other"
@@ -249,8 +249,7 @@ class McapSource implements Source {
             const channel of [...reader.channelsById.values()].sort((a, b) => a.topic.localeCompare(b.topic))
         ) {
             const schema = reader.schemasById.get(channel.schemaId)
-            const typeName = schema?.name ?? channel.metadata.get("type") ??
-                channel.metadata.get("lcm_type") ?? ""
+            const typeName = channelType(schema, channel.metadata)
             const type = shortType(typeName)
             const name = channel.topic.replace(/^\//, "")
             source.#channelOf.set(name, channel.id)

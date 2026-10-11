@@ -71,7 +71,7 @@ async function sampleDb() {
 }
 
 /** an .mcap (raw LCM channels) cut into many small chunks */
-async function sampleMcap(dir: string) {
+async function sampleMcap(dir: string, layout: "plain" | "dimos" = "plain") {
     const path = join(dir, "run.mcap")
     const file = await Deno.open(path, {
         write: true,
@@ -92,15 +92,25 @@ async function sampleMcap(dir: string) {
             position: () => position,
         },
     })
-    await writer.start({ profile: "", library: "test" })
-    const channel = async (topic: string, type: string) =>
-        await writer.registerChannel({
-            topic,
-            messageEncoding: "lcm",
-            schemaId: 0,
-            metadata: new Map([["type", type]]),
-        })
-    const camera = await channel("/camera", "sensor_msgs.Image")
+    await writer.start({ profile: layout === "dimos" ? "dimos" : "", library: "test" })
+    // dimos' layout (dimos' Rust recorder, Go2 Ctrl): the type in dimos.payload_type, the codec as the encoding
+    const channel = async (topic: string, type: string, encoding = "lcm") =>
+        await writer.registerChannel(
+            layout === "dimos"
+                ? {
+                    topic: topic.replace(/^\//, ""),
+                    messageEncoding: encoding,
+                    schemaId: 0,
+                    metadata: new Map([
+                        ["dimos.payload_type", `dimos.msgs.${type}.${type.split(".").pop()}`],
+                        ["dimos.stream_name", topic.replace(/^\//, "")],
+                        ["dimos.port", topic.replace(/^\//, "")],
+                        ["dimos.observation_time", "publish_time"],
+                    ]),
+                }
+                : { topic, messageEncoding: "lcm", schemaId: 0, metadata: new Map([["type", type]]) },
+        )
+    const camera = await channel("/camera", "sensor_msgs.Image", "jpeg")
     const odom = await channel("/odom", "geometry_msgs.PoseStamped")
     const tfChannel = await channel("/tf", "tf2_msgs.TFMessage")
     const messages: { channelId: number; t: number; data: Uint8Array }[] = []
@@ -180,6 +190,26 @@ Deno.test("source: an .mcap indexes from MessageIndex records and decompresses o
     } finally {
         source.close()
     }
+})
+
+Deno.test("source: a dimos-layout .mcap (types in dimos.payload_type, codec as the encoding) reads like any other", async () => {
+    const dir = await tempDir()
+    const path = await sampleMcap(dir, "dimos")
+    const source = await openSource(path)
+    try {
+        const byName = Object.fromEntries(source.streams.map((stream) => [stream.name, stream]))
+        assertEquals(byName.camera.type, "sensor_msgs.Image")
+        assertEquals(byName.camera.encoding, "jpeg")
+        assertEquals(byName.odom.type, "geometry_msgs.PoseStamped")
+        const { times } = await source.index("odom")
+        assertEquals(times.length, 100)
+        assertEquals(await source.read("odom", 0), pose(0))
+    } finally {
+        source.close()
+    }
+    const inspection = await inspect(path)
+    const camera = inspection.streams.find((stream) => stream.name === "camera")
+    assertEquals(camera?.type, "sensor_msgs.Image")
 })
 
 /** `source`, with every read of `stream` (default: all) waiting for `gate` */

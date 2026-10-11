@@ -55,6 +55,12 @@ export type Inspection = {
 }
 
 /** dimos.msgs.sensor_msgs.Image.Image, sensor_msgs/msg/Image, sensor_msgs.Image → sensor_msgs.Image */
+/** An .mcap channel's message type: its schema's name, else the channel metadata's (dimos' layout, which dimos' Rust
+ * recorder and Go2 Ctrl write: `dimos.payload_type`; older raw-LCM channels: `type` / `lcm_type`). */
+export function channelType(schema: { name: string } | undefined, metadata: Map<string, string>): string {
+    return schema?.name || metadata.get("dimos.payload_type") || metadata.get("type") || metadata.get("lcm_type") || ""
+}
+
 export function shortType(name: string): string {
     if (!name) {
         return ""
@@ -387,7 +393,7 @@ export async function inspectMcap(path: string): Promise<Inspection> {
             const times = (timesById.get(channel.id) ?? []).sort((a, b) => a - b)
             const count = Number(reader.statistics?.channelMessageCounts.get(channel.id) ?? times.length)
             // a raw-LCM channel has no schema; its type rides in the channel metadata
-            const typeName = schema?.name ?? channel.metadata.get("type") ?? channel.metadata.get("lcm_type") ?? ""
+            const typeName = channelType(schema, channel.metadata)
             const name = channel.topic.replace(/^\//, "")
             timesByName.set(name, times)
             streams.push({

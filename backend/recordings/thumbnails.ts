@@ -5,7 +5,7 @@
 import { openDb } from "./sqlite.ts"
 import { join } from "node:path"
 import process from "node:process"
-import type { Inspection, StreamInfo } from "./inspect.ts"
+import { channelType, type Inspection, type StreamInfo } from "./inspect.ts"
 import { openMcap } from "./mcap.ts"
 import { decodeCdrImage, type DecodedImage, decodeLcmCompressedImage, decodeLcmImage, unwrapBlob } from "./messages.ts"
 import { which } from "./foxglove.ts"
@@ -152,7 +152,7 @@ async function mcapSource(path: string, inspection: Inspection): Promise<Source>
         if (channel.messageEncoding === "cdr" && schema) {
             return withSize(decodeCdrImage(schema.name, new TextDecoder().decode(schema.data), data))
         }
-        const type = schema?.name ?? channel.metadata.get("type") ?? channel.metadata.get("lcm_type") ?? ""
+        const type = channelType(schema, channel.metadata)
         return withSize(/Compressed/.test(type) ? decodeLcmCompressedImage(data) : decodeLcmImage(data))
     }
     const frameAt = async (stream: string, time: number) => {
