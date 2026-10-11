@@ -1,16 +1,16 @@
 // Hash routes: `#/` the library, `#/transfer` the library with the transfer dialog open (Desktop's "Transfer
 // recordings" notification opens this), `#/replay/<id>` the Replayer (views/Replay.tsx).
 import { lazy, Suspense, useEffect, useState } from "react"
+import { Button, EmptyState, ErrorBoundary } from "dimos-react"
 import { Library } from "./views/Library.tsx"
-import { Toasts } from "./ui.tsx"
-import { EmptyState } from "./EmptyState.tsx"
-import { ViewBoundary } from "./ViewBoundary.tsx"
 
-// the Replayer (three.js, the Controller's view) loads only when a recording is opened in it; its styles then come
-// after the theme's, as they do in the Controller
+// the Replayer (three.js) loads only when a recording is opened in it
 const Replay = lazy(() => import("./views/Replay.tsx").then((module) => ({ default: module.Replay })))
 
-export type Route = { view: "library"; transfer?: boolean } | { view: "replay"; id: string }
+export type Route = { view: "library"; transfer?: boolean } | {
+    view: "replay"
+    id: string
+}
 
 export function parseRoute(hash: string): Route {
     const match = hash.match(/^#\/replay\/(.+)$/)
@@ -35,29 +35,35 @@ export function App() {
         addEventListener("hashchange", update)
         return () => removeEventListener("hashchange", update)
     }, [])
+    // a view that throws says so, and the next route starts clean (React would otherwise unmount the app)
     return (
-        <>
-            {/* a view that throws says so, and the next route starts clean (React would otherwise unmount the app) */}
-            <ViewBoundary
-                resetKey={JSON.stringify(route)}
-                fallback={(failure) => (
-                    <EmptyState
-                        title="Something went wrong"
-                        tone="warn"
-                        body={failure.message}
-                        actions={[{ label: "Back to the recordings", onClick: () => go({ view: "library" }) }]}
-                    />
-                )}
-            >
-                {route.view === "replay"
-                    ? (
-                        <Suspense fallback={null}>
-                            <Replay id={route.id} />
-                        </Suspense>
-                    )
-                    : <Library transfer={!!route.transfer} />}
-            </ViewBoundary>
-            <Toasts />
-        </>
+        <ErrorBoundary
+            key={JSON.stringify(route)}
+            fallback={({ error }: { error: Error }) => (
+                <EmptyState
+                    layer
+                    icon="warn"
+                    tone="warn"
+                    title="Something went wrong"
+                    message={error.message}
+                    actions={
+                        <Button
+                            variant="primary"
+                            onClick={() => go({ view: "library" })}
+                        >
+                            Back to the recordings
+                        </Button>
+                    }
+                />
+            )}
+        >
+            {route.view === "replay"
+                ? (
+                    <Suspense fallback={null}>
+                        <Replay id={route.id} />
+                    </Suspense>
+                )
+                : <Library transfer={!!route.transfer} />}
+        </ErrorBoundary>
     )
 }

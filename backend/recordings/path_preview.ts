@@ -1,7 +1,7 @@
 // The preview of a recording with no camera: its odometry path seen from above. The path comes from (first that has
 // one) a nav_msgs/Path (lite_record's /pointlio_path is the whole trajectory in one message), the busiest odometry /
 // pose stream, or tf's world/map/odom → body edge; it's thinned to a few hundred points and fitted into a unit box,
-// and the page draws it as an SVG in the theme's colors (ui.tsx PathThumbnail).
+// and the page draws it as an SVG in the theme's colors (views/Thumbnail.tsx PathThumbnail).
 import { decodeObject } from "../replay/payload.ts"
 import { openSource, type Source, type StreamMeta } from "../replay/source.ts"
 

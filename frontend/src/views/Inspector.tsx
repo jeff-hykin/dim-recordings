@@ -1,7 +1,24 @@
-// The selected recording, right of the list: its actions (Replay first; the rest fold into ⋯ as the pane narrows) and
-// name, a big preview that cycles its camera streams and its odometry path from above, the facts with its notes under
-// them, and Streams (with each stream's coverage over time) / TF frames / Warnings tabs.
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react"
+// The selected recording, right of the list: its actions (Replay first; the rest in ⋯ on a narrow pane) and name, a
+// big preview that cycles its camera streams and its odometry path from above, the facts with its notes under them,
+// and Streams (with each stream's coverage over time) / TF frames / Warnings tabs.
+import { type ReactNode, useEffect, useRef, useState } from "react"
+import {
+    Alert,
+    Badge,
+    Button,
+    Chip,
+    IconButton,
+    KeyValue,
+    Menu,
+    Progress,
+    Segmented,
+    Table,
+    Tabs,
+    Text,
+    TextArea,
+    Tree,
+    useMediaQuery,
+} from "dimos-react"
 import {
     api,
     bytes,
@@ -10,12 +27,27 @@ import {
     type Inspection,
     type Job,
     type Recording,
+    type TfTree,
     type Upload,
     type Warning,
 } from "../api.ts"
 import { type Overview, replayApi, type Timeline } from "../replay/api.ts"
-import { FloatMenu, type MenuItem, Thumbnail } from "../ui.tsx"
-import { Tree } from "./SummaryPanel.tsx"
+import { metres, Thumbnail } from "./Thumbnail.tsx"
+
+/** A dimos-react Menu item. */
+export type MenuItem =
+    | {
+        label: string
+        icon?: string
+        title?: string
+        shortcut?: string
+        disabled?: boolean
+        danger?: boolean
+        checked?: boolean
+        onSelect: () => void
+    }
+    | "-"
+    | { heading: string }
 
 export type InspectorActions = {
     replay: () => void
@@ -29,8 +61,14 @@ export type InspectorActions = {
 }
 
 /** what Upload reads as: idle, or where its upload is (a percentage only when real byte counts arrive) */
-export function uploadLabel(upload: Upload | undefined, waitingForLogin: boolean): string {
-    if (!upload || upload.state === "done" || upload.state === "failed" || upload.state === "cancelled") {
+export function uploadLabel(
+    upload: Upload | undefined,
+    waitingForLogin: boolean,
+): string {
+    if (
+        !upload || upload.state === "done" || upload.state === "failed" ||
+        upload.state === "cancelled"
+    ) {
         return "Upload"
     }
     if (upload.state === "queued") {
@@ -38,89 +76,6 @@ export function uploadLabel(upload: Upload | undefined, waitingForLogin: boolean
     }
     const known = upload.bytesTotal > 0 && upload.bytesDone > 0
     return known ? `Uploading ${Math.floor((upload.bytesDone / upload.bytesTotal) * 100)}%` : "Uploading…"
-}
-
-type Action = { id: string; label: string; className?: string; keep?: boolean; run: () => void; menu?: MenuItem[] }
-
-/** The header's buttons, left to right; when they don't fit, the last ones go into ⋯ first (Replay never does). */
-function Actions({ actions, extra, room }: { actions: Action[]; extra: MenuItem[]; room: number }) {
-    const box = useRef<HTMLDivElement>(null)
-    const [hidden, setHidden] = useState<string[]>([])
-    const [menu, setMenu] = useState<{ anchor: HTMLElement; items: MenuItem[] } | null>(null)
-    useLayoutEffect(() => {
-        const el = box.current
-        if (!el) {
-            return
-        }
-        const buttons = [...el.querySelectorAll<HTMLElement>("[data-action]")]
-        buttons.forEach((b) => (b.hidden = false))
-        const gone: string[] = []
-        for (const action of [...actions].reverse()) {
-            if (el.scrollWidth <= room + 1 || action.keep) {
-                break
-            }
-            const button = buttons.find((b) => b.dataset.action === action.id)
-            if (button) {
-                button.hidden = true
-                gone.push(action.id)
-            }
-        }
-        setHidden((current) => current.join() === gone.join() ? current : gone)
-    }, [room, actions.map((a) => a.label).join()])
-    const overflow = (): MenuItem[] => {
-        const folded = actions.filter((a) => hidden.includes(a.id))
-        const items: MenuItem[] = []
-        for (const action of folded.filter((a) => !a.menu)) {
-            items.push({
-                label: action.label.replace(/^▶ /, ""),
-                danger: action.className?.includes("delete"),
-                onSelect: action.run,
-            })
-        }
-        for (const action of folded.filter((a) => a.menu)) {
-            items.push({ heading: action.label.replace(/ ▾$/, "") }, ...action.menu!)
-        }
-        return items
-    }
-    return (
-        <div className="acts" ref={box} style={{ maxWidth: room }}>
-            {actions.map((action) => (
-                <button
-                    key={action.id}
-                    type="button"
-                    data-action={action.id}
-                    className={`dim-btn sm ${action.className ?? ""}`}
-                    aria-haspopup={action.menu ? "menu" : undefined}
-                    data-testid={`action-${action.id}`}
-                    onClick={(event) =>
-                        action.menu ? setMenu({ anchor: event.currentTarget, items: action.menu }) : action.run()}
-                >
-                    {action.label}
-                </button>
-            ))}
-            <button
-                type="button"
-                className="dim-btn sm icon"
-                aria-label="More actions"
-                aria-haspopup="menu"
-                data-testid="action-more"
-                onClick={(event) => {
-                    const folded = overflow()
-                    setMenu({
-                        anchor: event.currentTarget,
-                        items: [
-                            ...folded,
-                            ...(folded.length && extra.length ? [{ separator: true } as const] : []),
-                            ...extra,
-                        ],
-                    })
-                }}
-            >
-                ⋯
-            </button>
-            {menu && <FloatMenu at={{ anchor: menu.anchor }} items={menu.items} onClose={() => setMenu(null)} />}
-        </div>
-    )
 }
 
 /** The recording's sensors, by kind, as chips: "3× cam", "lidar", "2× odom", "imu", "tf". */
@@ -136,32 +91,41 @@ function sensorChips(overview: Overview | null): string[] {
         ["imu", count((s) => /imu/i.test(s.type) || /(^|\/|_)imu/i.test(s.name))],
         ["tf", count((s) => s.kind === "tf")],
     ]
-    return kinds.filter(([, n]) => n > 0).map(([label, n]) => (n > 1 && label !== "tf" ? `${n}× ${label}` : label))
+    return kinds.filter(([, n]) => n > 0).map((
+        [label, n],
+    ) => (n > 1 && label !== "tf" ? `${n}× ${label}` : label))
 }
 
-type View = { kind: "camera"; stream: string; hz: number } | { kind: "path"; stream: string }
+type View = { kind: "camera"; stream: string; hz: number } | {
+    kind: "path"
+    stream: string
+}
 
 /** the cameras (the preview's own camera first) and, when there's a pose stream, the path from above */
-function viewsOf(overview: Overview | null, inspection: Inspection | null, recording: Recording): View[] {
+function viewsOf(
+    overview: Overview | null,
+    inspection: Inspection | null,
+    recording: Recording,
+): View[] {
     const rate = (name: string) => inspection?.streams.find((s) => s.name === name)?.hz ?? 0
     const main = recording.thumbnail.state === "ready" ? recording.thumbnail.stream : null
     const cameras = (overview?.streams ?? [])
         .filter((s) => s.kind === "image" && s.count > 0)
-        .sort((a, b) => Number(b.name === main) - Number(a.name === main) || a.name.localeCompare(b.name))
+        .sort((a, b) =>
+            Number(b.name === main) - Number(a.name === main) ||
+            a.name.localeCompare(b.name)
+        )
         .map((s): View => ({ kind: "camera", stream: s.name, hz: rate(s.name) }))
     const poses = (overview?.streams ?? []).filter((s) => s.kind === "pose" && s.count > 1)
     const thumb = recording.thumbnail
     const pathStream = thumb.state === "path" && poses.some((s) => s.name === thumb.stream)
         ? thumb.stream
         : [...poses].sort((a, b) =>
-            Number(/odom|path|pose/i.test(b.name)) - Number(/odom|path|pose/i.test(a.name)) || b.count - a.count
+            Number(/odom|path|pose/i.test(b.name)) -
+                Number(/odom|path|pose/i.test(a.name)) || b.count - a.count
         )[0]?.name
     return pathStream ? [...cameras, { kind: "path", stream: pathStream }] : cameras
 }
-
-/** "12 m", "1.4 km" */
-const metres = (value: number) =>
-    value >= 1000 ? `${(value / 1000).toFixed(1)} km` : `${value < 10 ? value.toFixed(1) : Math.round(value)} m`
 
 // routes already read this session (each read decodes a few hundred messages: seconds on a big file)
 const routes = new Map<string, Promise<[number, number][]>>()
@@ -176,7 +140,10 @@ function PathView({ id, stream }: { id: string; stream: string }) {
         setError(null)
         const key = `${id}\n${stream}`
         if (!routes.has(key)) {
-            routes.set(key, replayApi.path(id, stream, 400).then((path) => path.points.map(([, x, y]) => [x, y])))
+            routes.set(
+                key,
+                replayApi.path(id, stream, 400).then((path) => path.points.map(([, x, y]) => [x, y])),
+            )
         }
         routes.get(key)!.then(
             (route) => live && setPoints(route),
@@ -189,18 +156,22 @@ function PathView({ id, stream }: { id: string; stream: string }) {
             live = false
         }
     }, [id, stream])
-    if (error) {
-        return <div className="preview-note muted mono">{error}</div>
-    }
-    if (!points) {
-        return <div className="preview-note muted mono">reading {stream}'s route…</div>
-    }
-    if (points.length < 2) {
-        return <div className="preview-note muted mono">{stream} has no positions</div>
+    if (error || !points || points.length < 2) {
+        return (
+            <Text small muted mono className="rec-preview-note">
+                {error ??
+                    (!points ? `reading ${stream}'s route…` : `${stream} has no positions`)}
+            </Text>
+        )
     }
     const xs = points.map((p) => p[0])
     const ys = points.map((p) => p[1])
-    const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]
+    const [minX, maxX, minY, maxY] = [
+        Math.min(...xs),
+        Math.max(...xs),
+        Math.min(...ys),
+        Math.max(...ys),
+    ]
     const extent = Math.max(maxX - minX, maxY - minY, 0.01)
     const [w, h, pad] = [320, 180, 14]
     const scale = (Math.min(w, h) - 2 * pad) / extent
@@ -211,24 +182,38 @@ function PathView({ id, stream }: { id: string; stream: string }) {
     const [ex, ey] = at(points[points.length - 1])
     let length = 0
     for (let i = 1; i < points.length; i++) {
-        length += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1])
+        length += Math.hypot(
+            points[i][0] - points[i - 1][0],
+            points[i][1] - points[i - 1][1],
+        )
     }
     return (
         <>
-            <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet" aria-label={`${stream} from above`}>
-                <path d={line} className="path-line" />
-                <circle cx={sx} cy={sy} r="3.6" className="path-start" />
-                <circle cx={ex} cy={ey} r="4" className="path-end" />
+            <svg
+                viewBox={`0 0 ${w} ${h}`}
+                preserveAspectRatio="xMidYMid meet"
+                aria-label={`${stream} from above`}
+            >
+                <path d={line} className="rec-path-line" />
+                <circle cx={sx} cy={sy} r="3.6" className="rec-path-start" />
+                <circle cx={ex} cy={ey} r="4" className="rec-path-end" />
             </svg>
-            <span className="tag">
+            <Badge className="rec-preview-tag">
                 {stream} · top-down · {metres(length)} of path, {metres(extent)} across
-            </span>
+            </Badge>
         </>
     )
 }
 
 /** Another camera than the preview's: one real frame at the hovered time (the middle until hovered). */
-function CameraFrame({ id, stream, hz, span }: { id: string; stream: string; hz: number; span: number }) {
+function CameraFrame(
+    { id, stream, hz, span }: {
+        id: string
+        stream: string
+        hz: number
+        span: number
+    },
+) {
     const [t, setT] = useState(span / 2)
     const [shown, setShown] = useState(span / 2)
     const [failed, setFailed] = useState(false)
@@ -244,57 +229,69 @@ function CameraFrame({ id, stream, hz, span }: { id: string; stream: string; hz:
     }, [t])
     return (
         <div
-            className="camera-frame"
+            className="rec-camera-frame"
             onPointerMove={(event) => {
                 const rect = event.currentTarget.getBoundingClientRect()
-                setT(Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * span)
+                setT(
+                    Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) *
+                        span,
+                )
             }}
         >
-            {failed ? <div className="preview-note muted mono">no frame from {stream} here</div> : (
-                <img
-                    src={replayApi.frameUrl(id, stream, shown)}
-                    alt={`${stream} at ${shown.toFixed(1)} s`}
-                    onError={() => setFailed(true)}
-                    onLoad={() => setFailed(false)}
-                />
-            )}
-            <span className="thumb-bar" style={{ width: `${span ? (t / span) * 100 : 0}%` }} />
-            <span className="tag">{stream}{hz ? ` · ${hz.toFixed(1)} Hz` : ""}</span>
+            {failed
+                ? (
+                    <Text small muted mono className="rec-preview-note">
+                        no frame from {stream} here
+                    </Text>
+                )
+                : (
+                    <img
+                        src={replayApi.frameUrl(id, stream, shown)}
+                        alt={`${stream} at ${shown.toFixed(1)} s`}
+                        onError={() => setFailed(true)}
+                        onLoad={() => setFailed(false)}
+                    />
+                )}
+            <span
+                className="rec-thumb-bar"
+                style={{ width: `${span ? (t / span) * 100 : 0}%` }}
+            />
+            <Badge className="rec-preview-tag">
+                {stream}
+                {hz ? ` · ${hz.toFixed(1)} Hz` : ""}
+            </Badge>
         </div>
     )
 }
 
-function Preview(
-    { recording, overview, inspection, version, span }: {
-        recording: Recording
-        overview: Overview | null
-        inspection: Inspection | null
-        version: number
-        span: number
-    },
-) {
+function Preview({ recording, overview, inspection, version, span }: {
+    recording: Recording
+    overview: Overview | null
+    inspection: Inspection | null
+    version: number
+    span: number
+}) {
     const views = viewsOf(overview, inspection, recording)
     const [index, setIndex] = useState(0)
-    const strip = useRef<HTMLDivElement>(null)
     useEffect(() => setIndex(0), [recording.id])
     const view = views[Math.min(index, Math.max(0, views.length - 1))]
     const step = (by: number) => views.length && setIndex((i) => (i + by + views.length) % views.length)
-    useEffect(() => {
-        strip.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" })
-    }, [index])
     const clock = (fraction: number) =>
-        new Date((recording.recorded + span * fraction) * 1000).toLocaleTimeString([], {
-            hour: "numeric",
-            minute: "2-digit",
-            second: "2-digit",
-        })
+        new Date((recording.recorded + span * fraction) * 1000).toLocaleTimeString(
+            [],
+            {
+                hour: "numeric",
+                minute: "2-digit",
+                second: "2-digit",
+            },
+        )
     const thumb = recording.thumbnail
     let body: ReactNode
     if (!view) {
         body = (
-            <div className="preview-note muted mono">
+            <Text small muted mono className="rec-preview-note">
                 {overview ? "no camera or pose stream to show" : thumb.state === "pending" ? "preview…" : "reading…"}
-            </div>
+            </Text>
         )
     } else if (view.kind === "path") {
         body = <PathView id={recording.id} stream={view.stream} />
@@ -302,19 +299,26 @@ function Preview(
         body = (
             <>
                 <Thumbnail id={recording.id} thumb={thumb} version={version} />
-                <span className="tag">
+                <Badge className="rec-preview-tag">
                     {view.stream}
                     {view.hz ? ` · ${view.hz.toFixed(1)} Hz` : ""} · start, middle, end
-                </span>
+                </Badge>
             </>
         )
     } else {
-        body = <CameraFrame id={recording.id} stream={view.stream} hz={view.hz} span={span} />
+        body = (
+            <CameraFrame
+                id={recording.id}
+                stream={view.stream}
+                hz={view.hz}
+                span={span}
+            />
+        )
     }
     return (
-        <div className="preview-col">
+        <div className="rec-preview-col">
             <div
-                className="film big"
+                className="rec-film"
                 tabIndex={0}
                 aria-label="Preview; the arrow keys switch view"
                 data-testid="preview"
@@ -329,34 +333,41 @@ function Preview(
                 {body}
             </div>
             {span > 0 && (
-                <div className="ticks mono">
-                    <span>{clock(0)}</span>
-                    <span>{clock(0.5)}</span>
-                    <span>{clock(1)}</span>
+                <div className="rec-ticks">
+                    <Text small muted mono>{clock(0)}</Text>
+                    <Text small muted mono>{clock(0.5)}</Text>
+                    <Text small muted mono>{clock(1)}</Text>
                 </div>
             )}
             {views.length > 0 && (
-                <div className="views">
-                    <button type="button" className="dim-btn sm" aria-label="Previous view" onClick={() => step(-1)}>
-                        ‹
-                    </button>
-                    <div className="seg" ref={strip} role="group" aria-label="view">
-                        {views.map((v, i) => (
-                            <button
-                                key={`${v.kind}:${v.stream}`}
-                                type="button"
-                                className="dim-btn sm"
-                                aria-pressed={v === view}
-                                onClick={() => setIndex(i)}
-                            >
-                                <span className="k">{v.kind === "camera" ? "CAM" : "MAP"}</span>
-                                {v.kind === "camera" ? v.stream : "Odom path"}
-                            </button>
-                        ))}
-                    </div>
-                    <button type="button" className="dim-btn sm" aria-label="Next view" onClick={() => step(1)}>
-                        ›
-                    </button>
+                <div className="rec-row-flex rec-views">
+                    <IconButton
+                        icon="chevron-left"
+                        size="sm"
+                        label="Previous view"
+                        onClick={() => step(-1)}
+                    />
+                    <Segmented
+                        size="sm"
+                        className="rec-views-strip"
+                        label="view"
+                        value={view ? `${view.kind}:${view.stream}` : ""}
+                        items={views.map((v) => ({
+                            value: `${v.kind}:${v.stream}`,
+                            icon: v.kind === "camera" ? "camera" : "map",
+                            label: v.kind === "camera" ? v.stream : "Odom path",
+                        }))}
+                        onChange={(value: string) =>
+                            setIndex(
+                                views.findIndex((v) => `${v.kind}:${v.stream}` === value),
+                            )}
+                    />
+                    <IconButton
+                        icon="chevron-right"
+                        size="sm"
+                        label="Next view"
+                        onClick={() => step(1)}
+                    />
                 </div>
             )}
         </div>
@@ -394,90 +405,217 @@ function coverage(counts: number[]) {
     return { runs: runs.map(share), drops: drops.map(share) }
 }
 
-function StreamsPane(
-    { inspection, timeline, warnings }: {
-        inspection: Inspection
-        timeline: Timeline | null
-        warnings: Warning[]
-    },
-) {
+function StreamsPane({ inspection, timeline, warnings }: {
+    inspection: Inspection
+    timeline: Timeline | null
+    warnings: Warning[]
+}) {
     const flagged = new Set(warnings.map((w) => w.stream).filter(Boolean))
-    const rows = [...inspection.streams].sort((a, b) => a.name.localeCompare(b.name))
+    type Row = Inspection["streams"][number]
     return (
         <>
-            <div className="scroll">
-                <table className="streams-table" data-testid="streams">
-                    <thead>
-                        <tr>
-                            <th>Topic</th>
-                            <th className="t-type">Type</th>
-                            <th className="num">Count</th>
-                            <th className="num">Hz</th>
-                            <th className="num">Max gap</th>
-                            <th className="cov">Coverage</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((s) => {
+            <Table
+                compact
+                sticky
+                data-testid="streams"
+                rowKey="name"
+                defaultSort={{ key: "name", dir: "asc" }}
+                rows={inspection.streams}
+                columns={[
+                    {
+                        key: "name",
+                        label: "Topic",
+                        render: (s: Row) => (
+                            <Text
+                                mono
+                                small
+                                title={`${s.name}: ${s.type} (${s.encoding})`}
+                                tone={flagged.has(s.name) ? "warn" : undefined}
+                            >
+                                {flagged.has(s.name) ? "⚠ " : ""}
+                                {s.name}
+                            </Text>
+                        ),
+                    },
+                    {
+                        key: "type",
+                        label: "Type",
+                        render: (s: Row) => (
+                            <Text small muted title={s.type}>
+                                {s.type.split(/[./]/).pop()}
+                            </Text>
+                        ),
+                    },
+                    {
+                        key: "count",
+                        label: "Count",
+                        align: "right",
+                        render: (s: Row) => <Text mono small>{s.count.toLocaleString()}</Text>,
+                    },
+                    {
+                        key: "hz",
+                        label: "Hz",
+                        align: "right",
+                        render: (s: Row) => <Text mono small>{s.hz > 0 ? s.hz.toFixed(1) : "—"}</Text>,
+                    },
+                    {
+                        key: "maxGap",
+                        label: "Max gap",
+                        align: "right",
+                        render: (s: Row) => <Text mono small>{gap(s.maxGap)}</Text>,
+                    },
+                    {
+                        key: "coverage",
+                        label: "Coverage",
+                        sort: false,
+                        width: "34%",
+                        render: (s: Row) => {
                             const row = timeline?.streams.find((t) => t.name === s.name)
                             const cov = row ? coverage(row.counts) : null
-                            const bad = flagged.has(s.name)
-                            return (
-                                <tr key={s.name} className={`${bad ? "flagged" : ""} ${s.count ? "" : "empty-stream"}`}>
-                                    <td className="mono topic" title={`${s.name}: ${s.type} (${s.encoding})`}>
-                                        {bad && <span aria-label="has a warning">⚠</span>}
-                                        {s.name}
-                                    </td>
-                                    <td className="muted t-type" title={s.type}>{s.type.split(/[./]/).pop()}</td>
-                                    <td className="num mono">{s.count.toLocaleString()}</td>
-                                    <td className="num mono">{s.hz > 0 ? s.hz.toFixed(1) : "—"}</td>
-                                    <td className="num mono">{gap(s.maxGap)}</td>
-                                    <td className="cov">
-                                        {cov
-                                            ? (
-                                                <div className="covbar" aria-label={`${s.name} over time`}>
-                                                    {cov.runs.map((style, i) => <i key={i} style={style} />)}
-                                                    {cov.drops.map((style, i) => <b key={`d${i}`} style={style} />)}
-                                                </div>
-                                            )
-                                            : <div className="covbar loading" />}
-                                    </td>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </table>
-            </div>
-            <div className="legend small muted">
-                <span>
-                    <i className="lg-msg" />messages
-                </span>
-                <span>
-                    <i className="lg-gap" />gap
-                </span>
-                <span>
-                    <i className="lg-drop" />rate drop
-                </span>
-                {!timeline && <span>reading coverage…</span>}
+                            return cov
+                                ? (
+                                    <div
+                                        className="rec-covbar"
+                                        aria-label={`${s.name} over time`}
+                                    >
+                                        {cov.runs.map((style, i) => <i key={i} style={style} />)}
+                                        {cov.drops.map((style, i) => <b key={`d${i}`} style={style} />)}
+                                    </div>
+                                )
+                                : <Progress />
+                        },
+                    },
+                ]}
+            />
+            <div className="rec-row-flex rec-legend">
+                <Text small muted>
+                    <i className="rec-lg-msg" />messages
+                </Text>
+                <Text small muted>
+                    <i className="rec-lg-gap" />gap
+                </Text>
+                <Text small muted>
+                    <i className="rec-lg-drop" />rate drop
+                </Text>
+                {!timeline && <Text small muted>reading coverage…</Text>}
             </div>
         </>
     )
 }
 
-function WarningList({ warnings }: { warnings: Warning[] }) {
+const rate = (
+    hz: number,
+) => (hz >= 10 ? `${Math.round(hz)} Hz` : `${hz.toFixed(1)} Hz`)
+/** +m:ss after the recording's start */
+function offset(seconds: number): string {
+    const s = Math.max(0, Math.round(seconds))
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const ss = String(s % 60).padStart(2, "0")
+    return h ? `+${h}:${String(m).padStart(2, "0")}:${ss}` : `+${m}:${ss}`
+}
+
+/** The tf frames as a tree, each child with its transform's rate (or static) and, when it stops early, when. */
+function TfPane(
+    { tf, start, warnings }: {
+        tf: TfTree
+        start: number | null
+        warnings: Warning[]
+    },
+) {
+    if (!tf.source) {
+        return <Text small muted>No tf stream.</Text>
+    }
+    if (!tf.edges.length) {
+        return <Text small muted>No frames in {tf.source}.</Text>
+    }
+    const children = new Map<string, TfTree["edges"]>()
+    for (const edge of tf.edges) {
+        children.set(edge.parent, [...(children.get(edge.parent) ?? []), edge])
+    }
+    const conflicted = new Set(tf.conflicts.map((c) => c.frame))
+    const flagged = new Set(
+        warnings.filter((w) => w.message.startsWith("TF:") && w.frame).map((w) => w.frame!),
+    )
+    const end = Math.max(...tf.edges.map((edge) => edge.last))
+    type Node = {
+        id: string
+        label: ReactNode
+        badge?: ReactNode
+        children?: Node[]
+    }
+    const meta = (edge: TfTree["edges"][number]) => {
+        if (edge.static) {
+            return "static"
+        }
+        const parts = [edge.hz > 0 ? rate(edge.hz) : `${edge.count}×`]
+        if (
+            start !== null &&
+            end - edge.last > Math.max(1, edge.hz > 0 ? 10 / edge.hz : 1)
+        ) {
+            parts.push(`until ${offset(edge.last - start)}`)
+        }
+        return parts.join(" · ")
+    }
+    const node = (
+        frame: string,
+        edge: TfTree["edges"][number] | null,
+        path: Set<string>,
+    ): Node => {
+        const bad = conflicted.has(frame) || flagged.has(frame)
+        const kids = path.has(frame) ? [] : (children.get(frame) ?? []).sort((a, b) => a.child.localeCompare(b.child))
+        const next = new Set(path).add(frame)
+        return {
+            id: [...next].join("/"),
+            label: (
+                <Text mono small tone={bad ? "warn" : undefined}>
+                    {frame}
+                    {conflicted.has(frame) ? " (2 parents)" : ""}
+                </Text>
+            ),
+            badge: edge ? <Text mono small muted>{meta(edge)}</Text> : undefined,
+            children: kids.length ? kids.map((kid) => node(kid.child, kid, next)) : undefined,
+        }
+    }
+    const roots = tf.roots.length ? tf.roots : [tf.edges[0].parent]
+    const frames = new Set(tf.edges.flatMap((edge) => [edge.parent, edge.child])).size
+    return (
+        <>
+            <Text small muted mono as="p">
+                {tf.source} · {frames} frames · {tf.messages.toLocaleString()} {tf.messages === 1 ? "msg" : "msgs"}
+                {tf.coverage && tf.coverage !== "all of it" ? ` · read ${tf.coverage}` : ""}
+            </Text>
+            <div data-testid="tf-tree">
+                <Tree
+                    nodes={roots.map((root) => node(root, null, new Set()))}
+                    defaultExpanded="all"
+                />
+            </div>
+            {tf.conflicts.map((c) => (
+                <Text key={c.frame} small mono tone="warn" as="p">
+                    {c.frame} ← {c.parents.map((p) => `${p.parent} (${p.count})`).join(" | ")}
+                </Text>
+            ))}
+        </>
+    )
+}
+
+function WarningList(
+    { warnings, limit }: { warnings: Warning[]; limit?: number },
+) {
     if (!warnings.length) {
         return (
-            <div className="note ok-note" data-testid="no-issues">
-                <b>Nothing to flag</b> <span>no gaps, rate drops or tf problems found</span>
-            </div>
+            <Alert tone="ok" title="Nothing to flag" data-testid="no-issues">
+                no gaps, rate drops or tf problems found
+            </Alert>
         )
     }
     return (
-        <div className="warning-list" data-testid="warnings">
-            {warnings.map((w, i) => (
-                <div key={i} className="note warn-note" data-kind={w.kind}>
-                    <b>{w.message}</b> <span className="mono">{w.detail}</span>
-                </div>
+        <div className="rec-warnings" data-testid="warnings">
+            {warnings.slice(0, limit ?? warnings.length).map((w, i) => (
+                <Alert key={i} tone="warn" title={w.message} data-kind={w.kind}>
+                    <Text mono small>{w.detail}</Text>
+                </Alert>
             ))}
         </div>
     )
@@ -486,7 +624,7 @@ function WarningList({ warnings }: { warnings: Warning[] }) {
 type Tab = "streams" | "tf" | "warnings"
 
 export function Inspector(
-    { recording, actions, upload, waitingForLogin, jobs, version, onBack, renaming, onRenamed, onCancelRename }: {
+    { recording, actions, upload, waitingForLogin, jobs, version, onBack }: {
         recording: Recording
         actions: InspectorActions
         upload: Upload | undefined
@@ -494,10 +632,6 @@ export function Inspector(
         jobs: Job[]
         version: number
         onBack: () => void
-        /** the name is being edited in place */
-        renaming: boolean
-        onRenamed: (name: string) => void
-        onCancelRename: () => void
     },
 ) {
     const [inspection, setInspection] = useState<Inspection | null>(null)
@@ -508,10 +642,8 @@ export function Inspector(
     const [note, setNote] = useState(recording.note)
     const [saved, setSaved] = useState<"saved" | "saving…" | null>(null)
     const noteTimer = useRef<number | undefined>(undefined)
-    const head = useRef<HTMLDivElement>(null)
-    const who = useRef<HTMLDivElement>(null)
-    const nameRef = useRef<HTMLDivElement>(null)
-    const [room, setRoom] = useState(600)
+    const narrow = useMediaQuery("(max-width: 1100px)")
+    const phone = useMediaQuery("(max-width: 760px)")
 
     useEffect(() => {
         let live = true
@@ -526,16 +658,16 @@ export function Inspector(
             (e) => live && setError(String(e.message ?? e)),
         )
         // the stream kinds (the preview's cameras and pose streams), then their coverage: both read the file's index
-        replayApi.overview(recording.id).then(
-            (o) => {
-                if (!live) {
-                    return
-                }
-                setOverview(o)
-                replayApi.timeline(recording.id, 160).then((t) => live && setTimeline(t), () => {})
-            },
-            () => {},
-        )
+        replayApi.overview(recording.id).then((o) => {
+            if (!live) {
+                return
+            }
+            setOverview(o)
+            replayApi.timeline(recording.id, 160).then(
+                (t) => live && setTimeline(t),
+                () => {},
+            )
+        }, () => {})
         return () => {
             live = false
         }
@@ -545,52 +677,6 @@ export function Inspector(
             setNote(recording.note)
         }
     }, [recording.note])
-
-    // the room the actions get: the header's width less the name's (at least 200 px of it); a phone stacks them
-    useLayoutEffect(() => {
-        const el = head.current
-        if (!el) {
-            return
-        }
-        const fit = () => {
-            const style = getComputedStyle(el)
-            const inner = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
-            const stacked = matchMedia("(max-width: 760px)").matches
-            const name = Math.max(200, Math.min(320, who.current?.scrollWidth ?? 200))
-            setRoom(Math.max(80, stacked ? inner : inner - 16 - name))
-        }
-        const observer = new ResizeObserver(fit)
-        observer.observe(el)
-        fit()
-        return () => observer.disconnect()
-    }, [])
-
-    // rename in place: the name's text is selected up to its extension
-    useEffect(() => {
-        const el = nameRef.current
-        if (!renaming || !el) {
-            return
-        }
-        el.textContent = recording.name
-        el.focus()
-        const dot = recording.name.lastIndexOf(".")
-        const range = document.createRange()
-        range.setStart(el.firstChild ?? el, 0)
-        range.setEnd(el.firstChild ?? el, dot > 0 ? dot : recording.name.length)
-        getSelection()?.removeAllRanges()
-        getSelection()?.addRange(range)
-    }, [renaming])
-    const finishRename = (keep: boolean) => {
-        const text = nameRef.current?.textContent?.trim() ?? ""
-        if (keep && text && text !== recording.name) {
-            onRenamed(text)
-        } else {
-            if (nameRef.current) {
-                nameRef.current.textContent = recording.name
-            }
-            onCancelRename()
-        }
-    }
 
     const saveNote = (text: string) => {
         clearTimeout(noteTimer.current)
@@ -605,75 +691,157 @@ export function Inspector(
 
     const busy = upload?.state === "queued" || upload?.state === "uploading"
     const link = upload?.state === "done" ? upload.link : recording.uploaded?.link
-    const list: Action[] = [
-        { id: "replay", label: "▶ Replay", className: "primary", keep: true, run: actions.replay },
-        { id: "rename", label: "Rename", run: actions.rename },
-        link && !busy
-            ? { id: "upload", label: "View upload ↗", run: () => globalThis.open(link, "_blank", "noreferrer") }
-            : { id: "upload", label: uploadLabel(upload, waitingForLogin), className: "upload", run: actions.upload },
-        { id: "delete", label: "Delete", className: "delete", run: actions.remove },
-        ...(actions.opens.length ? [{ id: "open", label: "Open with ▾", run: () => {}, menu: actions.opens }] : []),
-    ]
     const warnings = inspection?.warnings ?? []
     // the list's row trails a fresh inspection by a refresh: the inspection's own numbers win
     const span = Math.max(0, recording.duration ?? inspection?.duration ?? 0)
-    const summary = recording.error ?? inspection?.error ?? recording.summary ?? inspection?.summary ?? null
+    const summary = recording.error ?? inspection?.error ?? recording.summary ??
+        inspection?.summary ?? null
     const chips = sensorChips(overview)
     const running = jobs.filter((j) => j.recording === recording.id && j.state === "running")
+    const uploadAction = link && !busy
+        ? {
+            label: "View upload",
+            icon: "external",
+            onSelect: () => globalThis.open(link, "_blank", "noreferrer"),
+        }
+        : {
+            label: uploadLabel(upload, waitingForLogin),
+            icon: "upload",
+            onSelect: actions.upload,
+        }
+    // a narrow pane folds Rename / Upload / Delete / Open with into ⋯ (Replay stays)
+    const folded: MenuItem[] = narrow
+        ? [
+            { label: "Rename", icon: "edit", onSelect: actions.rename },
+            uploadAction,
+            {
+                label: "Delete",
+                icon: "trash",
+                danger: true,
+                onSelect: actions.remove,
+            },
+            ...(actions.opens.length ? ["-" as const, { heading: "Open with" }, ...actions.opens] : []),
+            "-",
+        ]
+        : []
 
     return (
-        <section className="detail" aria-label={`${recording.name}`} data-testid="inspector">
-            <div className="dhead" ref={head}>
-                <Actions actions={list} extra={actions.more} room={room} />
-                <div className="who" ref={who}>
-                    <button type="button" className="dim-btn sm ghost back" onClick={onBack}>
-                        ← All
-                    </button>
-                    <div>
-                        <div
-                            ref={nameRef}
-                            className="name mono"
+        <section
+            className="rec-detail"
+            aria-label={recording.name}
+            data-testid="inspector"
+        >
+            <header className="rec-detail-head">
+                <div className="rec-who">
+                    {phone && (
+                        <IconButton
+                            icon="arrow-left"
+                            label="All recordings"
+                            onClick={onBack}
+                        />
+                    )}
+                    <div className="rec-who-text">
+                        <Text
+                            className="rec-name"
+                            mono
                             data-testid="recording-name"
-                            contentEditable={renaming ? "plaintext-only" : false}
-                            suppressContentEditableWarning
                             title={recording.path}
-                            onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                    event.preventDefault()
-                                    finishRename(true)
-                                } else if (event.key === "Escape") {
-                                    event.preventDefault()
-                                    event.stopPropagation()
-                                    finishRename(false)
-                                }
-                            }}
-                            onBlur={() => renaming && finishRename(true)}
                         >
                             {recording.name}
-                        </div>
-                        <div className="sub small">
-                            <span>{recording.error || inspection?.error ? "unreadable" : summary ?? "reading…"}</span>
-                            <span className="dim-badge">.{recording.format}</span>
-                            {recording.symlink && (
-                                <span className="dim-badge" title="a symlink to a file elsewhere">link</span>
-                            )}
+                        </Text>
+                        <div className="rec-row-flex">
+                            <Text small muted>
+                                {recording.error || inspection?.error ? "unreadable" : summary ?? "reading…"}
+                            </Text>
+                            <Badge>.{recording.format}</Badge>
+                            {recording.symlink && <Badge title="a symlink to a file elsewhere">link</Badge>}
                         </div>
                     </div>
                 </div>
-            </div>
+                <div className="rec-row-flex rec-acts">
+                    <Button
+                        variant="primary"
+                        icon="play"
+                        size="sm"
+                        data-testid="action-replay"
+                        onClick={actions.replay}
+                    >
+                        Replay
+                    </Button>
+                    {!narrow && (
+                        <>
+                            <Button
+                                size="sm"
+                                icon="edit"
+                                data-testid="action-rename"
+                                onClick={actions.rename}
+                            >
+                                Rename
+                            </Button>
+                            <Button
+                                size="sm"
+                                icon={uploadAction.icon}
+                                loading={busy}
+                                data-testid="action-upload"
+                                onClick={uploadAction.onSelect}
+                            >
+                                {uploadAction.label}
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="danger"
+                                icon="trash"
+                                data-testid="action-delete"
+                                onClick={actions.remove}
+                            >
+                                Delete
+                            </Button>
+                            {actions.opens.length > 0 && (
+                                <Menu
+                                    placement="bottom-end"
+                                    items={actions.opens}
+                                    trigger={
+                                        <Button
+                                            size="sm"
+                                            iconRight="chevron-down"
+                                            data-testid="action-open"
+                                        >
+                                            Open with
+                                        </Button>
+                                    }
+                                />
+                            )}
+                        </>
+                    )}
+                    <Menu
+                        placement="bottom-end"
+                        items={[...folded, ...actions.more]}
+                        trigger={
+                            <IconButton
+                                icon="more-horizontal"
+                                size="sm"
+                                label="More actions"
+                                data-testid="action-more"
+                            />
+                        }
+                    />
+                </div>
+            </header>
             {running.map((job) => (
-                <div className="job-strip small" key={job.id}>
-                    <span className="muted">converting → .{job.to}</span>
-                    <div className={`dim-progress ${job.progress ? "" : "indeterminate"}`}>
-                        <span style={{ width: `${(job.progress || 0.3) * 100}%` }} />
-                    </div>
-                    <span className="muted job-phase">{job.phase}</span>
-                    <button type="button" className="dim-btn ghost sm" onClick={() => api.cancelJob(job.id)}>
+                <div className="rec-row-flex rec-job" key={job.id}>
+                    <Text small muted>converting → .{job.to}</Text>
+                    <Progress value={job.progress || undefined} className="rec-grow" />
+                    <Text small muted>{job.phase}</Text>
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => api.cancelJob(job.id)}
+                    >
                         Cancel
-                    </button>
+                    </Button>
                 </div>
             ))}
-            <div className="hero">
+            <div className="rec-hero">
                 <Preview
                     recording={recording}
                     overview={overview}
@@ -681,118 +849,129 @@ export function Inspector(
                     version={version}
                     span={span}
                 />
-                <div className="facts">
-                    <div className="kv">
-                        <span>Duration</span>
-                        <span>{span ? duration(span) : duration(recording.duration)}</span>
-                    </div>
-                    <div className="kv">
-                        <span>Size</span>
-                        <span>{bytes(recording.size)}</span>
-                    </div>
-                    <div className="kv">
-                        <span>Recorded</span>
-                        <span
-                            title={recording.recordedFrom === "mtime"
-                                ? "the file's time (no timestamps inside)"
-                                : "its first message"}
-                        >
-                            {new Date(recording.recorded * 1000).toLocaleString([], {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                                hour: "numeric",
-                                minute: "2-digit",
-                            })}
-                        </span>
-                    </div>
-                    <div className="kv">
-                        <span>Messages</span>
-                        <span>{(inspection?.messages ?? recording.messages)?.toLocaleString() ?? "…"}</span>
-                    </div>
-                    <div className="kv">
-                        <span>Sensors</span>
-                        <span className="chips">
-                            {chips.length ? chips.map((c) => <span key={c} className="dim-chip">{c}</span>) : "…"}
-                        </span>
-                    </div>
-                    {recording.rrds.length > 0 && (
-                        <div className="kv">
-                            <span>Rerun files</span>
-                            <span>{recording.rrds.map((r) => r.name).join(", ")}</span>
+                <div className="rec-facts">
+                    <KeyValue
+                        items={[
+                            [
+                                "Duration",
+                                span ? duration(span) : duration(recording.duration),
+                            ],
+                            ["Size", bytes(recording.size)],
+                            [
+                                "Recorded",
+                                <span
+                                    key="r"
+                                    title={recording.recordedFrom === "mtime"
+                                        ? "the file's time (no timestamps inside)"
+                                        : "its first message"}
+                                >
+                                    {new Date(recording.recorded * 1000).toLocaleString([], {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                    })}
+                                </span>,
+                            ],
+                            [
+                                "Messages",
+                                (inspection?.messages ?? recording.messages)
+                                    ?.toLocaleString() ?? "…",
+                            ],
+                            [
+                                "Sensors",
+                                <span key="s" className="rec-row-flex">
+                                    {chips.length ? chips.map((c) => <Chip key={c}>{c}</Chip>) : "…"}
+                                </span>,
+                            ],
+                            ...(recording.rrds.length
+                                ? [[
+                                    "Rerun files",
+                                    recording.rrds.map((r) => r.name).join(", "),
+                                ]]
+                                : []),
+                        ]}
+                    />
+                    <div className="rec-notes">
+                        <div className="rec-row-flex">
+                            <Text className="rec-group-label">Notes</Text>
+                            <Text small muted>
+                                {saved ?? "kept in the app, not the file"}
+                            </Text>
                         </div>
-                    )}
-                    <label className="notes">
-                        <span className="lab">
-                            <span className="section-head">Notes</span>
-                            <small className="muted">{saved ?? "kept in the app, not the file"}</small>
-                        </span>
-                        <textarea
-                            className="dim-textarea"
+                        <TextArea
                             rows={3}
                             placeholder="What's in this recording?"
                             value={note}
                             data-testid="notes"
-                            onChange={(event) => {
-                                setNote(event.target.value)
-                                saveNote(event.target.value)
+                            onChange={(text: string) => {
+                                setNote(text)
+                                saveNote(text)
                             }}
                         />
-                    </label>
-                    <div className="health">
-                        {!inspection ? <span className="muted small">{error ?? "reading…"}</span> : warnings.length
-                            ? (
-                                <>
-                                    {warnings.slice(0, 2).map((w, i) => (
-                                        <div key={i} className="note warn-note">
-                                            <b>{w.message}</b> <span className="mono">{w.detail}</span>
-                                        </div>
-                                    ))}
-                                    {warnings.length > 2 && (
-                                        <button
-                                            type="button"
-                                            className="dim-btn sm ghost"
-                                            onClick={() => setTab("warnings")}
-                                        >
-                                            All {warnings.length} warnings →
-                                        </button>
-                                    )}
-                                </>
-                            )
-                            : (
-                                <div className="note ok-note">
-                                    <b>Healthy</b> <span>no gaps, rate drops or tf problems found</span>
-                                </div>
-                            )}
                     </div>
+                    {!inspection ? <Text small muted>{error ?? "reading…"}</Text> : warnings.length
+                        ? (
+                            <>
+                                <WarningList warnings={warnings} limit={2} />
+                                {warnings.length > 2 && (
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        iconRight="arrow-right"
+                                        onClick={() => setTab("warnings")}
+                                    >
+                                        All {warnings.length} warnings
+                                    </Button>
+                                )}
+                            </>
+                        )
+                        : (
+                            <Alert tone="ok" title="Healthy">
+                                no gaps, rate drops or tf problems found
+                            </Alert>
+                        )}
                 </div>
             </div>
-            <div className="tabs" role="tablist">
-                {([
-                    ["streams", "Streams", inspection?.streams.length],
-                    ["tf", "TF frames", inspection?.tf.edges.length],
-                    ["warnings", "Warnings", inspection ? warnings.length : undefined],
-                ] as const).map(([key, label, n]) => (
-                    <button
-                        key={key}
-                        type="button"
-                        role="tab"
-                        aria-selected={tab === key}
-                        className={tab === key ? "on" : ""}
-                        onClick={() => setTab(key)}
-                    >
-                        {label}
-                        {n !== undefined && <span className="n">{n}</span>}
-                    </button>
-                ))}
-            </div>
-            <div className="pane">
-                {!inspection
-                    ? <p className="muted small">{error ?? "reading…"}</p>
-                    : tab === "streams"
-                    ? <StreamsPane inspection={inspection} timeline={timeline} warnings={warnings} />
+            <Tabs
+                value={tab}
+                onChange={setTab}
+                items={[
+                    {
+                        value: "streams",
+                        label: "Streams",
+                        badge: inspection?.streams.length,
+                    },
+                    {
+                        value: "tf",
+                        label: "TF frames",
+                        badge: inspection?.tf.edges.length,
+                    },
+                    {
+                        value: "warnings",
+                        label: "Warnings",
+                        badge: inspection ? warnings.length : undefined,
+                    },
+                ]}
+            />
+            <div className="rec-pane">
+                {!inspection ? <Text small muted>{error ?? "reading…"}</Text> : tab === "streams"
+                    ? (
+                        <StreamsPane
+                            inspection={inspection}
+                            timeline={timeline}
+                            warnings={warnings}
+                        />
+                    )
                     : tab === "tf"
-                    ? <Tree tf={inspection.tf} start={inspection.start} warnings={warnings} />
+                    ? (
+                        <TfPane
+                            tf={inspection.tf}
+                            start={inspection.start}
+                            warnings={warnings}
+                        />
+                    )
                     : <WarningList warnings={warnings} />}
             </div>
         </section>

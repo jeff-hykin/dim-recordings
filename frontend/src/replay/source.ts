@@ -1,66 +1,24 @@
-// The Replayer's stand-in for the Controller's gateway connection (same interface, so the Controller's layers, TF feed
-// and panels run unchanged): topics are the recording's streams, `subscribe` asks the backend's playback websocket
-// (backend/replay/player.ts) for a stream, and the clock is the playhead, not the wall. The page owns the playhead:
-// each animation frame it tells the backend where it is (`at`) and in which mode (play / scrub / pause), one request
-// in flight at a time.
-import { Store } from "./store.ts"
-
-export interface Topic {
-    /** dimos/<stream>/<type>, like the live gateway's keys */
-    key: string
-    /** the stream name with a leading slash, e.g. /lidar */
-    name: string
-    /** the message type, e.g. sensor_msgs.PointCloud2 */
-    type: string
-}
-
-export interface Message {
-    key: string
-    /** dimos LCM bytes (raw subscriptions) */
-    bytes: Uint8Array
-    /** the message's recording time, in ms */
-    timestamp: number
-    seq: number
-    /** encoding subscriptions: a cloud ({positions, intensity}) or a frame (see video.ts) */
-    decoded?: unknown
-    /** "low" while scrubbing (thumbnail image, thinned cloud), else "full" */
-    quality?: "low" | "full"
-}
-
-export interface SubscribeOptions {
-    delivery?: "latest" | "reliable"
-    priority?: number
-    maxHz?: number
-    minQuality?: number
-    /** dimos_lcm_pointcloud2 → a decoded cloud; *_image / *_depth → a decoded frame; none → LCM bytes */
-    encoding?: string
-}
-
-export const Priority = { low: 0, normal: 1, high: 2 }
-
-export function parseKey(key: string): Topic | null {
-    const parts = key.split("/")
-    if (parts.length < 3 || parts[0] !== "dimos") {
-        return null
-    }
-    return {
-        key,
-        name: "/" + parts.slice(1, -1).join("/"),
-        type: parts[parts.length - 1],
-    }
-}
-
-export const dimosKey = (topic: string, type: string) => `dimos/${topic.replace(/^\/+/, "")}/${type}`
-
-export interface ConnectionState {
-    state: "connecting" | "connected" | "degraded" | "lost"
-    topics: Topic[]
-    droppedPerSecond: number
-    rttMs: number | null
-    error: string | null
-}
+// The Replayer's data source for dimos-react (the same `{ subscribe, listTopics, state, onState, now, ... }` shape as
+// its live zenoh source, so the library's 3D layers and image views run unchanged): topics are the recording's
+// streams, `subscribe` asks the backend's playback websocket (backend/replay/player.ts) for a stream, and the clock is
+// the playhead, not the wall. The page owns the playhead: each animation frame it tells the backend where it is (`at`)
+// and in which mode (play / scrub / pause), one request in flight at a time. Backend events (frontendtopics) still come
+// from Desktop's zenoh-gateway.
+import { dimosKey, keyMatches, parseKey, zenohSource } from "dimos-react"
+import { Store, type TypedStore } from "./store.ts"
 
 export type Mode = "play" | "scrub" | "pause"
+export type ConnectionState = "connecting" | "connected" | "degraded" | "lost"
+
+export interface StreamInfo {
+    name: string
+    type: string
+    kind: "image" | "cloud" | "tf" | "pose" | "info" | "other"
+    encoding: string
+    count: number
+    start: number | null
+    end: number | null
+}
 
 export interface Playhead {
     /** recording time, seconds since the epoch (the recording's own clock) */
@@ -73,19 +31,24 @@ export interface Playhead {
     loop: boolean
 }
 
-export interface StreamInfo {
-    name: string
-    type: string
-    kind: "image" | "cloud" | "tf" | "pose" | "info" | "other"
-    encoding: string
-    count: number
-    start: number | null
-    end: number | null
+export interface Message {
+    key: string
+    /** dimos LCM bytes (raw subscriptions) */
+    bytes: Uint8Array
+    /** the message's recording time, in ms */
+    timestamp: number
+    seq: number
+    /** a cloud ({ positions, intensity, frame }) or a frame ({ kind, width, height, encoding, frame, data }) */
+    decoded?: unknown
+    /** "low" while scrubbing (thumbnail image, thinned cloud), else "full" */
+    quality?: "low" | "full"
 }
 
-/** seconds of playhead, for things that age by time (point-cloud windows): the replay clock, not the wall */
-let mediaSecondsNow = () => performance.now() / 1000
-export const mediaSeconds = () => mediaSecondsNow()
+export interface Topic {
+    key: string
+    name: string
+    type: string
+}
 
 type As = "lcm" | "image" | "cloud" | "header"
 
@@ -96,26 +59,34 @@ interface Subscription {
     as: As
     maxHz: number
     onMessage: (message: Message) => void
-    /** the latest message, so a second subscriber to the same thing gets it at once (like a live topic's sample) */
 }
 
 /** while scrubbing, a playhead that holds still this long gets full-quality frames */
 const SETTLE_MS = 350
 
-export class Connection {
-    readonly status = new Store<ConnectionState>({
-        state: "connecting",
-        topics: [],
-        droppedPerSecond: 0,
-        rttMs: null,
-        error: null,
-    })
-    readonly playhead: Store<Playhead>
-    readonly streams: StreamInfo[]
-    /** fired when the playhead jumps (a seek, a scrub, a loop): layers that accumulate start over */
+/** A depth stream by its name (the backend sends those as raw 16UC1 / 32FC1). */
+export const isDepthStream = (name: string) => /depth/i.test(name)
+
+export class ReplaySource {
+    readonly kind = "replay"
+    readonly playhead: TypedStore<Playhead>
+    readonly topics: Topic[]
+    readonly status = new Store<{ state: ConnectionState; error: string | null }>(
+        {
+            state: "connecting",
+            error: null,
+        },
+    )
+    /** fired when the playhead jumps (a seek, a scrub's end, a loop): layers that accumulate start over */
     readonly onSeek = new Set<() => void>()
+    /** the recording changed on disk (a stream edit): the page re-reads it */
+    onReload: (() => void) | null = null
+    /** the backend's answer time for the last request (ms) */
+    rttMs: number | null = null
+    readonly #live = zenohSource()
     #ws: WebSocket | null = null
     #subs = new Map<number, Subscription>()
+    #stateListeners = new Set<(state: ConnectionState) => void>()
     #nextId = 1
     #seq = 0
     #inFlight: { seq: number; at: number; t: number; mode: Mode } | null = null
@@ -123,17 +94,15 @@ export class Connection {
     #lastFrame = 0
     #stillSince = 0
     #lastT = 0
+    #wasScrubbing = false
     #raf = 0
     #closed = false
-    /** the backend's answer time for the last request (ms), for the stats pill */
-    rttMs: number | null = null
 
     constructor(
         readonly recordingId: string,
         overview: { start: number; end: number; streams: StreamInfo[] },
         initial?: Partial<Playhead>,
     ) {
-        this.streams = overview.streams
         this.playhead = new Store<Playhead>({
             t: overview.start,
             start: overview.start,
@@ -145,8 +114,7 @@ export class Connection {
             ...initial,
         })
         this.#lastT = this.playhead.get().t
-        mediaSecondsNow = () => this.playhead.get().t - overview.start
-        const topics = overview.streams
+        this.topics = overview.streams
             .filter((stream) => stream.count > 0)
             .map((stream) => ({
                 key: dimosKey(stream.name, stream.type),
@@ -154,9 +122,83 @@ export class Connection {
                 type: stream.type,
             }))
             .sort((a, b) => a.name.localeCompare(b.name))
-        this.status.update({ topics })
         this.playhead.subscribe(() => this.#onPlayhead())
+        this.status.subscribe(() => this.#stateListeners.forEach((listener) => listener(this.state)))
     }
+
+    // ── the data source interface (dimos-react's useDataSource) ──
+
+    get state(): ConnectionState {
+        return this.status.get().state
+    }
+
+    onState(listener: (state: ConnectionState) => void) {
+        this.#stateListeners.add(listener)
+        return () => this.#stateListeners.delete(listener)
+    }
+
+    listTopics(filter = "dimos/**") {
+        return Promise.resolve(
+            this.topics.filter((topic) => keyMatches(filter, topic.key)),
+        )
+    }
+
+    /** the playhead in ms: message timestamps are in it */
+    now() {
+        return this.playhead.get().t * 1000
+    }
+
+    subscribeFrontend(
+        topic: string,
+        callback: (payload: unknown, info: unknown) => void,
+        options?: unknown,
+    ) {
+        return this.#live.subscribeFrontend(topic, callback, options)
+    }
+
+    onReconnect(listener: () => void) {
+        return this.#live.onReconnect(listener)
+    }
+
+    subscribe(
+        key: string,
+        options: { maxHz?: number; encoding?: string } | undefined,
+        onMessage: (message: Message) => void,
+    ) {
+        const topic = parseKey(key)
+        const stream = topic ? topic.name.slice(1) : key
+        const heavy = topic &&
+            /(Image|CompressedImage|PointCloud2)$/.test(topic.type)
+        const encoding = options?.encoding ?? ""
+        const as: As = encoding.endsWith("pointcloud2")
+            ? "cloud"
+            : /(image|depth)$/.test(encoding)
+            ? "image"
+            : heavy
+            ? "header"
+            : "lcm"
+        const sub: Subscription = {
+            id: this.#nextId++,
+            key,
+            stream,
+            as,
+            maxHz: options?.maxHz ?? 0,
+            onMessage,
+        }
+        this.#subs.set(sub.id, sub)
+        this.#sendSub(sub)
+        const off = () => {
+            if (!this.#subs.delete(sub.id)) {
+                return
+            }
+            if (this.#ws?.readyState === WebSocket.OPEN) {
+                this.#ws.send(JSON.stringify({ op: "unsub", id: sub.id }))
+            }
+        }
+        return Object.assign(off, { unsubscribe: off, update: async () => {} })
+    }
+
+    // ── the playback socket ──
 
     start() {
         this.#open()
@@ -186,7 +228,7 @@ export class Connection {
         ws.binaryType = "arraybuffer"
         this.#ws = ws
         ws.onopen = () => {
-            this.status.update({ state: "connected", error: null })
+            this.status.set({ state: "connected", error: null })
             for (const sub of this.#subs.values()) {
                 this.#sendSub(sub)
             }
@@ -209,8 +251,7 @@ export class Connection {
         }
     }
 
-    // deno-lint-ignore no-explicit-any
-    #onText(message: any) {
+    #onText(message: { op: string; seq?: number; error?: unknown }) {
         if (message.op === "done") {
             if (this.#inFlight && message.seq === this.#inFlight.seq) {
                 this.rttMs = performance.now() - this.#inFlight.at
@@ -222,9 +263,6 @@ export class Connection {
             this.status.update({ error: String(message.error) })
         }
     }
-
-    /** the recording changed on disk (a stream edit): the page re-reads it */
-    onReload: (() => void) | null = null
 
     #onPacket(bytes: Uint8Array) {
         const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
@@ -286,46 +324,6 @@ export class Connection {
         }
     }
 
-    subscribe(
-        key: string,
-        options: SubscribeOptions,
-        onMessage: (message: Message) => void,
-    ): () => void {
-        const topic = parseKey(key)
-        const stream = topic ? topic.name.slice(1) : key
-        const heavy = topic &&
-            /(Image|CompressedImage|PointCloud2)$/.test(topic.type)
-        const encoding = options.encoding ?? ""
-        const as: As = encoding.endsWith("pointcloud2")
-            ? "cloud"
-            : /(image|depth)$/.test(encoding)
-            ? "image"
-            : heavy
-            ? "header"
-            : "lcm"
-        const sub: Subscription = {
-            id: this.#nextId++,
-            key,
-            stream,
-            as,
-            maxHz: options.maxHz ?? 0,
-            onMessage,
-        }
-        this.#subs.set(sub.id, sub)
-        this.#sendSub(sub)
-        return () => {
-            this.#subs.delete(sub.id)
-            if (this.#ws?.readyState === WebSocket.OPEN) {
-                this.#ws.send(JSON.stringify({ op: "unsub", id: sub.id }))
-            }
-        }
-    }
-
-    /** the playhead in ms: what the Controller calls the gateway clock (message timestamps are in it) */
-    bridgeNow(): number {
-        return this.playhead.get().t * 1000
-    }
-
     // ── the clock ──
 
     play() {
@@ -344,15 +342,16 @@ export class Connection {
     }
 
     #onPlayhead() {
-        const t = this.playhead.get().t
-        const playing = this.playhead.get().playing &&
-            !this.playhead.get().scrubbing
-        // anything but smooth forward playback is a jump
-        if (!playing || t < this.#lastT || t - this.#lastT > 1.5) {
-            if (t !== this.#lastT) {
-                for (const listener of this.onSeek) {
-                    listener()
-                }
+        const head = this.playhead.get()
+        const t = head.t
+        // anything but smooth forward playback is a jump; mid-scrub the jump is announced when the scrub ends
+        const jumped = t !== this.#lastT &&
+            (t < this.#lastT || t - this.#lastT > 1.5 || !head.playing)
+        const scrubEnded = this.#wasScrubbing && !head.scrubbing
+        this.#wasScrubbing = head.scrubbing
+        if ((jumped && !head.scrubbing) || scrubEnded) {
+            for (const listener of this.onSeek) {
+                listener()
             }
         }
         this.#lastT = t
@@ -368,8 +367,7 @@ export class Connection {
                 if (head.loop) {
                     t = head.start
                 } else {
-                    t = head.end
-                    this.playhead.update({ t, playing: false })
+                    this.playhead.update({ t: head.end, playing: false })
                     return
                 }
             }

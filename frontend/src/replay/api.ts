@@ -1,5 +1,5 @@
 // The Replayer's endpoints (backend/replay/routes.ts).
-import type { StreamInfo } from "../live/core/transport.ts"
+import type { StreamInfo } from "./source.ts"
 
 export type Overview = {
     id: string
@@ -59,7 +59,13 @@ export const replayApi = {
     timeline: (id: string, bins: number) => call<Timeline>("GET", `api/replay/${enc(id)}/timeline?bins=${bins}`),
     /** a pose stream's route: [t, x, y, z] in its frame */
     path: (id: string, stream: string, maxPoints = 1200) =>
-        call<{ stream: string; frame: string; points: [number, number, number, number][] }>(
+        call<
+            {
+                stream: string
+                frame: string
+                points: [number, number, number, number][]
+            }
+        >(
             "GET",
             `api/replay/${enc(id)}/path?stream=${enc(stream)}&maxPoints=${maxPoints}`,
         ),
