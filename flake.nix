@@ -34,7 +34,7 @@
                     version = "0.2.0";
                     src = ./frontend;
                     # `nix build .#frontend` prints the right hash when package-lock.json changes
-                    npmDepsHash = "";
+                    npmDepsHash = "sha256-2UxfIq6ZQS9dTqiSKvtnOgKcIDhB3yM7gocppRKdujs=";
                     installPhase = "cp -r dist $out";
                 };
                 # backend/main.ts and its npm packages as one ES module (esbuild; backend/bundle), from package-lock.json
