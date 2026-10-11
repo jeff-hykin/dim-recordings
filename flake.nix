@@ -35,6 +35,8 @@
                     src = ./frontend;
                     # `nix build .#frontend` prints the right hash when package-lock.json changes
                     npmDepsHash = "sha256-2UxfIq6ZQS9dTqiSKvtnOgKcIDhB3yM7gocppRKdujs=";
+                    # dimos-react is a git dependency, which npm unpacks through its cache (even with no prepare build)
+                    makeCacheWritable = true;
                     installPhase = "cp -r dist $out";
                 };
                 # backend/main.ts and its npm packages as one ES module (esbuild; backend/bundle), from package-lock.json
