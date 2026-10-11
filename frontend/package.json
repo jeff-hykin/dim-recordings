@@ -9,7 +9,7 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "dimos-react": "github:jeff-hykin/dimos-react#933ca9c7ef3e80c51b943f487eea9c6c6987b30d",
+        "dimos-react": "github:jeff-hykin/dimos-react#v0.2.0-beta2",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
         "three": "^0.180.0"
