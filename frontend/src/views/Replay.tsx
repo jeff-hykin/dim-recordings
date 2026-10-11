@@ -98,13 +98,15 @@ export function Replay({ id }: { id: string }) {
     return (
         <ErrorBoundary
             key={`${overview.id}#${version}`}
-            fallback={({ error }: { error: Error }) => (
+            fallback={({ error }) => (
                 <EmptyState
                     layer
                     icon="warn"
                     tone="warn"
                     title={`Couldn't show ${overview.name}`}
-                    message={`${error.message}. This browser may not support what the Replayer draws with (WebGL).`}
+                    message={`${
+                        error instanceof Error ? error.message : String(error)
+                    }. This browser may not support what the Replayer draws with (WebGL).`}
                     actions={back}
                     data-testid="replay-failed"
                 />

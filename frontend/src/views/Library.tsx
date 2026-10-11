@@ -492,7 +492,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                                 }`}
                             {live &&
                                 (live.state === "uploading" || live.state === "queued") && (
-                                <Text small tone="info" as="div">
+                                <Text small as="div">
                                     {live.state === "queued" ? "queued for upload" : "uploading…"}
                                 </Text>
                             )}
@@ -506,7 +506,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                             trigger={<IconButton icon="more-horizontal" size="sm" label="More" />}
                         />
                     }
-                    onClick={(event: MouseEvent) => {
+                    onClick={(event) => {
                         if (picking) {
                             toggle(recording.id, event.shiftKey)
                         } else {

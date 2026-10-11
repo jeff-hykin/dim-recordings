@@ -39,13 +39,13 @@ export function App() {
     return (
         <ErrorBoundary
             key={JSON.stringify(route)}
-            fallback={({ error }: { error: Error }) => (
+            fallback={({ error }) => (
                 <EmptyState
                     layer
                     icon="warn"
                     tone="warn"
                     title="Something went wrong"
-                    message={error.message}
+                    message={error instanceof Error ? error.message : String(error)}
                     actions={
                         <Button
                             variant="primary"

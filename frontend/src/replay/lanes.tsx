@@ -2,7 +2,7 @@
 // the backend's per-slice counts for the window on show), a switch that draws or hides it, and a menu that renames,
 // duplicates or deletes it in the file.
 import { useEffect, useState } from "react"
-import { Toggle, useConfirm, usePrompt, useToast } from "dimos-react"
+import { type PlaybackLane, Toggle, useConfirm, usePrompt, useToast } from "dimos-react"
 import { dimosKey } from "dimos-react"
 import { type Overview, replayApi, type Timeline } from "./api.ts"
 import { useStore } from "dimos-react/three"
@@ -106,7 +106,7 @@ export function useStreamLanes(
     }
 
     const locked = !overview.editable
-    const lanes = overview.streams.map((stream) => {
+    const lanes = overview.streams.map((stream): PlaybackLane => {
         const key = dimosKey(stream.name, stream.type)
         const row = rows?.streams.find((other) => other.name === stream.name)
         const hz = stream.count > 1 && stream.end !== null && stream.start !== null &&

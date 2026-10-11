@@ -1,13 +1,13 @@
 // The Replayer's side panel over the 3D view: Layers (dimos-react's LayersPanel: each stream's switch and settings),
 // TF (its TfPanel: the tree at the playhead, problems, hover to find a frame) and Settings (followed frame, the robot
 // model, rendering, stats).
-import { Field, IconButton, KeyValue, Panel, Segmented, Tabs, Toggle } from "dimos-react"
+import { type ChoiceItem, Field, IconButton, KeyValue, Panel, Segmented, Tabs, Toggle } from "dimos-react"
 import { FramePicker, LayersPanel, RenderingSettings, ROBOT_KINDS, TfPanel } from "dimos-react/three"
 import type { ReplaySettings } from "./layers.tsx"
 
 export type SideTab = "layers" | "tf" | "settings"
 
-const TABS = [
+const TABS: ChoiceItem<SideTab>[] = [
     { value: "layers", label: "Layers", icon: "layers" },
     { value: "tf", label: "TF", icon: "tree" },
     { value: "settings", label: "Settings", icon: "settings" },

@@ -886,10 +886,12 @@ export function Inspector(
                                 </span>,
                             ],
                             ...(recording.rrds.length
-                                ? [[
-                                    "Rerun files",
-                                    recording.rrds.map((r) => r.name).join(", "),
-                                ]]
+                                ? [
+                                    [
+                                        "Rerun files",
+                                        recording.rrds.map((r) => r.name).join(", "),
+                                    ] as const,
+                                ]
                                 : []),
                         ]}
                     />

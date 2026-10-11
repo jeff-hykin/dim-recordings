@@ -229,7 +229,7 @@ export function TransferDialog({ onClose }: { onClose: () => void }) {
             <div className="rec-transfer-list">
                 {data?.drives.map((drive) => (
                     <section key={drive.mount}>
-                        <Heading level={4} className="rec-row-flex">
+                        <Heading level={3} className="rec-row-flex">
                             {drive.name}
                             <Text small muted mono>
                                 {drive.state === "not-responding"

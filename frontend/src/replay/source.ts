@@ -4,7 +4,7 @@
 // the playhead, not the wall. The page owns the playhead: each animation frame it tells the backend where it is (`at`)
 // and in which mode (play / scrub / pause), one request in flight at a time. Backend events (frontendtopics) still come
 // from Desktop's zenoh-gateway.
-import { dimosKey, keyMatches, parseKey, zenohSource } from "dimos-react"
+import { dimosKey, type FrontendMessage, keyMatches, parseKey, zenohSource } from "dimos-react"
 import { Store, type TypedStore } from "./store.ts"
 import { replayApi } from "./api.ts"
 
@@ -45,7 +45,7 @@ export interface Message {
     quality?: "low" | "full"
 }
 
-export interface Topic {
+export type Topic = {
     key: string
     name: string
     type: string
@@ -171,8 +171,8 @@ export class ReplaySource {
 
     subscribeFrontend(
         topic: string,
-        callback: (payload: unknown, info: unknown) => void,
-        options?: unknown,
+        callback: (payload: unknown, message: FrontendMessage) => void,
+        options?: Record<string, unknown>,
     ) {
         return this.#live.subscribeFrontend(topic, callback, options)
     }

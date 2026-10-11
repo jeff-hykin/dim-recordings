@@ -7,6 +7,7 @@ import {
     FloatingPanel,
     IconButton,
     IMAGE_OVERLAY_TYPES,
+    type ImageInfo,
     ImageView,
     NumberInput,
     Select,
@@ -43,14 +44,6 @@ function pickDefault(topics: Topic[]): Topic | null {
         images.find((topic) => !isDepthStream(topic.name)) ?? images[0] ?? null
 }
 
-type Info = {
-    width: number
-    height: number
-    fps: number
-    quality: string
-    range: [number, number] | null
-}
-
 function CameraPanel(
     { panel, index, topics, isMain, mobile, onChange, onClose, onMain }: {
         panel: CameraPanelState
@@ -63,7 +56,7 @@ function CameraPanel(
         onMain: () => void
     },
 ) {
-    const [info, setInfo] = useState<Info | null>(null)
+    const [info, setInfo] = useState<ImageInfo | null>(null)
     const topic = topics.find((other) => other.key === panel.key) ?? null
     const depth = topic ? isDepthStream(topic.name) : false
     const overlays = topics.filter((other) => IMAGE_OVERLAY_TYPES.includes(other.type))
