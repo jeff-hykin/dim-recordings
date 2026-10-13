@@ -1,17 +1,7 @@
 // Uploads to the Dimensional cloud: the tray (state, elapsed time, progress only when real numbers arrive,
 // cancel/retry). The login isn't this app's: it is Desktop's (Settings → Dimensional account), shared by every app.
 import { useEffect, useState } from "react"
-import {
-    Alert,
-    Button,
-    FloatingPanel,
-    IconButton,
-    Progress,
-    Text,
-    useBackendState,
-    useTheme,
-    useZenoh,
-} from "dimos-react"
+import { Alert, Button, FloatingPanel, IconButton, Progress, Text, useBackendState, useZenoh } from "dimos-react"
 import { api, bytes, type Tray, type Upload } from "../api.ts"
 import { openApp } from "../dim-app/source/desktop.js"
 
