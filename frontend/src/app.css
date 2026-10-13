@@ -320,18 +320,6 @@ body {
     padding-bottom: 8px;
     border-bottom: 1px solid var(--hair);
 }
-.rec-login {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.rec-login-frame {
-    width: 100%;
-    height: 320px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: transparent;
-}
 .rec-transfer-list {
     display: flex;
     flex-direction: column;

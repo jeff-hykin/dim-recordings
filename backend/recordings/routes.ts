@@ -333,13 +333,6 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             handler: ({ upload }) => uploads.retry(String(upload)),
         },
         {
-            method: "POST",
-            path: "api/cloud/login",
-            description:
-                "Start logging in to the Dimensional cloud: returns the device code and the URL the user opens to approve it",
-            handler: () => uploads.login(),
-        },
-        {
             method: "GET",
             path: "api/thumbnails",
             description:

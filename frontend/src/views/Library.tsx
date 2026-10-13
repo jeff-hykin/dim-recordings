@@ -44,7 +44,7 @@ import { usePersistentState } from "../typed.ts"
 import { inDesktopShell, openApp } from "../dim-app/source/desktop.js"
 import { Inspector, type InspectorActions, type MenuItem } from "./Inspector.tsx"
 import { TransferDialog } from "./Transfer.tsx"
-import { UploadTray, useTray } from "./Uploads.tsx"
+import { openCloudLogin, UploadTray, useTray } from "./Uploads.tsx"
 import { Thumbnail } from "./Thumbnail.tsx"
 
 const SORTS: { key: SortKey; order: Order; label: string }[] = [
@@ -79,7 +79,6 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
     const phone = useMobile(760)
     const [showDetail, setShowDetail] = useState(false)
     const [trayOpen, setTrayOpen] = useState(false)
-    const [login, setLogin] = useState(false)
     const [thumbVersion, setThumbVersion] = useState(1)
     const prompt = usePrompt()
     const { tray, error: trayError, refresh: refreshTray } = useTray()
@@ -248,7 +247,8 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
             )
             setTrayOpen(true)
             if (tray && !tray.account.loggedIn) {
-                setLogin(true)
+                // the upload waits for the login: Desktop's Settings, which comes back here once it's done
+                openCloudLogin()
             }
         }
         refreshTray()
@@ -752,9 +752,6 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                 <UploadTray
                     tray={tray}
                     error={trayError}
-                    login={login}
-                    onLogin={() => setLogin(true)}
-                    onCloseLogin={() => setLogin(false)}
                     onChange={refreshTray}
                     onClose={() => setTrayOpen(false)}
                 />

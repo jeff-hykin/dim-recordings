@@ -1,8 +1,8 @@
 title: Recordings
 spec-version: v1.1 # the dimos.yaml spec version this file follows
 uses:
-    # the dimos gateway's endpoints the uploads go through (the app's own api/uploads relays them; the login panel
-    # frames /dimos/cloud/login/page)
+    # the dimos gateway's endpoints the uploads go through (the app's own api/uploads relays them; logging in is
+    # Desktop's Settings → Dimensional account)
     "@dimos-gateway":
         - GET /uploads
         - POST /uploads
@@ -10,8 +10,6 @@ uses:
         - POST /uploads/{id}/retry
         - GET /uploads/uploaded
         - GET /cloud/account
-        - POST /cloud/login
-        - GET /cloud/login/page
     "@desktop-gateway":
         - POST /api/open-app
         - GET /api/apps
@@ -191,9 +189,6 @@ provides:
                   type: string
                   required: true
                   description: upload id
-        - method: POST
-          path: api/cloud/login
-          description: "Start logging in to the Dimensional cloud: returns the device code and the URL the user opens to approve it"
         - method: GET
           path: api/thumbnails
           description: >-

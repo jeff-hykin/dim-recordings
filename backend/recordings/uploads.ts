@@ -69,8 +69,4 @@ export class Uploads {
     retry(id: string) {
         return this.#call("POST", `/dimos/uploads/${encodeURIComponent(id)}/retry`)
     }
-
-    login() {
-        return this.#call("POST", "/dimos/cloud/login")
-    }
 }

@@ -1,6 +1,6 @@
 // Uploads to the Dimensional cloud: the tray (state, elapsed time, progress only when real numbers arrive,
-// cancel/retry) and the login panel, which is Desktop's own page in an embedded frame (`/dimos/cloud/login/page`).
-import { useEffect, useRef, useState } from "react"
+// cancel/retry). The login isn't this app's: it is Desktop's (Settings → Dimensional account), shared by every app.
+import { useEffect, useState } from "react"
 import {
     Alert,
     Button,
@@ -12,7 +12,8 @@ import {
     useTheme,
     useZenoh,
 } from "dimos-react"
-import { api, bytes, desktopPath, type Tray, type Upload } from "../api.ts"
+import { api, bytes, type Tray, type Upload } from "../api.ts"
+import { openApp } from "../dim-app/source/desktop.js"
 
 const PHASES: Record<string, string> = {
     preparing: "preparing",
@@ -69,73 +70,10 @@ export function useTray() {
     }
 }
 
-export function LoginPanel(
-    { onDone, onClose }: { onDone: () => void; onClose: () => void },
-) {
-    const { dark } = useTheme()
-    useEffect(() => {
-        const onMessage = (event: MessageEvent) => {
-            if (
-                event.data?.type === "dimos-cloud-login" &&
-                ["approved", "loggedIn"].includes(event.data.state)
-            ) {
-                onDone()
-            }
-        }
-        addEventListener("message", onMessage)
-        return () => removeEventListener("message", onMessage)
-    }, [onDone])
-    // the page is same-origin (Desktop serves both), so the frame follows its content's height in every state
-    const frame = useRef<HTMLIFrameElement>(null)
-    const [height, setHeight] = useState<number | null>(null)
-    useEffect(() => {
-        const element = frame.current
-        if (!element) {
-            return
-        }
-        let observer: ResizeObserver | null = null
-        const follow = () => {
-            observer?.disconnect()
-            try {
-                const root = element.contentDocument?.documentElement
-                if (!root) {
-                    return
-                }
-                observer = new ResizeObserver(() => setHeight(Math.ceil(root.getBoundingClientRect().height)))
-                observer.observe(root)
-            } catch {
-                // not same-origin: keep the CSS height
-            }
-        }
-        element.addEventListener("load", follow)
-        if (
-            element.contentDocument?.readyState === "complete" &&
-            element.contentDocument.URL !== "about:blank"
-        ) {
-            follow()
-        }
-        return () => {
-            element.removeEventListener("load", follow)
-            observer?.disconnect()
-        }
-    }, [])
-    return (
-        <div className="rec-login">
-            <Text small muted as="p">
-                Log in to the Dimensional cloud to upload. The upload waits until you do.
-            </Text>
-            <iframe
-                ref={frame}
-                title="Dimensional login"
-                className="rec-login-frame"
-                style={height ? { height: height + 2 } : undefined}
-                src={desktopPath(
-                    `dimos/cloud/login/page?theme=${dark ? "dark" : "light"}`,
-                )}
-            />
-            <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>
-        </div>
-    )
+/** Desktop's Settings → Dimensional account, where every app's cloud login lives; signing in there brings the user
+ * back here (the shell returns to the app that opened Settings). */
+export function openCloudLogin() {
+    return openApp("settings", { path: "settings-cloud-account" })
 }
 
 // when this page first saw each upload running: the elapsed time is what an upload without progress can honestly show
@@ -250,12 +188,9 @@ function Row(
 }
 
 export function UploadTray(
-    { tray, error, login, onLogin, onCloseLogin, onChange, onClose }: {
+    { tray, error, onChange, onClose }: {
         tray: Tray | null
         error: string | null
-        login: boolean
-        onLogin: () => void
-        onCloseLogin: () => void
         onChange: () => void
         onClose: () => void
     },
@@ -277,26 +212,17 @@ export function UploadTray(
         >
             <div className="rec-tray-body">
                 {error && <Alert tone="danger">{error}</Alert>}
-                {(login || tray?.waitingForLogin) && (
-                    <LoginPanel
-                        onDone={() => {
-                            onCloseLogin()
-                            onChange()
-                        }}
-                        onClose={onCloseLogin}
-                    />
-                )}
-                {tray && !tray.account.loggedIn && !login && !tray.waitingForLogin && (
+                {tray && !tray.account.loggedIn && (
                     <Alert
                         tone="info"
                         data-testid="onboard-login"
                         actions={
-                            <Button size="sm" variant="primary" onClick={onLogin}>
+                            <Button size="sm" variant="primary" onClick={openCloudLogin}>
                                 Log in
                             </Button>
                         }
                     >
-                        Log in to Dimensional cloud to upload. Uploads you start before that wait here until you do.
+                        Not logged in to Dimensional cloud. Uploads wait here until you log in, in Desktop's Settings.
                     </Alert>
                 )}
                 {!tray?.uploads.length && (
