@@ -1,4 +1,4 @@
-// Uploads to the Dimensional cloud go through Desktop's dimos server (`/dimos/uploads`, `/dimos/cloud/*`; the
+// Uploads to the Dimensional cloud go through Desktop's dimos server (`/dimos-gateway/uploads`, `/dimos-gateway/cloud/*`; the
 // contract: NosyPuma upload_api.md). This only relays, so the page and the agent use one set of endpoints.
 import type { Config } from "../config.ts"
 import { HttpError, stateChanged } from "../http.ts"
@@ -44,29 +44,32 @@ export class Uploads {
             return {}
         }
         try {
-            return (await this.#call("GET", "/dimos/uploads/uploaded"))?.byPath ?? {}
+            return (await this.#call("GET", "/dimos-gateway/uploads/uploaded"))?.byPath ?? {}
         } catch {
             return {}
         }
     }
 
     start(path: string) {
-        return this.#call("POST", "/dimos/uploads", { path })
+        return this.#call("POST", "/dimos-gateway/uploads", { path })
     }
 
     async tray() {
         const [queue, account] = await Promise.all([
-            this.#call("GET", "/dimos/uploads"),
-            this.#call("GET", "/dimos/cloud/account").catch((error) => ({ loggedIn: false, error: error.message })),
+            this.#call("GET", "/dimos-gateway/uploads"),
+            this.#call("GET", "/dimos-gateway/cloud/account").catch((error) => ({
+                loggedIn: false,
+                error: error.message,
+            })),
         ])
         return { ...queue, account }
     }
 
     remove(id: string) {
-        return this.#call("DELETE", `/dimos/uploads/${encodeURIComponent(id)}`)
+        return this.#call("DELETE", `/dimos-gateway/uploads/${encodeURIComponent(id)}`)
     }
 
     retry(id: string) {
-        return this.#call("POST", `/dimos/uploads/${encodeURIComponent(id)}/retry`)
+        return this.#call("POST", `/dimos-gateway/uploads/${encodeURIComponent(id)}/retry`)
     }
 }
