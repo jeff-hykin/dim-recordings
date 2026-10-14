@@ -1,7 +1,7 @@
 // The summary's warnings: a broken tf tree and streams with outlier gaps, sags, late starts and early stops.
 import { assert, assertEquals } from "@std/assert"
 import { join } from "node:path"
-import { inspect } from "../backend/recordings/inspect.ts"
+import { inspect, QUIET_TYPES } from "../backend/recordings/inspect.ts"
 import { type EdgeSpan, streamWarnings, tfWarnings } from "../backend/recordings/warnings.ts"
 import { lcmTf, range, tempDir, writeDb } from "./fixtures.ts"
 
@@ -85,4 +85,13 @@ Deno.test("inspect: a recording with a gap and a disconnected tf frame warns abo
     ])
     assertEquals((await inspect(join(dir, "clean.db"))).warnings, [])
     await Deno.remove(dir, { recursive: true })
+})
+
+Deno.test("event-like stream types (PointStamped, Bool, Path, Twist) never get warnings", () => {
+    for (const type of ["geometry_msgs.PointStamped", "std_msgs/msg/Bool", "nav_msgs.Path", "Twist"]) {
+        assert(QUIET_TYPES.test(type), type)
+    }
+    for (const type of ["geometry_msgs.TwistStamped", "nav_msgs.Odometry", "sensor_msgs.Image", "PathPlan"]) {
+        assert(!QUIET_TYPES.test(type), type)
+    }
 })

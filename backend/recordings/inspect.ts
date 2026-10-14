@@ -7,6 +7,9 @@ import { logTimesFromIndexes, openMcap } from "./mcap.ts"
 import { type EdgeSpan, streamWarnings, tfWarnings, type Warning } from "./warnings.ts"
 import { reachable } from "./slow_fs.ts"
 
+/** Stream types that never get warnings (gaps, late starts, rate drops, frames outside the tf tree) */
+export const QUIET_TYPES = /(^|[./])(PointStamped|Bool|Path|Twist)$/
+
 export type StreamInfo = {
     name: string
     /** short message type: sensor_msgs.Image, nav_msgs.Odometry, ... */
@@ -251,9 +254,12 @@ function finish(
     const middle = (values: number[]) => values.sort((a, b) => a - b)[Math.floor((values.length - 1) / 2)]
     const usualStart = steady.length ? middle(steady.map((s) => s.start!)) : start
     const usualEnd = steady.length ? middle(steady.map((s) => s.end!)) : end
+    // event-like streams (a click, a flag, a plan, a drive command) come and go by nature: no warnings for them
+    const quiet = new Set(streams.filter((s) => QUIET_TYPES.test(s.type)).map((s) => s.name))
+    const placed = new Map([...headerFrames].filter(([name]) => !quiet.has(name)))
     const warnings = [
-        ...tfWarnings(tf.edges, start, end, headerFrames, sampledEvery, sampledWindow),
-        ...streams.flatMap((s) =>
+        ...tfWarnings(tf.edges, start, end, placed, sampledEvery, sampledWindow),
+        ...streams.filter((s) => !quiet.has(s.name)).flatMap((s) =>
             streamWarnings(s.name, timesOf(s.name), start, end, usualStart, usualEnd, /TFMessage$/.test(s.type))
         ),
     ]
