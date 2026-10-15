@@ -4,11 +4,9 @@ uses:
     # the dimos gateway's endpoints the uploads go through (the app's own api/uploads relays them; logging in is
     # Desktop's Settings → Dimensional account)
     "@dimos-gateway":
-        - GET /uploads
-        - POST /uploads
-        - DELETE /uploads/{id}
-        - POST /uploads/{id}/retry
-        - GET /uploads/uploaded
+        - GET /cloud/uploads
+        - POST /cloud/uploads
+        - DELETE /cloud/uploads
         - GET /cloud/account
     "@desktop-gateway":
         - POST /api/open-app
@@ -165,7 +163,7 @@ provides:
         - method: POST
           path: "api/recordings/{id}/upload"
           description: >-
-              Upload a recording to the Dimensional cloud (Desktop's /dimos-gateway/uploads; queues until logged in). Follow it with
+              Upload a recording to the Dimensional cloud (Desktop's /dimos-gateway/cloud/uploads; queues until logged in). Follow it with
               GET api/uploads; when done the row carries `uploaded.link`
           params: *ref_0
         - method: GET

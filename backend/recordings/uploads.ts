@@ -1,5 +1,6 @@
-// Uploads to the Dimensional cloud go through Desktop's dimos server (`/dimos-gateway/uploads`, `/dimos-gateway/cloud/*`; the
-// contract: NosyPuma upload_api.md). This only relays, so the page and the agent use one set of endpoints.
+// Uploads to the Dimensional cloud go through Desktop's dimos server (`/dimos-gateway/cloud/uploads`,
+// `/dimos-gateway/cloud/account`; the gateway's API 4.0). This only relays, so the page and the agent use one set of
+// endpoints.
 import type { Config } from "../config.ts"
 import { HttpError, stateChanged } from "../http.ts"
 
@@ -38,25 +39,25 @@ export class Uploads {
         return text ? JSON.parse(text) : null
     }
 
-    /** path → its last upload (Desktop keeps this across restarts); {} when Desktop doesn't have the endpoint yet */
+    /** path → its last upload (GET cloud/uploads's byPath, kept across restarts); {} when Desktop can't say */
     async uploadedByPath(): Promise<Record<string, Uploaded>> {
         if (!this.config.desktopUrl) {
             return {}
         }
         try {
-            return (await this.#call("GET", "/dimos-gateway/uploads/uploaded"))?.byPath ?? {}
+            return (await this.#call("GET", "/dimos-gateway/cloud/uploads"))?.byPath ?? {}
         } catch {
             return {}
         }
     }
 
     start(path: string) {
-        return this.#call("POST", "/dimos-gateway/uploads", { path })
+        return this.#call("POST", "/dimos-gateway/cloud/uploads", { path })
     }
 
     async tray() {
         const [queue, account] = await Promise.all([
-            this.#call("GET", "/dimos-gateway/uploads"),
+            this.#call("GET", "/dimos-gateway/cloud/uploads"),
             this.#call("GET", "/dimos-gateway/cloud/account").catch((error) => ({
                 loggedIn: false,
                 error: error.message,
@@ -66,10 +67,10 @@ export class Uploads {
     }
 
     remove(id: string) {
-        return this.#call("DELETE", `/dimos-gateway/uploads/${encodeURIComponent(id)}`)
+        return this.#call("DELETE", `/dimos-gateway/cloud/uploads?id=${encodeURIComponent(id)}`)
     }
 
     retry(id: string) {
-        return this.#call("POST", `/dimos-gateway/uploads/${encodeURIComponent(id)}/retry`)
+        return this.#call("POST", "/dimos-gateway/cloud/uploads", { retry: id })
     }
 }

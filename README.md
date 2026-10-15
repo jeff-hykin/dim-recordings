@@ -27,8 +27,8 @@ dimos-desktop install https://github.com/jeff-hykin/dim-recordings
   viewer, else the button says what's missing.
 - **Actions**: Upload, Rename and (set apart) Delete (asks first) on the row; in its ⋯ menu: duplicate, convert to `.db`
   / `.mcap` / `.rrd` (with [dtk](https://github.com/jeff-hykin/dtk), with progress), copy path, show in folder, and
-  upload to the Dimensional cloud through Desktop's `/dimos-gateway/uploads` (a tray with progress and ETA; once a file
-  is uploaded, its button becomes a link).
+  upload to the Dimensional cloud through Desktop's `/dimos-gateway/cloud/uploads` (a tray with progress and ETA; once a
+  file is uploaded, its button becomes a link).
 
 - **Replayer** (`#/replay/<id>`): [dimos-react](https://github.com/jeff-hykin/dimos-react)'s 3D view (the Controller's:
   3D with point clouds, poses and the odometry route, camera panels, the tf tree, layers) playing the recording, with no
