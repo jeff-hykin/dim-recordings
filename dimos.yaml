@@ -37,6 +37,7 @@ provides:
         - api/open-app
         - api/apps
         - api/events/*
+    when: you need to browse, convert, open or upload robot recordings
     description: >-
         Recordings: the robot recordings in Desktop's recordings folder (.db memory2 SQLite, .mcap, and the .rrd files made
         from them): list and sort them, inspect their streams and tf tree, keep notes, preview their main camera, rename,
@@ -46,6 +47,7 @@ provides:
     endpoints:
         - method: GET
           path: api/recordings
+          when: you need to see which recordings exist or find one by name or date
           description: >-
               The recordings folder: each .db/.mcap recording (name, size, duration, when recorded, a stream summary, note,
               preview state, what can open it, the .rrd files made from it) and standalone .rrd files, sorted and in date
@@ -63,6 +65,7 @@ provides:
           role: context
         - method: GET
           path: "api/recordings/{id}"
+          when: you need a recording's streams, rates, tf tree or data problems
           description: >-
               One recording in full: the list fields plus its inspection: every stream's type, encoding, count, rate (hz), p99
               and largest gap, the tf frame tree (edges with rate and first/last time, roots, frames with two parents) — what
@@ -76,11 +79,14 @@ provides:
                   description: "recording id: its path inside the recordings folder"
         - method: GET
           path: "api/recordings/{id}/thumbnail"
+          when: you want to see a recording's camera preview at a glance
           description: 'The preview sprite: its frames side by side (a jpeg; frame count and size in the list''s `thumbnail`)'
           params: *ref_0
         - method: PUT
           path: "api/recordings/{id}/note"
-          description: 'Set the recording''s note (kept in this app''s data, not in the file; empty text clears it)'
+          when: you want to add, change or clear a note on a recording
+          description: >-
+              Set the recording's note (kept in this app's data, not in the file; empty text clears it). Answers {ok, note}
           params:
               id: *ref_1
               text:
@@ -89,7 +95,10 @@ provides:
                   description: the note
         - method: POST
           path: "api/recordings/{id}/rename"
-          description: "Rename a recording (the extension stays; its SQLite sidecars and same-name .rrd follow it, and so does its note)"
+          when: you need to rename a recording
+          description: >-
+              Rename a recording (the extension stays; its SQLite sidecars and same-name .rrd follow it, and so does its
+              note). Answers {ok, id, path}: the recording's new id and absolute path
           params:
               id: *ref_1
               name:
@@ -98,20 +107,25 @@ provides:
                   description: "the new name, with or without extension"
         - method: DELETE
           path: "api/recordings/{id}"
+          when: you need to delete a recording
           description: >-
               Delete a recording file (permanent; the page asks first). A symlinked recording loses only the link. Its .rrd
-              files stay
+              files stay. Answers {ok}
           params: *ref_0
         - method: POST
           path: "api/recordings/{id}/duplicate"
-          description: 'Copy a recording next to itself ("<name>_copy.db", or `name`)'
+          when: you want a copy of a recording, e.g. before editing it
+          description: >-
+              Copy a recording next to itself ("<name> copy.db", then "<name> copy 2.db", ...; or `name`). Answers {ok, id,
+              path}: the copy's id and absolute path
           params:
               id: *ref_1
               name:
                   type: string
-                  description: 'the copy''s name (default: "<name>_copy")'
+                  description: 'the copy''s name (default: "<name> copy")'
         - method: POST
           path: "api/recordings/{id}/convert"
+          when: you need a recording as a .db, .mcap or .rrd file
           description: >-
               Convert a .db or .mcap to another format with dtk (to = db | mcap | rrd); the new file lands next to it (an .rrd
               under the same name, so it lists with it). Returns a job; follow it with GET api/jobs/{job}
@@ -123,10 +137,15 @@ provides:
                   description: db | mcap | rrd
         - method: GET
           path: api/jobs
+          when: you want to see how conversions are going
           description: 'Conversion jobs, newest first: state, progress (0..1), the converter''s last line, the result''s path'
         - method: GET
           path: "api/jobs/{job}"
-          description: One conversion job
+          when: you are waiting on a conversion you started
+          description: >-
+              One conversion job: id, recording, from, to, state (running | done | failed | cancelled), progress (0..1, null
+              when the converter doesn't say), phase, the converter's output, result (the new file's path), error, started
+              and finished times. 404 for an unknown job
           params:
               job:
                   type: string
@@ -134,7 +153,8 @@ provides:
                   description: job id
         - method: DELETE
           path: "api/jobs/{job}"
-          description: Cancel a running conversion (its partial output is removed)
+          when: you need to stop a running conversion
+          description: Cancel a running conversion (its partial output is removed). Answers {ok}
           params:
               job:
                   type: string
@@ -142,38 +162,55 @@ provides:
                   description: job id
         - method: POST
           path: "api/recordings/{id}/open"
+          when: you want to view or play a recording (Replayer, Rerun, Foxglove...)
           description: >-
               Open a recording: target = replayer (this app's player), map-editor (the dim-map-builder app, when installed),
               foxglove (when installed, for an .mcap whose image/point cloud/camera_info channels are CDR), rerun (an .rrd:
-              the Rerun app, else the rerun viewer). The list's `opens` says which are available and why not
+              the Rerun app, else the rerun viewer). The list's `opens` says which are available and why not. Answers {ok,
+              opened: what it opened in, app: the app's id when an app opened it}; 409 when that target can't open it
           params:
               id: *ref_1
               target:
                   type: string
                   required: true
                   description: replayer | map-editor | foxglove | rerun
+              show:
+                  type: boolean
+                  description: >-
+                      switch Desktop's window to the app that opened it (default true); false = load only, the answer's
+                      `app` says which
         - method: POST
           path: "api/recordings/{id}/reveal"
-          description: "Show the file in Finder (macOS) or the file manager (Linux), on the machine running Desktop"
+          when: the person wants to see a recording's file in their file manager
+          description: >-
+              Show the file in Finder (macOS) or the file manager (Linux), on the machine running Desktop. Answers {ok,
+              path, folder}
           params: *ref_0
         - method: GET
           path: "api/recordings/{id}/path"
-          description: The recording's absolute path (what the page's Copy path copies)
+          when: you need a recording's file path on disk
+          description: "The recording's absolute path (what the page's Copy path copies), as {path}"
           params: *ref_0
         - method: POST
           path: "api/recordings/{id}/upload"
+          when: you need to upload or share a recording to the Dimensional cloud
           description: >-
               Upload a recording to the Dimensional cloud (Desktop's /dimos-gateway/cloud/uploads; queues until logged in). Follow it with
-              GET api/uploads; when done the row carries `uploaded.link`
+              GET api/uploads; when done the row carries `uploaded.link`. Answers the gateway's queued upload. Only .db and
+              .mcap upload (an .rrd is refused, 400)
           params: *ref_0
         - method: GET
           path: api/uploads
+          when: you want upload progress or a finished upload's link
           description: >-
               The uploads tray: each upload's state, phase, bytes, rate and ETA, link when done; whether it waits for login;
               the cloud account
         - method: DELETE
           path: "api/uploads/{upload}"
-          description: "Cancel a queued or running upload, or remove a finished one from the tray"
+          when: you need to cancel an upload or clear it from the tray
+          description: >-
+              Cancel a queued or running upload, or remove a finished one from the tray (relayed to the dimos gateway's
+              DELETE /cloud/uploads; answers its reply)
           params:
               upload:
                   type: string
@@ -181,7 +218,9 @@ provides:
                   description: upload id
         - method: POST
           path: "api/uploads/{upload}/retry"
-          description: Retry a failed or cancelled upload
+          when: an upload failed or was cancelled and should run again
+          description: >-
+              Retry a failed or cancelled upload (relayed to the dimos gateway's POST /cloud/uploads; answers its reply)
           params:
               upload:
                   type: string
@@ -189,12 +228,14 @@ provides:
                   description: upload id
         - method: GET
           path: api/thumbnails
+          when: previews are missing or slow and you want to know why
           description: >-
               The preview job: which recording it's working on, and the last results with their wall and CPU time (it runs one
               recording at a time under nice -n 19, pausing between frames)
         # transfers from a plugged-in drive (backend/recordings/drive_routes.ts)
         - method: GET
           path: api/drives
+          when: you want recordings from a plugged-in USB drive or SD card
           description: >-
               Plugged-in removable drives (USB sticks, SD cards) that have recordings on them: each drive's name, mount,
               free space and its .mcap / .db files (path, size, modified, preview state), plus the recordings folder's
@@ -202,10 +243,13 @@ provides:
           role: context
         - method: POST
           path: api/drives/rescan
+          when: a drive was just plugged in or its files changed
           description: >-
-              Look for drives again and re-read the recordings on each
+              Look for drives again and re-read the recordings on each. Answers {ok, drives: how many drives it found};
+              GET api/drives has the details
         - method: GET
           path: api/drives/thumbnail
+          when: you want to preview a recording that is still on a drive
           description: >-
               A drive recording's preview sprite (a jpeg, like api/recordings/{id}/thumbnail)
           params:
@@ -215,6 +259,7 @@ provides:
                   required: true
         - method: POST
           path: api/drives/transfer
+          when: you need to import recordings from a plugged-in drive
           description: >-
               Copy or move recordings from a plugged-in drive into the recordings folder. Never overwrites (a taken name
               becomes "name 2"), refuses when there isn't room, and runs one file at a time; returns the transfers,
@@ -234,8 +279,9 @@ provides:
                   description: "a new name for the copy (only with one path)"
         - method: DELETE
           path: "api/drives/transfer/{id}"
+          when: you need to stop an import from a drive
           description: >-
-              Cancel a transfer (a half-copied file is removed; the drive's file is untouched)
+              Cancel a transfer (a half-copied file is removed; the drive's file is untouched). Answers {ok}
           params:
               id:
                   type: string
@@ -243,8 +289,10 @@ provides:
                   required: true
         - method: POST
           path: api/drives/rename
+          when: you need to rename a recording that is on a drive
           description: >-
-              Rename a recording on a plugged-in drive, in place (keeps its extension; refuses a taken name)
+              Rename a recording on a plugged-in drive, in place (keeps its extension; refuses a taken name). Answers {ok,
+              path, name, folder}: the renamed file
           params:
               path:
                   type: string
@@ -257,6 +305,7 @@ provides:
         # the Replayer (backend/replay/routes.ts)
         - method: GET
           path: "api/replay/{id}"
+          when: you need a recording's time span and streams for playback
           description: >-
               The Replayer's view of a recording: start/end, every stream (type, kind: image | cloud | tf | pose | info
               | other, count, first/last time), scrubbing-thumbnail progress, and the playhead of each page playing it
@@ -267,6 +316,7 @@ provides:
                   description: "recording id: its path inside the recordings folder"
         - method: GET
           path: "api/replay/{id}/timeline"
+          when: you want to see when each stream has data across a recording
           description: >-
               Per-stream message density for the timeline rows: the recording's span cut into `bins` equal slices and
               each stream's message count per slice (ticks), plus its exact times when it has at most `exact` messages
@@ -289,6 +339,7 @@ provides:
                   description: "window end (recording time, seconds; default: the end)"
         - method: GET
           path: "api/replay/{id}/ws"
+          when: you are building a page that plays a recording back
           description: >-
               The playback stream (a websocket the page opens): it sends {op:sub, id, stream, as: lcm | image | cloud |
               header} and {op:at, t, mode: play | scrub | pause, seq}; the backend answers with what each stream has at
@@ -300,9 +351,10 @@ provides:
                   description: "recording id: its path inside the recordings folder"
         - method: POST
           path: "api/replay/{id}/control"
+          when: you need to play, pause, seek or change speed in the Replayer
           description: >-
               Drive the Replayer pages showing this recording: action = play | pause | seek (t: seconds since the
-              recording's start) | speed (speed: 0.25..8)
+              recording's start) | speed (speed: 0.25..8). Answers {ok, players: how many Replayer pages are playing it}
           params:
               id:
                   type: string
@@ -321,6 +373,7 @@ provides:
           role: context
         - method: GET
           path: "api/replay/{id}/frame"
+          when: you need to see what the camera saw at a moment in a recording
           description: >-
               One camera frame as an image (jpeg, or png for raw pixels): the stream's message at or before time t
               (seconds since the start; default the first frame); without a stream, the main camera (color first)
@@ -337,6 +390,7 @@ provides:
                   description: seconds since the start (default 0)
         - method: GET
           path: "api/replay/{id}/message"
+          when: you need a stream's value at a moment in a recording
           description: >-
               One stream's message at or before time t (seconds since the start), decoded to JSON (long arrays
               shortened): what the player shows for that stream at that moment
@@ -354,6 +408,7 @@ provides:
                   description: seconds since the start (default 0)
         - method: GET
           path: "api/replay/{id}/path"
+          when: you want the route the robot traveled in a recording
           description: >-
               The whole route of a pose stream (nav_msgs Odometry / PoseStamped): up to maxPoints [t, x, y, z] in its
               frame (what the player draws as the odometry path)
@@ -371,9 +426,11 @@ provides:
                   description: most points (default 4000)
         - method: POST
           path: "api/recordings/{id}/streams/{stream}/rename"
+          when: you need to rename a stream (topic) inside a recording
           description: >-
               Rename a stream inside the recording, in place (a .db: ALTER TABLE; an .mcap: the chunk with its channel
-              record and the summary rewritten into a temp file beside it, then renamed over it). Players reload
+              record and the summary rewritten into a temp file beside it, then renamed over it). Players reload.
+              Answers {ok, op, stream, to, seconds} plus the edit's details; a symlinked recording is refused (409)
           params:
               id:
                   type: string
@@ -389,9 +446,11 @@ provides:
                   description: the new name
         - method: DELETE
           path: "api/recordings/{id}/streams/{stream}"
+          when: you need to remove a stream from a recording
           description: >-
               Delete a stream and all its messages from the recording, in place (permanent; the page asks first).
-              Players reload
+              Players reload. Answers {ok, op, stream, seconds} plus the edit's details; a symlinked recording is
+              refused (409)
           params:
               id:
                   type: string
@@ -403,9 +462,11 @@ provides:
                   description: stream (topic) name
         - method: POST
           path: "api/recordings/{id}/streams/{stream}/duplicate"
+          when: you want a copy of a stream inside a recording
           description: >-
               Copy a stream inside the same recording under a new name (default "<stream>_copy"), in place. Players
-              reload
+              reload. Answers {ok, op, stream, to, seconds} plus the edit's details; a symlinked recording is
+              refused (409)
           params:
               id:
                   type: string
