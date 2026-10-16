@@ -39,7 +39,8 @@ import { type Playhead, ReplaySource } from "../replay/source.ts"
 import { useStreamLanes } from "../replay/lanes.tsx"
 import { CameraPanels, type CameraState } from "../replay/cameras.tsx"
 import { SidePanel, type SideTab, SideTabs } from "../replay/side.tsx"
-import { DEFAULT_SETTINGS, type ReplaySettings } from "../replay/layers.tsx"
+import { DEFAULT_SETTINGS, type ReplaySettings, type RobotChoice } from "../replay/layers.tsx"
+import { useRecordingRobot } from "../replay/use_robot_kind.ts"
 
 export function Replay({ id }: { id: string }) {
     const [overview, setOverview] = useState<Overview | null>(null)
@@ -227,6 +228,10 @@ function ReplayView({ overview, source, onReload }: {
     })
     const mainCamera = cameras.main !== null && cameras.panels.some((panel) => panel.id === cameras.main)
     const robotFrame = settings.followFrame || "base_link"
+    // the robot model: what the recording says it is (never a dog by default), unless picked in Settings for this recording
+    const recordingRobot = useRecordingRobot(overview, tf)
+    const [robotChoice, setRobotChoice] = usePersistentState<RobotChoice>(`replay.robot.${overview.id}`, "auto")
+    const robotKind = robotChoice === "auto" ? recordingRobot?.kind ?? null : robotChoice
 
     return (
         <div className={`rp-page ${mobile ? "rp-mobile" : ""}`} data-testid="replayer">
@@ -264,7 +269,9 @@ function ReplayView({ overview, source, onReload }: {
                 >
                     <TfFeed />
                     <TopicLayers manager={layers} />
-                    {settings.robotModel && <RobotModel kind={settings.robotKind} frame={robotFrame} />}
+                    {settings.robotModel && robotKind && (
+                        <RobotModel key={robotKind} kind={robotKind} frame={robotFrame} />
+                    )}
                     <FrameHighlight frame={hovered} />
                     <TfFootnote issues={issues} onOpen={() => setTab("tf")} />
                     <SceneControls className="rp-scene-controls">
@@ -289,6 +296,9 @@ function ReplayView({ overview, source, onReload }: {
                             onHover={setHovered}
                             settings={settings}
                             onSettings={(patch) => setSettings((old) => ({ ...old, ...patch }))}
+                            robotChoice={robotChoice}
+                            onRobotChoice={setRobotChoice}
+                            recordingRobot={recordingRobot}
                         />
                     )}
                 </Scene3D>

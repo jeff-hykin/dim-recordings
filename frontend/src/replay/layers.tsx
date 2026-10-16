@@ -8,7 +8,6 @@ export interface ReplaySettings {
     /** "" = base_link */
     followFrame: string
     robotModel: boolean
-    robotKind: string
     showStats: boolean
 }
 
@@ -17,6 +16,8 @@ export const DEFAULT_SETTINGS: ReplaySettings = {
     follow: true,
     followFrame: "",
     robotModel: true,
-    robotKind: "dog",
     showStats: false,
 }
+
+/** Settings → robot model, per recording: "auto" (what the recording says it is: robot_kind.ts) or a ROBOT_KINDS kind (the Robot model switch turns it off) */
+export type RobotChoice = string

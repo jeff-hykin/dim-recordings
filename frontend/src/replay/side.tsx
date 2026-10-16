@@ -1,9 +1,10 @@
 // The Replayer's side panel over the 3D view: Layers (dimos-react's LayersPanel: each stream's switch and settings),
 // TF (its TfPanel: the tree at the playhead, problems, hover to find a frame) and Settings (followed frame, the robot
 // model, rendering, stats).
-import { type ChoiceItem, Field, IconButton, KeyValue, Panel, Segmented, Tabs, Toggle } from "dimos-react"
+import { type ChoiceItem, Field, IconButton, KeyValue, Panel, Segmented, Tabs, Text, Toggle } from "dimos-react"
 import { FramePicker, LayersPanel, RenderingSettings, ROBOT_KINDS, TfPanel } from "dimos-react/three"
-import type { ReplaySettings } from "./layers.tsx"
+import type { ReplaySettings, RobotChoice } from "./layers.tsx"
+import type { RobotKindAnswer } from "./robot_kind.ts"
 
 export type SideTab = "layers" | "tf" | "settings"
 
@@ -25,9 +26,12 @@ interface SideProps {
     onHover: (frame: string | null) => void
     settings: ReplaySettings
     onSettings: (patch: Partial<ReplaySettings>) => void
+    robotChoice: RobotChoice
+    onRobotChoice: (choice: RobotChoice) => void
+    recordingRobot: RobotKindAnswer | null
 }
 
-function SettingsTab({ settings, onSettings }: SideProps) {
+function SettingsTab({ settings, onSettings, robotChoice, onRobotChoice, recordingRobot }: SideProps) {
     return (
         <div className="rp-settings">
             <Field label="Follow frame">
@@ -49,12 +53,23 @@ function SettingsTab({ settings, onSettings }: SideProps) {
                 onChange={(robotModel: boolean) => onSettings({ robotModel })}
             />
             {settings.robotModel && (
-                <Segmented
-                    size="sm"
-                    value={settings.robotKind}
-                    items={(ROBOT_KINDS as string[]).map((kind) => [kind, kind])}
-                    onChange={(robotKind: string) => onSettings({ robotKind })}
-                />
+                <>
+                    <Segmented
+                        size="sm"
+                        value={robotChoice}
+                        items={["auto", ...(ROBOT_KINDS as string[]).filter((kind) => kind !== "arrow")].map((
+                            kind,
+                        ) => [kind, kind])}
+                        onChange={onRobotChoice}
+                    />
+                    <Text muted small data-testid="replay-robot-reason">
+                        {robotChoice !== "auto"
+                            ? "Picked here for this recording; auto picks from the recording."
+                            : recordingRobot
+                            ? `Auto: ${recordingRobot.kind}, from ${recordingRobot.reason}.`
+                            : "Auto: nothing in this recording says which robot it is, so no model is drawn."}
+                    </Text>
+                </>
             )}
             <Toggle
                 value={settings.showStats}
