@@ -4,10 +4,9 @@ import { useEffect, useState } from "react"
 import type { Overview } from "./api.ts"
 import { recordingRobotKind, type RobotKindAnswer } from "./robot_kind.ts"
 
-// deno-lint-ignore no-explicit-any
 export function useRecordingRobot(
     overview: Overview,
-    tf: any,
+    tf: { frames(): string[]; onChange(listener: () => void): () => void },
 ): RobotKindAnswer | null {
     const [urdf, setUrdf] = useState<string | null>(null)
     const [answer, setAnswer] = useState<RobotKindAnswer | null>(() =>
