@@ -1,12 +1,28 @@
 // The Replayer's side panel over the 3D view: Layers (dimos-react's LayersPanel: each stream's switch and settings),
 // TF (its TfPanel: the tree at the playhead, problems, hover to find a frame) and Settings (followed frame, the robot
 // model, rendering, stats).
-import { type ChoiceItem, Field, IconButton, KeyValue, Panel, Segmented, Slider, Tabs, Text, Toggle } from "dimos-react"
+import {
+    type ChoiceItem,
+    Field,
+    IconButton,
+    KeyValue,
+    Panel,
+    Segmented,
+    Select,
+    Slider,
+    Tabs,
+    Text,
+    Toggle,
+    type Topic,
+} from "dimos-react"
 import { FramePicker, LayersPanel, RenderingSettings, ROBOT_KINDS, TfPanel } from "dimos-react/three"
 import type { ReplaySettings, RobotChoice } from "./layers.tsx"
 import type { RobotKindAnswer } from "./robot_kind.ts"
 import type { DisplayMode } from "./urdf.ts"
 import type { RecordingUrdf } from "./use_urdf.ts"
+import { gpu, type SimSettings } from "./sim_world.tsx"
+import type { SceneData } from "./sim/sceneData.ts"
+import { isSoftwareRenderer } from "./sim/grass.ts"
 
 export type SideTab = "layers" | "tf" | "settings"
 
@@ -33,6 +49,88 @@ interface SideProps {
     recordingRobot: RobotKindAnswer | null
     urdf: RecordingUrdf
     drawUrdf: boolean
+    /** what the minimap can draw, best first */
+    mapBases: Topic[]
+    simScene: SceneData | null
+    simProblem: string | null
+    sim: SimSettings
+    onSim: (patch: Partial<SimSettings>) => void
+}
+
+/** A sim run's world: what it holds, and this viewer's look for it (the Controller's sim scene settings). */
+function SimSection({ settings, onSettings, simScene, simProblem, sim, onSim }: SideProps) {
+    if (!simScene) {
+        return simProblem ? <Text muted small>Simulated world: {simProblem}</Text> : null
+    }
+    const geoms = simScene.bodies.reduce((count, body) => count + body.geoms.length, 0)
+    const movers = simScene.bodies.filter((body) => body.mocap).length
+    const percent = (value: number) => `${Math.round(value * 100)}%`
+    return (
+        <>
+            <Toggle
+                value={settings.simWorld}
+                label="Simulated world"
+                onChange={(simWorld: boolean) => onSettings({ simWorld })}
+            />
+            <Text muted small>
+                {simScene.id} · {simScene.bodies.length} bodies · {geoms} geoms ·{" "}
+                {Object.keys(simScene.meshes).length} meshes{movers ? ` · ${movers} moving` : ""}
+            </Text>
+            {settings.simWorld && (
+                <>
+                    <Field inline label="Opacity">
+                        <Slider
+                            min={0.1}
+                            max={1}
+                            step={0.05}
+                            value={sim.opacity}
+                            format={percent}
+                            onChange={(opacity: number) => onSim({ opacity })}
+                        />
+                    </Field>
+                    <Field inline label="Hide above" title="leaves out ceilings and upper floors">
+                        <Slider
+                            min={0.5}
+                            max={30}
+                            step={0.1}
+                            value={sim.cutAbove}
+                            format={(height: number) => `${height.toFixed(1)} m`}
+                            onChange={(cutAbove: number) => onSim({ cutAbove })}
+                        />
+                    </Field>
+                    <Toggle value={sim.lights} label="The world's lights" onChange={(lights: boolean) => onSim({ lights })} />
+                    <Toggle
+                        value={sim.grass}
+                        label="Grass"
+                        title={isSoftwareRenderer(gpu())
+                            ? `this viewer only; off by default: ${gpu()} is a software GPU`
+                            : "this viewer only: blades on the world's grassy hills"}
+                        onChange={(grass: boolean) => onSim({ grass })}
+                    />
+                    {sim.grass && (
+                        <>
+                            <Field inline label="Grass density">
+                                <Slider
+                                    min={0.1}
+                                    max={2}
+                                    step={0.05}
+                                    value={sim.grassDensity}
+                                    format={percent}
+                                    onChange={(grassDensity: number) => onSim({ grassDensity })}
+                                />
+                            </Field>
+                            <Toggle
+                                value={sim.sway}
+                                label="Wind"
+                                title="keeps the view redrawing while grass is on screen"
+                                onChange={(sway: boolean) => onSim({ sway })}
+                            />
+                        </>
+                    )}
+                </>
+            )}
+        </>
+    )
 }
 
 /** Why this model, in words. */
@@ -120,6 +218,29 @@ function SettingsTab(props: SideProps) {
                     )}
                 </>
             )}
+            {props.mapBases.length > 0 && (
+                <>
+                    <Toggle
+                        value={settings.minimap}
+                        label="Minimap"
+                        onChange={(minimap: boolean) => onSettings({ minimap })}
+                    />
+                    {settings.minimap && props.mapBases.length > 1 && (
+                        <Field inline label="Map">
+                            <Select<string>
+                                aria-label="Minimap base map"
+                                value={settings.minimapBase}
+                                options={[
+                                    ["", `auto (${props.mapBases[0].name})`],
+                                    ...props.mapBases.map((topic): [string, string] => [topic.key, topic.name]),
+                                ]}
+                                onChange={(minimapBase: string) => onSettings({ minimapBase })}
+                            />
+                        </Field>
+                    )}
+                </>
+            )}
+            <SimSection {...props} />
             <Toggle
                 value={settings.showStats}
                 label="Render stats"

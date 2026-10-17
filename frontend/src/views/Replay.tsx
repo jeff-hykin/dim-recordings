@@ -43,6 +43,8 @@ import { DEFAULT_SETTINGS, type ReplaySettings, type RobotChoice } from "../repl
 import { useRecordingRobot } from "../replay/use_robot_kind.ts"
 import { useRecordingUrdf } from "../replay/use_urdf.ts"
 import { UrdfRobot } from "../replay/urdf_robot.tsx"
+import { mapTopics, Minimap } from "../replay/minimap.tsx"
+import { DEFAULT_SIM, defaultSim, type SimSettings, SimWorld, useRecordingScene } from "../replay/sim_world.tsx"
 
 export function Replay({ id }: { id: string }) {
     const [overview, setOverview] = useState<Overview | null>(null)
@@ -240,6 +242,10 @@ function ReplayView({ overview, source, onReload }: {
     const [robotChoice, setRobotChoice] = usePersistentState<RobotChoice>(`replay.robot.${overview.id}`, "auto")
     const urdfComplete = !!urdf.description && (urdf.meshesWanted === 0 || urdf.meshesRecorded > 0)
     const drawUrdf = robotChoice === "urdf" ? !!urdf.description : robotChoice === "auto" && urdfComplete
+    // a sim run's world, with this viewer's look for it (grass is off on a software GPU unless turned on here)
+    const { scene: simScene, problem: simProblem } = useRecordingScene(overview)
+    const [savedSim, setSim] = usePersistentState<SimSettings>("replay.sim", DEFAULT_SIM)
+    const sim = { ...defaultSim(), ...savedSim }
     const robotKind = drawUrdf ? null : robotChoice === "auto" ? recordingRobot?.kind ?? null : robotChoice
 
     return (
@@ -282,6 +288,7 @@ function ReplayView({ overview, source, onReload }: {
                     {settings.robotModel && robotKind && robotKind !== "urdf" && (
                         <RobotModel key={robotKind} kind={robotKind} frame={robotFrame} />
                     )}
+                    {simScene && settings.simWorld && <SimWorld scene={simScene} settings={sim} />}
                     {settings.robotModel && drawUrdf && (
                         <UrdfRobot urdf={urdf} display={settings.urdfDisplay} opacity={settings.urdfOpacity} />
                     )}
@@ -314,9 +321,23 @@ function ReplayView({ overview, source, onReload }: {
                             recordingRobot={recordingRobot}
                             urdf={urdf}
                             drawUrdf={drawUrdf}
+                            mapBases={mapTopics(source.topics).bases}
+                            simScene={simScene}
+                            simProblem={simProblem}
+                            sim={sim}
+                            onSim={(patch) => setSim((old) => ({ ...defaultSim(), ...old, ...patch }))}
                         />
                     )}
                 </Scene3D>
+                {settings.minimap && mapTopics(source.topics).bases.length > 0 && (
+                    <Minimap
+                        tf={tf}
+                        topics={source.topics}
+                        base={settings.minimapBase}
+                        followFrame={robotFrame}
+                        fixedFrame={settings.fixedFrame || undefined}
+                    />
+                )}
                 <CameraPanels topics={source.topics} state={cameras} onState={setCameras} mobile={mobile} />
                 {head.scrubbing
                     ? <Badge className="rp-scrub-hint" tone="info">scrubbing · thumbnails until you let go</Badge>
