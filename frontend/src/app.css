@@ -37,6 +37,7 @@ body {
     min-height: 0;
     border-right: 1px solid var(--border);
     background: var(--block-bg, var(--surface)); /* a skin's solid sidebar (Research: Deep Cobalt), else a panel */
+    -webkit-font-smoothing: var(--on-block-smoothing, antialiased); /* light text on the navy: a touch heavier */
 }
 .rec-list-head {
     display: flex;
