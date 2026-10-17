@@ -1,10 +1,12 @@
 // The Replayer's side panel over the 3D view: Layers (dimos-react's LayersPanel: each stream's switch and settings),
 // TF (its TfPanel: the tree at the playhead, problems, hover to find a frame) and Settings (followed frame, the robot
 // model, rendering, stats).
-import { type ChoiceItem, Field, IconButton, KeyValue, Panel, Segmented, Tabs, Text, Toggle } from "dimos-react"
+import { type ChoiceItem, Field, IconButton, KeyValue, Panel, Segmented, Slider, Tabs, Text, Toggle } from "dimos-react"
 import { FramePicker, LayersPanel, RenderingSettings, ROBOT_KINDS, TfPanel } from "dimos-react/three"
 import type { ReplaySettings, RobotChoice } from "./layers.tsx"
 import type { RobotKindAnswer } from "./robot_kind.ts"
+import type { DisplayMode } from "./urdf.ts"
+import type { RecordingUrdf } from "./use_urdf.ts"
 
 export type SideTab = "layers" | "tf" | "settings"
 
@@ -29,9 +31,31 @@ interface SideProps {
     robotChoice: RobotChoice
     onRobotChoice: (choice: RobotChoice) => void
     recordingRobot: RobotKindAnswer | null
+    urdf: RecordingUrdf
+    drawUrdf: boolean
 }
 
-function SettingsTab({ settings, onSettings, robotChoice, onRobotChoice, recordingRobot }: SideProps) {
+/** Why this model, in words. */
+function robotReason({ robotChoice, recordingRobot, urdf, drawUrdf }: SideProps): string {
+    const meshes = urdf.meshesWanted ? `, meshes ${urdf.meshesLoaded}/${urdf.meshesWanted}` : ""
+    const fromUrdf = urdf.description
+        ? `the recording's URDF (${urdf.description.name}, ${urdf.description.links.length} links${meshes})`
+        : ""
+    if (drawUrdf) {
+        return `${robotChoice === "auto" ? "Auto: " : ""}${fromUrdf}.${urdf.problem ? ` ${urdf.problem}` : ""}`
+    }
+    if (robotChoice !== "auto") {
+        return "Picked here for this recording; auto picks from the recording."
+    }
+    const stand = recordingRobot
+        ? `Auto: ${recordingRobot.kind} stand-in, from ${recordingRobot.reason}.`
+        : "Auto: nothing in this recording says which robot it is, so no model is drawn."
+    // a URDF whose meshes weren't recorded (recorded before the recorder asked for them, or by a recorder that doesn't)
+    return urdf.description ? `${stand} Its URDF's meshes aren't in the recording; "urdf" draws what it can.` : stand
+}
+
+function SettingsTab(props: SideProps) {
+    const { settings, onSettings, robotChoice, onRobotChoice, urdf, drawUrdf } = props
     return (
         <div className="rp-settings">
             <Field label="Follow frame">
@@ -64,18 +88,36 @@ function SettingsTab({ settings, onSettings, robotChoice, onRobotChoice, recordi
                     <Segmented
                         size="sm"
                         value={robotChoice}
-                        items={["auto", ...(ROBOT_KINDS as string[]).filter((kind) => kind !== "arrow")].map((
-                            kind,
-                        ) => [kind, kind])}
+                        items={[
+                            "auto",
+                            ...(urdf.description ? ["urdf"] : []),
+                            ...(ROBOT_KINDS as string[]).filter((kind) => kind !== "arrow"),
+                        ].map((kind) => [kind, kind])}
                         onChange={onRobotChoice}
                     />
-                    <Text muted small data-testid="replay-robot-reason">
-                        {robotChoice !== "auto"
-                            ? "Picked here for this recording; auto picks from the recording."
-                            : recordingRobot
-                            ? `Auto: ${recordingRobot.kind}, from ${recordingRobot.reason}.`
-                            : "Auto: nothing in this recording says which robot it is, so no model is drawn."}
-                    </Text>
+                    <Text muted small data-testid="replay-robot-reason">{robotReason(props)}</Text>
+                    {drawUrdf && (
+                        <>
+                            <Field inline label="Show">
+                                <Segmented
+                                    size="sm"
+                                    value={settings.urdfDisplay}
+                                    items={[["visual", "Visual"], ["collision", "Collision"], ["both", "Both"]]}
+                                    onChange={(urdfDisplay: DisplayMode) => onSettings({ urdfDisplay })}
+                                />
+                            </Field>
+                            <Field inline label="Opacity">
+                                <Slider
+                                    min={0.1}
+                                    max={1}
+                                    step={0.05}
+                                    value={settings.urdfOpacity}
+                                    format={(opacity: number) => `${Math.round(opacity * 100)}%`}
+                                    onChange={(urdfOpacity: number) => onSettings({ urdfOpacity })}
+                                />
+                            </Field>
+                        </>
+                    )}
                 </>
             )}
             <Toggle

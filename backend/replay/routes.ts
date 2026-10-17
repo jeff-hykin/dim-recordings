@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { HttpError, publishEvent, type Route } from "../http.ts"
 import { NotFound, type Recording } from "../recordings/library.ts"
 import type { Services } from "../recordings/routes.ts"
+import { unwrapBlob } from "../recordings/messages.ts"
 import { ffmpeg } from "../recordings/thumbnails.ts"
 import { editDb, STREAM_NAME } from "./edit_db.ts"
 import { editMcap } from "./edit_mcap.ts"
@@ -423,6 +424,40 @@ export function replayRoutes({ library }: Services): Route[] {
                         offset: times[i] - start,
                         message: shorten(message),
                     }
+                })
+            },
+        },
+        {
+            method: "GET",
+            path: "api/replay/{id}/raw",
+            description:
+                "One stream's message number `index`, its encoded bytes as published (a .db's lz4 framing undone; the " +
+                "x-message-time header is its time): what the Replayer reads a robot's meshes from (mesh_info)",
+            params: {
+                ...ID,
+                stream: STREAM,
+                index: {
+                    type: "number",
+                    description: "the message's number in its stream, from 0",
+                },
+            },
+            handler: async ({ id, stream, index }) => {
+                const recording = await find(String(id))
+                return await withSource(recording, async (source) => {
+                    const meta = streamOf(source, String(stream))
+                    const { times } = await source.index(meta.name)
+                    const i = Number(index)
+                    if (!Number.isInteger(i) || i < 0 || i >= times.length) {
+                        throw new HttpError(404, `${meta.name} has no message ${index} (it has ${times.length})`)
+                    }
+                    const stored = await source.read(meta.name, i)
+                    const bytes = source.format === "db" ? unwrapBlob(stored) : stored
+                    return new Response(bytes as Uint8Array<ArrayBuffer>, {
+                        headers: {
+                            "content-type": "application/octet-stream",
+                            "x-message-time": String(times[i]),
+                        },
+                    })
                 })
             },
         },

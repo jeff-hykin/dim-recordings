@@ -41,6 +41,8 @@ import { CameraPanels, type CameraState } from "../replay/cameras.tsx"
 import { SidePanel, type SideTab, SideTabs } from "../replay/side.tsx"
 import { DEFAULT_SETTINGS, type ReplaySettings, type RobotChoice } from "../replay/layers.tsx"
 import { useRecordingRobot } from "../replay/use_robot_kind.ts"
+import { useRecordingUrdf } from "../replay/use_urdf.ts"
+import { UrdfRobot } from "../replay/urdf_robot.tsx"
 
 export function Replay({ id }: { id: string }) {
     const [overview, setOverview] = useState<Overview | null>(null)
@@ -185,7 +187,9 @@ function ReplayView({ overview, source, onReload }: {
     const mobile = useMobile()
     const [tab, setTab] = useState<SideTab | null>(() => (matchMedia("(max-width: 720px)").matches ? null : "layers"))
     const [expanded, setExpanded] = usePersistentState("replay.timeline.expanded", false)
-    const [settings, setSettings] = usePersistentState<ReplaySettings>("replay.view.v2", DEFAULT_SETTINGS)
+    const [savedSettings, setSettings] = usePersistentState<ReplaySettings>("replay.view.v2", DEFAULT_SETTINGS)
+    // settings saved before a setting existed get its default
+    const settings = { ...DEFAULT_SETTINGS, ...savedSettings }
     // the layers: one per stream some dimos-react layer type draws; which are on and their settings persist
     const layers = useLayerManager({ storagePrefix: "dim-recordings.layers" })
     const issues = useTfIssues({ tf, layers: () => layers.layerFrames() })
@@ -229,10 +233,14 @@ function ReplayView({ overview, source, onReload }: {
     })
     const mainCamera = cameras.main !== null && cameras.panels.some((panel) => panel.id === cameras.main)
     const robotFrame = settings.followFrame || "base_link"
-    // the robot model: what the recording says it is (never a dog by default), unless picked in Settings for this recording
-    const recordingRobot = useRecordingRobot(overview, tf)
+    // the robot model: the recording's URDF with its recorded meshes (the Controller's model), else a stand-in for what
+    // the recording says it is (never a dog by default), unless picked in Settings for this recording
+    const urdf = useRecordingUrdf(overview)
+    const recordingRobot = useRecordingRobot(overview, tf, urdf.xml)
     const [robotChoice, setRobotChoice] = usePersistentState<RobotChoice>(`replay.robot.${overview.id}`, "auto")
-    const robotKind = robotChoice === "auto" ? recordingRobot?.kind ?? null : robotChoice
+    const urdfComplete = !!urdf.description && (urdf.meshesWanted === 0 || urdf.meshesRecorded > 0)
+    const drawUrdf = robotChoice === "urdf" ? !!urdf.description : robotChoice === "auto" && urdfComplete
+    const robotKind = drawUrdf ? null : robotChoice === "auto" ? recordingRobot?.kind ?? null : robotChoice
 
     return (
         <div className={`rp-page ${mobile ? "rp-mobile" : ""}`} data-testid="replayer">
@@ -271,8 +279,11 @@ function ReplayView({ overview, source, onReload }: {
                 >
                     <TfFeed />
                     <TopicLayers manager={layers} />
-                    {settings.robotModel && robotKind && (
+                    {settings.robotModel && robotKind && robotKind !== "urdf" && (
                         <RobotModel key={robotKind} kind={robotKind} frame={robotFrame} />
+                    )}
+                    {settings.robotModel && drawUrdf && (
+                        <UrdfRobot urdf={urdf} display={settings.urdfDisplay} opacity={settings.urdfOpacity} />
                     )}
                     <FrameHighlight frame={hovered} />
                     <TfFootnote issues={issues} onOpen={() => setTab("tf")} />
@@ -301,6 +312,8 @@ function ReplayView({ overview, source, onReload }: {
                             robotChoice={robotChoice}
                             onRobotChoice={setRobotChoice}
                             recordingRobot={recordingRobot}
+                            urdf={urdf}
+                            drawUrdf={drawUrdf}
                         />
                     )}
                 </Scene3D>

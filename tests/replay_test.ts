@@ -3,7 +3,7 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
-import { McapWriter } from "../backend/deps.ts"
+import { lz4, McapWriter } from "../backend/deps.ts"
 import { encode as lcmEncode } from "../backend/replay/lcm.ts"
 import { inspect } from "../backend/recordings/inspect.ts"
 import { openMcap } from "../backend/recordings/mcap.ts"
@@ -739,4 +739,35 @@ Deno.test("edit .db: without sqlite-vec, a stream with an embedding index refuse
         Deno.env.set("DIM_RECORDINGS_SQLITE_VEC", saved)
     }
     assertEquals((await inspect(path)).streams.map((s) => s.name), ["camera", "odom", "tf"])
+})
+
+Deno.test("api: raw gives a message's bytes as published, a .db's lz4 framing undone (the Replayer's meshes)", async () => {
+    const dir = await tempDir()
+    const meshFile = (uri: string) => {
+        const name = new TextEncoder().encode(uri)
+        const bytes = new Uint8Array(12 + name.length + 3)
+        new DataView(bytes.buffer).setUint32(8, name.length, true)
+        bytes.set(name, 12)
+        bytes.set([1, 2, 3], 12 + name.length)
+        return bytes
+    }
+    writeDb(join(dir, "meshes.db"), [
+        {
+            name: "mesh_info",
+            payload: "dimos.msgs.shape_msgs.MeshFile.MeshFile",
+            codec: "lz4+lcm",
+            times: [T0, T0 + 1],
+            blob: (i) => new Uint8Array(lz4.compress(meshFile(`package://r/${i}.stl`))),
+        },
+    ])
+    const routes = buildRoutes(
+        makeServices({ recordingsDir: dir, dataDir: await tempDir(), desktopUrl: "", appName: "dim-recordings" }),
+    )
+    const get = (url: string) => handle(new Request(`http://app/${url}`), routes, DESCRIPTION)
+    const second = await get("api/replay/meshes.db/raw?stream=mesh_info&index=1")
+    assertEquals(second!.status, 200)
+    assertEquals(new Uint8Array(await second!.arrayBuffer()), meshFile("package://r/1.stl"))
+    assertEquals((await get("api/replay/meshes.db/raw?stream=mesh_info&index=2"))!.status, 404)
+    await closeAll()
+    await Deno.remove(dir, { recursive: true })
 })
