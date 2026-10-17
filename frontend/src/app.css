@@ -47,8 +47,8 @@ body {
 }
 .rec-title {
     font: 400 13px var(--display);
-    letter-spacing: var(--track-label);
-    text-transform: var(--label-case);
+    letter-spacing: var(--display-track, var(--track-label));
+    text-transform: var(--display-case, var(--label-case));
 }
 .rec-items {
     flex: 1;
