@@ -36,8 +36,8 @@ dimos-desktop install https://github.com/jeff-hykin/dim-recordings
 - **Replayer** (`#/replay/<id>`): [dimos-react](https://github.com/jeff-hykin/dimos-react)'s 3D view (the Controller's:
   3D with point clouds, poses and the odometry route, camera panels, the tf tree, layers) playing the recording, with no
   drive / WASD / arm controls. Like the Controller it draws the robot from its URDF (`urdf_info`, meshes from
-  `mesh_info`, which dim-controller's recorder asks for while it records; a stand-in when they weren't recorded), a sim
-  run's world with its grass (`scene_data`) and a top-down minimap. A timeline docked at the bottom plays, pauses, changes speed and scrubs; expanded, it has
+  `mesh_info`, which dim-controller's recorder asks for while it records; a stand-in when they weren't recorded), and a sim
+  run's world with its grass (`scene_data`). A timeline docked at the bottom plays, pauses, changes speed and scrubs; expanded, it has
   a row per stream with a tick per message (scroll to zoom), a switch to draw or hide it, and rename / duplicate /
   delete, which edit the `.db` or `.mcap` in place. Nothing is loaded up front: the backend reads a stream's message
   times when it's first needed and a message when the playhead reaches it. While scrubbing, cameras show 192-px

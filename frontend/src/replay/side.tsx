@@ -8,12 +8,10 @@ import {
     KeyValue,
     Panel,
     Segmented,
-    Select,
     Slider,
     Tabs,
     Text,
     Toggle,
-    type Topic,
 } from "dimos-react"
 import { FramePicker, LayersPanel, RenderingSettings, ROBOT_KINDS, TfPanel } from "dimos-react/three"
 import type { ReplaySettings, RobotChoice } from "./layers.tsx"
@@ -49,8 +47,6 @@ interface SideProps {
     recordingRobot: RobotKindAnswer | null
     urdf: RecordingUrdf
     drawUrdf: boolean
-    /** what the minimap can draw, best first */
-    mapBases: Topic[]
     simScene: SceneData | null
     simProblem: string | null
     sim: SimSettings
@@ -215,28 +211,6 @@ function SettingsTab(props: SideProps) {
                                 />
                             </Field>
                         </>
-                    )}
-                </>
-            )}
-            {props.mapBases.length > 0 && (
-                <>
-                    <Toggle
-                        value={settings.minimap}
-                        label="Minimap"
-                        onChange={(minimap: boolean) => onSettings({ minimap })}
-                    />
-                    {settings.minimap && props.mapBases.length > 1 && (
-                        <Field inline label="Map">
-                            <Select<string>
-                                aria-label="Minimap base map"
-                                value={settings.minimapBase}
-                                options={[
-                                    ["", `auto (${props.mapBases[0].name})`],
-                                    ...props.mapBases.map((topic): [string, string] => [topic.key, topic.name]),
-                                ]}
-                                onChange={(minimapBase: string) => onSettings({ minimapBase })}
-                            />
-                        </Field>
                     )}
                 </>
             )}

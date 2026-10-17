@@ -43,7 +43,6 @@ import { DEFAULT_SETTINGS, type ReplaySettings, type RobotChoice } from "../repl
 import { useRecordingRobot } from "../replay/use_robot_kind.ts"
 import { useRecordingUrdf } from "../replay/use_urdf.ts"
 import { UrdfRobot } from "../replay/urdf_robot.tsx"
-import { mapTopics, Minimap } from "../replay/minimap.tsx"
 import { DEFAULT_SIM, defaultSim, type SimSettings, SimWorld, useRecordingScene } from "../replay/sim_world.tsx"
 
 export function Replay({ id }: { id: string }) {
@@ -321,7 +320,6 @@ function ReplayView({ overview, source, onReload }: {
                             recordingRobot={recordingRobot}
                             urdf={urdf}
                             drawUrdf={drawUrdf}
-                            mapBases={mapTopics(source.topics).bases}
                             simScene={simScene}
                             simProblem={simProblem}
                             sim={sim}
@@ -329,15 +327,6 @@ function ReplayView({ overview, source, onReload }: {
                         />
                     )}
                 </Scene3D>
-                {settings.minimap && mapTopics(source.topics).bases.length > 0 && (
-                    <Minimap
-                        tf={tf}
-                        topics={source.topics}
-                        base={settings.minimapBase}
-                        followFrame={robotFrame}
-                        fixedFrame={settings.fixedFrame || undefined}
-                    />
-                )}
                 <CameraPanels topics={source.topics} state={cameras} onState={setCameras} mobile={mobile} />
                 {head.scrubbing
                     ? <Badge className="rp-scrub-hint" tone="info">scrubbing · thumbnails until you let go</Badge>

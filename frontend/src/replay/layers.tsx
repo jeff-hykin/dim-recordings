@@ -17,9 +17,6 @@ export interface ReplaySettings {
     urdfOpacity: number
     /** a sim run's world (scene_data) */
     simWorld: boolean
-    /** the top-down minimap, and its base map ("" = the best: a lidar map, else a costmap) */
-    minimap: boolean
-    minimapBase: string
     showStats: boolean
 }
 
@@ -32,8 +29,6 @@ export const DEFAULT_SETTINGS: ReplaySettings = {
     urdfDisplay: "visual",
     urdfOpacity: 1,
     simWorld: true,
-    minimap: true,
-    minimapBase: "",
     showStats: false,
 }
 
