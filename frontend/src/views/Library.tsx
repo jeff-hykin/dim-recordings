@@ -537,7 +537,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
         <div
             className={`rec-library ${phone && showDetail && current ? "rec-show-detail" : ""}`}
         >
-            <aside className="rec-list" aria-label="Recordings">
+            <aside className="rec-list" aria-label="Recordings" data-block>
                 <header className="rec-list-head">
                     <div className="rec-row-flex">
                         {/* inside Desktop, its window bar already names the app, so the buttons start the row */}

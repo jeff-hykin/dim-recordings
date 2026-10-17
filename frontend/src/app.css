@@ -36,7 +36,7 @@ body {
     flex-direction: column;
     min-height: 0;
     border-right: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--block-bg, var(--surface)); /* a skin's solid sidebar (Research: Deep Cobalt), else a panel */
 }
 .rec-list-head {
     display: flex;
@@ -64,7 +64,7 @@ body {
     align-items: baseline;
     justify-content: space-between;
     padding: 10px 12px 4px;
-    background: var(--surface);
+    background: var(--block-bg, var(--surface)); /* the list's own fill (see .rec-list) */
 }
 .rec-group-label {
     font: 500 10.5px var(--mono);
