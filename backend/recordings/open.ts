@@ -126,8 +126,9 @@ export async function openIn(
             await desktop(config, `/apps/${MAP_EDITOR_APP}/api/open`, {
                 id: recording.id,
                 name: recording.name,
-                path: recording.path,
-                writable: !recording.symlink,
+                // a symlink's target, so writing in place (a temp file renamed over it) changes the file, not the link
+                path: recording.symlink ? await Deno.realPath(recording.path) : recording.path,
+                writable: !recording.symlink || await writableFile(recording.path),
             })
             if (show) {
                 await desktop(config, "/api/open-app", { app: MAP_EDITOR_APP })
@@ -155,5 +156,19 @@ export function reveal(path: string) {
         spawn(["open", "-R", path])
     } else {
         spawn([which("xdg-open") ?? "xdg-open", path.slice(0, path.lastIndexOf("/")) || "/"])
+    }
+}
+
+/** Whether a symlinked recording's target can be written in place: the file and its folder (a temp file goes there). */
+export async function writableFile(path: string): Promise<boolean> {
+    try {
+        const real = await Deno.realPath(path)
+        const file = await Deno.open(real, { write: true })
+        file.close()
+        const probe = await Deno.makeTempFile({ dir: real.replace(/\/[^/]*$/, ""), prefix: ".dim-recordings-probe-" })
+        await Deno.remove(probe)
+        return true
+    } catch {
+        return false
     }
 }
