@@ -4,7 +4,7 @@
 import { loadConfig } from "./config.ts"
 import { dimosApp } from "./dimos_app.ts"
 import { handle, publishEvent, stateChanged } from "./http.ts"
-import { buildRoutes, DESCRIPTION } from "./routes.ts"
+import { buildRoutes, INFO } from "./routes.ts"
 import { within } from "./recordings/slow_fs.ts"
 import { makeServices } from "./services.ts"
 
@@ -125,7 +125,7 @@ async function file(path: string): Promise<Response> {
 
 async function serve(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname
-    return (await handle(request, routes, DESCRIPTION)) ?? file(path)
+    return (await handle(request, routes, INFO)) ?? file(path)
 }
 
 const socket = dimosApp.socket

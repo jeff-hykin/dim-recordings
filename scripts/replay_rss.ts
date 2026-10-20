@@ -27,7 +27,7 @@ const backend = new Deno.Command(Deno.execPath(), {
 const base = `http://localhost:${port}`
 for (let i = 0; i < 100; i++) {
     try {
-        await fetch(`${base}/agent.json`).then((r) => r.body?.cancel())
+        await fetch(`${base}/openapi.json`).then((r) => r.body?.cancel())
         break
     } catch {
         await new Promise((r) => setTimeout(r, 100))

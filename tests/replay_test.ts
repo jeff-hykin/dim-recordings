@@ -12,7 +12,7 @@ import { editMcap } from "../backend/replay/edit_mcap.ts"
 import { acquire, closeAll, closeNow, Session, TfIndex } from "../backend/replay/player.ts"
 import { atOrBefore, openSource, type Source } from "../backend/replay/source.ts"
 import { handle } from "../backend/http.ts"
-import { buildRoutes, DESCRIPTION } from "../backend/routes.ts"
+import { buildRoutes, INFO } from "../backend/routes.ts"
 import { makeServices } from "../backend/services.ts"
 import { range, tempDir, writeDb } from "./fixtures.ts"
 
@@ -534,7 +534,7 @@ Deno.test("api: stream edits over HTTP refuse a symlinked recording and edit a r
                 body: body === undefined ? undefined : JSON.stringify(body),
             }),
             routes,
-            DESCRIPTION,
+            INFO,
         )
         return { status: response!.status, body: await response!.json() }
     }

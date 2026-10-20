@@ -22,7 +22,18 @@ caches:
     - url: "https://dimos-desktop.cachix.org"
       key: "dimos-desktop.cachix.org-1:A4P35aGJGmCan92LWyamtSFXMqaVE+VRFYnrJ8QMTeQ="
 provides:
-    private:
+    openapi: 3.1.0
+    info:
+        title: Recordings
+        version: 1.0.0
+        description: >-
+            Recordings: the robot recordings in Desktop's recordings folder (.db memory2 SQLite, .mcap, and the .rrd files
+            made from them): list and sort them, inspect their streams and tf tree, keep notes, preview their main camera,
+            rename, delete, duplicate, convert between formats, open them (Replayer, Map Editor, Foxglove, Rerun), upload
+            them to the Dimensional cloud, and bring recordings in from a plugged-in USB drive (GET api/drives, POST api/drives/transfer).
+            GET api/recordings is the overview.
+        x-when: you need to browse, convert, open or upload robot recordings
+    x-private:
         - api/state/*
         - api/recordings/*
         - api/replay/*
@@ -34,380 +45,655 @@ provides:
         - api/open-app
         - api/apps
         - api/events/*
-    when: "you need to browse, convert, open or upload robot recordings"
-    description: >-
-        Recordings: the robot recordings in Desktop's recordings folder (.db memory2 SQLite, .mcap, and the .rrd files made
-        from them): list and sort them, inspect their streams and tf tree, keep notes, preview their main camera, rename,
-        delete, duplicate, convert between formats, open them (Replayer, Map Editor, Foxglove, Rerun), upload them to the
-        Dimensional cloud, and bring recordings in from a plugged-in USB drive (GET api/drives, POST api/drives/transfer).
-        GET api/recordings is the overview.
-    endpoints:
-        - method: GET
-          path: api/recordings
-          description: >-
-              The recordings folder: each .db/.mcap recording (name, size, duration, when recorded, a stream summary, how many
-              warnings, note, preview state, what can open it, the .rrd files made from it) and standalone .rrd files, sorted
-              and in date sections (Today, Yesterday, This week, Last week, This month, then by month) when sorted by date
-          params:
-              sort:
-                  type: string
-                  description: date (default) | size | duration | name
-              order:
-                  type: string
-                  description: desc (default) | asc
-              tz:
-                  type: number
-                  description: the viewer's Date.getTimezoneOffset() in minutes (for Today/Yesterday)
-              extraDirs:
-                  type: string
-                  description: >-
-                      the extra folders to scan too, a JSON array of paths (~ is expanded); they stay the extra folders until the
-                      next call that gives them (the page keeps its list in its own storage and sends it with each list)
-          role: context
-        - method: PUT
-          path: api/extra-dirs
-          description: >-
-              Scan these folders too, besides the shared recordings folder (what the page's Settings sets; it keeps the list
-              itself): each folder's path, how many recordings it holds, or why it couldn't be read
-          params:
-              dirs:
-                  type: array
-                  items:
-                      type: string
-                  required: true
-                  description: 'the folders'' paths (~ is expanded); [] scans only the shared folder'
-        - method: GET
-          path: "api/recordings/{id}"
-          description: >-
-              One recording in full: the list fields plus its inspection: every stream's type, encoding, count, rate (hz), p99
-              and largest gap, the tf frame tree (edges with rate and first/last time, roots, frames with two parents) — what
-              `dtk data summary` prints — and warnings (kind, message, detail, stream/frame, at = seconds in): a broken tf
-              tree (two parents, cycle, separate trees, a stream's frame tf never publishes, transforms that stop early or
-              start late) and streams with outlier gaps, a rate drop, or a late start / early stop
-          params: &ref_0
-              id: &ref_2
-                  type: string
-                  required: true
-                  description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra folder''s)'
-        - method: GET
-          path: "api/recordings/{id}/thumbnail"
-          description: 'The preview sprite: its frames side by side (a jpeg; frame count and size in the list''s `thumbnail`)'
-          params: *ref_0
-        - method: PUT
-          path: "api/recordings/{id}/note"
-          description: 'Set the recording''s note (kept in this app''s data, not in the file; empty text clears it)'
-          params:
-              id: *ref_2
-              text:
-                  type: string
-                  required: true
-                  description: the note
-        - method: POST
-          path: "api/recordings/{id}/rename"
-          description: "Rename a recording (the extension stays; its SQLite sidecars and same-name .rrd follow it, and so does its note)"
-          params:
-              id: *ref_2
-              name:
-                  type: string
-                  required: true
-                  description: "the new name, with or without extension"
-        - method: DELETE
-          path: "api/recordings/{id}"
-          description: >-
-              Delete a recording file (permanent; the page asks first). A symlinked recording loses only the link. Its .rrd
-              files stay
-          params: *ref_0
-        - method: POST
-          path: "api/recordings/{id}/duplicate"
-          description: 'Copy a recording next to itself ("<name> copy.db", or `name`)'
-          params:
-              id: *ref_2
-              name:
-                  type: string
-                  description: 'the copy''s name (default: "<name> copy")'
-        - method: POST
-          path: "api/recordings/{id}/convert"
-          description: >-
-              Convert a .db or .mcap to another format with dtk (to = db | mcap | rrd); the new file lands next to it (an .rrd
-              under the same name, so it lists with it). Returns a job; follow it with GET api/jobs/{job}
-          params:
-              id: *ref_2
-              to:
-                  type: string
-                  required: true
-                  description: db | mcap | rrd
-        - method: GET
-          path: api/jobs
-          description: 'Conversion jobs, newest first: state, progress (0..1), the converter''s last line, the result''s path'
-        - method: GET
-          path: "api/jobs/{job}"
-          description: One conversion job
-          params:
-              job:
-                  type: string
-                  required: true
-                  description: job id
-        - method: DELETE
-          path: "api/jobs/{job}"
-          description: Cancel a running conversion (its partial output is removed)
-          params:
-              job:
-                  type: string
-                  required: true
-                  description: job id
-        - method: POST
-          path: "api/recordings/{id}/open"
-          description: >-
-              Open a recording: target = replayer (this app's player), map-editor (the dim-map-builder app, when installed),
-              foxglove (when installed, for an .mcap whose image/point cloud/camera_info channels are CDR), rerun (an .rrd:
-              the Rerun app, else the rerun viewer). The list's `opens` says which are available and why not
-          params:
-              id: *ref_2
-              target:
-                  type: string
-                  required: true
-                  description: replayer | map-editor | foxglove | rerun
-              show:
-                  type: boolean
-                  description: >-
-                      switch Desktop's window to the app that opened it (default true); false = load only, the answer's `app` says
-                      which
-        - method: POST
-          path: "api/recordings/{id}/reveal"
-          description: "Show the file in Finder (macOS) or the file manager (Linux), on the machine running Desktop"
-          params: *ref_0
-        - method: GET
-          path: "api/recordings/{id}/path"
-          description: The recording's absolute path (what the page's Copy path copies)
-          params: *ref_0
-        - method: POST
-          path: "api/recordings/{id}/upload"
-          description: >-
-              Upload a recording to the Dimensional cloud (Desktop's /dimos-gateway/uploads; queues until logged in). Follow
-              it with GET api/uploads; when done the row carries `uploaded.link`
-          params: *ref_0
-        - method: POST
-          path: "api/recordings/{id}/reupload"
-          description: >-
-              Upload an already uploaded recording again, as name.v2.mcap (then v3, ...; a name.v2 goes up as v3), keeping the
-              earlier upload. The row's `uploaded` says whether it changed since (`changed`, by its topic summary: each
-              stream's name, type, count and first/last time; `changes` lists what moved) and what it would be called
-              (`nextName`). An unchanged one needs force: true
-          params:
-              id: *ref_2
-              force:
-                  type: boolean
-                  description: re-upload even when its topic summary hasn't changed
-        - method: POST
-          path: "api/recordings/{id}/cloud-preview"
-          description: >-
-              TEMPORARY: build an uploaded .mcap's console preview here and send it to the cloud (finished .mcap uploads get
-              one on their own; this is for ones from before)
-          params: *ref_0
-        - method: GET
-          path: api/uploads
-          description: >-
-              The uploads tray: each upload's state, phase, bytes, rate and ETA, link when done; whether it waits for login;
-              the cloud account
-        - method: DELETE
-          path: "api/uploads/{upload}"
-          description: "Cancel a queued or running upload, or remove a finished one from the tray"
-          params:
-              upload:
-                  type: string
-                  required: true
-                  description: upload id
-        - method: POST
-          path: "api/uploads/{upload}/retry"
-          description: Retry a failed or cancelled upload
-          params:
-              upload:
-                  type: string
-                  required: true
-                  description: upload id
-        - method: GET
-          path: api/thumbnails
-          description: >-
-              The preview job: which recording it's working on, and the last results with their wall and CPU time (it runs one
-              recording at a time under nice -n 19, pausing between frames)
-        - method: GET
-          path: api/drives
-          description: >-
-              Plugged-in removable drives (USB sticks, SD cards) that have recordings on them: each drive's name, mount, free
-              space and its .mcap / .db files (path, size, modified, preview state), plus the recordings folder's free space
-              and the transfers so far
-          role: context
-        - method: POST
-          path: api/drives/rescan
-          description: Look for drives again and re-read the recordings on each
-        - method: GET
-          path: api/drives/thumbnail
-          description: 'A drive recording''s preview sprite (a jpeg, like api/recordings/{id}/thumbnail)'
-          params:
-              path:
-                  type: string
-                  required: true
-                  description: the file's path on the drive
-        - method: POST
-          path: api/drives/transfer
-          description: >-
-              Copy or move recordings from a plugged-in drive into the recordings folder. Never overwrites (a taken name
-              becomes "name 2"), refuses when there isn't room, and runs one file at a time; returns the transfers, which GET
-              api/drives follows
-          params:
-              paths:
-                  type: array
-                  required: true
-                  items:
-                      type: string
-                  description: files on the drive
-              mode:
-                  type: string
-                  description: copy (default) | move (deletes it from the drive once copied)
-              name:
-                  type: string
-                  description: a new name for the copy (only with one path)
-        - method: DELETE
-          path: "api/drives/transfer/{id}"
-          description: Cancel a transfer (a half-copied file is removed; the drive's file is untouched)
-          params:
-              id:
-                  type: string
-                  required: true
-                  description: the transfer id
-        - method: POST
-          path: api/drives/rename
-          description: "Rename a recording on a plugged-in drive, in place (keeps its extension; refuses a taken name)"
-          params:
-              path:
-                  type: string
-                  required: true
-                  description: the file's path on the drive
-              name:
-                  type: string
-                  required: true
-                  description: the new name
-        - method: GET
-          path: "api/replay/{id}"
-          description: >-
-              The Replayer's view of a recording: start/end, every stream (type, kind: image | cloud | tf | pose | info |
-              other, count, first/last time), scrubbing-thumbnail progress, and the playhead of each page playing it
-          params: &ref_1
-              id: &ref_3
-                  type: string
-                  required: true
-                  description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra folder''s)'
-        - method: GET
-          path: "api/replay/{id}/timeline"
-          description: >-
-              Per-stream message density for the timeline rows: the recording's span cut into `bins` equal slices and each
-              stream's message count per slice (ticks), plus its exact times when it has at most `exact` messages
-          params:
-              id: *ref_3
-              bins:
-                  type: number
-                  description: slices (default 1200)
-              exact:
-                  type: number
-                  description: send exact times for streams with at most this many messages in the window (default 2000)
-              from:
-                  type: number
-                  description: "window start (recording time, seconds; default: the start)"
-              to:
-                  type: number
-                  description: "window end (recording time, seconds; default: the end)"
-        - method: GET
-          path: "api/replay/{id}/ws"
-          description: >-
-              The playback stream (a websocket the page opens): it sends {op:sub, id, stream, as: lcm | image | cloud |
-              header} and {op:at, t, mode: play | scrub | pause, seq}; the backend answers with what each stream has at the
-              playhead (binary: u32 header length, JSON header, payload) and {op:done, seq}
-          params: *ref_1
-        - method: POST
-          path: "api/replay/{id}/control"
-          description: >-
-              Drive the Replayer pages showing this recording: action = play | pause | seek (t: seconds since the recording's
-              start) | speed (speed: 0.25..8)
-          params:
-              id: *ref_3
-              action:
-                  type: string
-                  required: true
-                  description: play | pause | seek | speed
-              t:
-                  type: number
-                  description: "seek: seconds since the start"
-              speed:
-                  type: number
-                  description: "speed: playback rate"
-          role: context
-        - method: GET
-          path: "api/replay/{id}/frame"
-          description: >-
-              One camera frame as an image (jpeg, or png for raw pixels): the stream's message at or before time t (seconds
-              since the start; default the first frame); without a stream, the main camera (color first)
-          params:
-              id: *ref_3
-              stream:
-                  type: string
-                  description: "image stream (default: the main camera)"
-              t:
-                  type: number
-                  description: seconds since the start (default 0)
-        - method: GET
-          path: "api/replay/{id}/message"
-          description: >-
-              One stream's message at or before time t (seconds since the start), decoded to JSON (long arrays shortened):
-              what the player shows for that stream at that moment
-          params:
-              id: *ref_3
-              stream: &ref_4
-                  type: string
-                  required: true
-                  description: stream (topic) name
-              t:
-                  type: number
-                  description: seconds since the start (default 0)
-        - method: GET
-          path: "api/replay/{id}/path"
-          description: >-
-              The whole route of a pose stream (nav_msgs Odometry / PoseStamped): up to maxPoints [t, x, y, z] in its frame
-              (what the player draws as the odometry path)
-          params:
-              id: *ref_3
-              stream: *ref_4
-              maxPoints:
-                  type: number
-                  description: most points (default 4000)
-        - method: POST
-          path: "api/recordings/{id}/streams/{stream}/rename"
-          description: >-
-              Rename a stream inside the recording, in place (a .db: ALTER TABLE; an .mcap: the chunk with its channel record
-              and the summary rewritten into a temp file beside it, then renamed over it). Players reload
-          params:
-              id: *ref_3
-              stream: *ref_4
-              name:
-                  type: string
-                  required: true
-                  description: the new name
-        - method: DELETE
-          path: "api/recordings/{id}/streams/{stream}"
-          description: >-
-              Delete a stream and all its messages from the recording, in place (permanent; the page asks first). Players
-              reload
-          params:
-              id: *ref_3
-              stream: *ref_4
-        - method: POST
-          path: "api/recordings/{id}/streams/{stream}/duplicate"
-          description: 'Copy a stream inside the same recording under a new name (default "<stream>_copy"), in place. Players reload'
-          params:
-              id: *ref_3
-              stream: *ref_4
-              name:
-                  type: string
-                  description: the copy's name (default "<stream>_copy")
+    paths:
+        /api/recordings:
+            get:
+                description: >-
+                    The recordings folder: each .db/.mcap recording (name, size, duration, when recorded, a stream summary,
+                    how many warnings, note, preview state, what can open it, the .rrd files made from it) and standalone
+                    .rrd files, sorted and in date sections (Today, Yesterday, This week, Last week, This month, then by month)
+                    when sorted by date
+                x-dimos-role: context
+                parameters:
+                    - name: sort
+                      in: query
+                      schema:
+                          type: string
+                      description: date (default) | size | duration | name
+                    - name: order
+                      in: query
+                      schema:
+                          type: string
+                      description: desc (default) | asc
+                    - name: tz
+                      in: query
+                      schema:
+                          type: number
+                      description: the viewer's Date.getTimezoneOffset() in minutes (for Today/Yesterday)
+                    - name: extraDirs
+                      in: query
+                      schema:
+                          type: string
+                      description: >-
+                          the extra folders to scan too, a JSON array of paths (~ is expanded); they stay the extra folders
+                          until the next call that gives them (the page keeps its list in its own storage and sends it with
+                          each list)
+        /api/extra-dirs:
+            put:
+                description: >-
+                    Scan these folders too, besides the shared recordings folder (what the page's Settings sets; it keeps
+                    the list itself): each folder's path, how many recordings it holds, or why it couldn't be read
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    dirs:
+                                        type: array
+                                        items:
+                                            type: string
+                                        description: the folders' paths (~ is expanded); [] scans only the shared folder
+                                required:
+                                    - dirs
+        /api/recordings/{id}:
+            get:
+                description: >-
+                    One recording in full: the list fields plus its inspection: every stream's type, encoding, count, rate
+                    (hz), p99 and largest gap, the tf frame tree (edges with rate and first/last time, roots, frames with
+                    two parents) — what `dtk data summary` prints — and warnings (kind, message, detail, stream/frame, at
+                    = seconds in): a broken tf tree (two parents, cycle, separate trees, a stream's frame tf never publishes,
+                    transforms that stop early or start late) and streams with outlier gaps, a rate drop, or a late start
+                    / early stop
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+            delete:
+                description: >-
+                    Delete a recording file (permanent; the page asks first). A symlinked recording loses only the link. Its
+                    .rrd files stay
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/recordings/{id}/thumbnail:
+            get:
+                summary: 'The preview sprite: its frames side by side (a jpeg; frame count and size in the list''s `thumbnail`)'
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/recordings/{id}/note:
+            put:
+                summary: Set the recording's note (kept in this app's data, not in the file; empty text clears it)
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    text:
+                                        type: string
+                                        description: the note
+                                required:
+                                    - text
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/recordings/{id}/rename:
+            post:
+                description: >-
+                    Rename a recording (the extension stays; its SQLite sidecars and same-name .rrd follow it, and so does
+                    its note)
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    name:
+                                        type: string
+                                        description: the new name, with or without extension
+                                required:
+                                    - name
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/recordings/{id}/duplicate:
+            post:
+                summary: Copy a recording next to itself ("<name> copy.db", or `name`)
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    name:
+                                        type: string
+                                        description: 'the copy''s name (default: "<name> copy")'
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/recordings/{id}/convert:
+            post:
+                description: >-
+                    Convert a .db or .mcap to another format with dtk (to = db | mcap | rrd); the new file lands next to it
+                    (an .rrd under the same name, so it lists with it). Returns a job; follow it with GET api/jobs/{job}
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    to:
+                                        type: string
+                                        description: db | mcap | rrd
+                                required:
+                                    - to
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/jobs:
+            get:
+                summary: 'Conversion jobs, newest first: state, progress (0..1), the converter''s last line, the result''s
+                    path'
+        /api/jobs/{job}:
+            get:
+                summary: One conversion job
+                parameters:
+                    - name: job
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: job id
+            delete:
+                summary: Cancel a running conversion (its partial output is removed)
+                parameters:
+                    - name: job
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: job id
+        /api/recordings/{id}/open:
+            post:
+                description: >-
+                    Open a recording: target = replayer (this app's player), map-editor (the dim-map-builder app, when installed),
+                    foxglove (when installed, for an .mcap whose image/point cloud/camera_info channels are CDR), rerun (an
+                    .rrd: the Rerun app, else the rerun viewer). The list's `opens` says which are available and why not
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    target:
+                                        type: string
+                                        description: replayer | map-editor | foxglove | rerun
+                                    show:
+                                        type: boolean
+                                        description: >-
+                                            switch Desktop's window to the app that opened it (default true); false = load
+                                            only, the answer's `app` says which
+                                required:
+                                    - target
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/recordings/{id}/reveal:
+            post:
+                summary: Show the file in Finder (macOS) or the file manager (Linux), on the machine running Desktop
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/recordings/{id}/path:
+            get:
+                summary: The recording's absolute path (what the page's Copy path copies)
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/recordings/{id}/upload:
+            post:
+                description: >-
+                    Upload a recording to the Dimensional cloud (Desktop's /dimos-gateway/uploads; queues until logged in).
+                    Follow it with GET api/uploads; when done the row carries `uploaded.link`
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/recordings/{id}/reupload:
+            post:
+                description: >-
+                    Upload an already uploaded recording again, as name.v2.mcap (then v3, ...; a name.v2 goes up as v3), keeping
+                    the earlier upload. The row's `uploaded` says whether it changed since (`changed`, by its topic summary:
+                    each stream's name, type, count and first/last time; `changes` lists what moved) and what it would be
+                    called (`nextName`). An unchanged one needs force: true
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    force:
+                                        type: boolean
+                                        description: re-upload even when its topic summary hasn't changed
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/recordings/{id}/cloud-preview:
+            post:
+                description: >-
+                    TEMPORARY: build an uploaded .mcap's console preview here and send it to the cloud (finished .mcap uploads
+                    get one on their own; this is for ones from before)
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/uploads:
+            get:
+                description: >-
+                    The uploads tray: each upload's state, phase, bytes, rate and ETA, link when done; whether it waits for
+                    login; the cloud account
+        /api/uploads/{upload}:
+            delete:
+                summary: Cancel a queued or running upload, or remove a finished one from the tray
+                parameters:
+                    - name: upload
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: upload id
+        /api/uploads/{upload}/retry:
+            post:
+                summary: Retry a failed or cancelled upload
+                parameters:
+                    - name: upload
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: upload id
+        /api/thumbnails:
+            get:
+                description: >-
+                    The preview job: which recording it's working on, and the last results with their wall and CPU time (it
+                    runs one recording at a time under nice -n 19, pausing between frames)
+        /api/drives:
+            get:
+                description: >-
+                    Plugged-in removable drives (USB sticks, SD cards) that have recordings on them: each drive's name, mount,
+                    free space and its .mcap / .db files (path, size, modified, preview state), plus the recordings folder's
+                    free space and the transfers so far
+                x-dimos-role: context
+        /api/drives/rescan:
+            post:
+                summary: Look for drives again and re-read the recordings on each
+        /api/drives/thumbnail:
+            get:
+                summary: A drive recording's preview sprite (a jpeg, like api/recordings/{id}/thumbnail)
+                parameters:
+                    - name: path
+                      in: query
+                      schema:
+                          type: string
+                      required: true
+                      description: the file's path on the drive
+        /api/drives/transfer:
+            post:
+                description: >-
+                    Copy or move recordings from a plugged-in drive into the recordings folder. Never overwrites (a taken
+                    name becomes "name 2"), refuses when there isn't room, and runs one file at a time; returns the transfers,
+                    which GET api/drives follows
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    paths:
+                                        type: array
+                                        items:
+                                            type: string
+                                        description: files on the drive
+                                    mode:
+                                        type: string
+                                        description: copy (default) | move (deletes it from the drive once copied)
+                                    name:
+                                        type: string
+                                        description: a new name for the copy (only with one path)
+                                required:
+                                    - paths
+        /api/drives/transfer/{id}:
+            delete:
+                summary: Cancel a transfer (a half-copied file is removed; the drive's file is untouched)
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: the transfer id
+        /api/drives/rename:
+            post:
+                summary: Rename a recording on a plugged-in drive, in place (keeps its extension; refuses a taken name)
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    path:
+                                        type: string
+                                        description: the file's path on the drive
+                                    name:
+                                        type: string
+                                        description: the new name
+                                required:
+                                    - path
+                                    - name
+        /api/replay/{id}:
+            get:
+                description: >-
+                    The Replayer's view of a recording: start/end, every stream (type, kind: image | cloud | tf | pose | info
+                    | other, count, first/last time), scrubbing-thumbnail progress, and the playhead of each page playing
+                    it
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/replay/{id}/timeline:
+            get:
+                description: >-
+                    Per-stream message density for the timeline rows: the recording's span cut into `bins` equal slices and
+                    each stream's message count per slice (ticks), plus its exact times when it has at most `exact` messages
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+                    - name: bins
+                      in: query
+                      schema:
+                          type: number
+                      description: slices (default 1200)
+                    - name: exact
+                      in: query
+                      schema:
+                          type: number
+                      description: send exact times for streams with at most this many messages in the window (default 2000)
+                    - name: from
+                      in: query
+                      schema:
+                          type: number
+                      description: "window start (recording time, seconds; default: the start)"
+                    - name: to
+                      in: query
+                      schema:
+                          type: number
+                      description: "window end (recording time, seconds; default: the end)"
+        /api/replay/{id}/ws:
+            get:
+                description: >-
+                    The playback stream (a websocket the page opens): it sends {op:sub, id, stream, as: lcm | image | cloud
+                    | header} and {op:at, t, mode: play | scrub | pause, seq}; the backend answers with what each stream has
+                    at the playhead (binary: u32 header length, JSON header, payload) and {op:done, seq}
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/replay/{id}/control:
+            post:
+                description: >-
+                    Drive the Replayer pages showing this recording: action = play | pause | seek (t: seconds since the recording's
+                    start) | speed (speed: 0.25..8)
+                x-dimos-role: context
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    action:
+                                        type: string
+                                        description: play | pause | seek | speed
+                                    t:
+                                        type: number
+                                        description: "seek: seconds since the start"
+                                    speed:
+                                        type: number
+                                        description: "speed: playback rate"
+                                required:
+                                    - action
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+        /api/replay/{id}/frame:
+            get:
+                description: >-
+                    One camera frame as an image (jpeg, or png for raw pixels): the stream's message at or before time t (seconds
+                    since the start; default the first frame); without a stream, the main camera (color first)
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+                    - name: stream
+                      in: query
+                      schema:
+                          type: string
+                      description: "image stream (default: the main camera)"
+                    - name: t
+                      in: query
+                      schema:
+                          type: number
+                      description: seconds since the start (default 0)
+        /api/replay/{id}/message:
+            get:
+                description: >-
+                    One stream's message at or before time t (seconds since the start), decoded to JSON (long arrays shortened):
+                    what the player shows for that stream at that moment
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+                    - name: stream
+                      in: query
+                      schema:
+                          type: string
+                      required: true
+                      description: stream (topic) name
+                    - name: t
+                      in: query
+                      schema:
+                          type: number
+                      description: seconds since the start (default 0)
+        /api/replay/{id}/path:
+            get:
+                description: >-
+                    The whole route of a pose stream (nav_msgs Odometry / PoseStamped): up to maxPoints [t, x, y, z] in its
+                    frame (what the player draws as the odometry path)
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+                    - name: stream
+                      in: query
+                      schema:
+                          type: string
+                      required: true
+                      description: stream (topic) name
+                    - name: maxPoints
+                      in: query
+                      schema:
+                          type: number
+                      description: most points (default 4000)
+        /api/recordings/{id}/streams/{stream}/rename:
+            post:
+                description: >-
+                    Rename a stream inside the recording, in place (a .db: ALTER TABLE; an .mcap: the chunk with its channel
+                    record and the summary rewritten into a temp file beside it, then renamed over it). Players reload
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    name:
+                                        type: string
+                                        description: the new name
+                                required:
+                                    - name
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+                    - name: stream
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: stream (topic) name
+        /api/recordings/{id}/streams/{stream}:
+            delete:
+                description: >-
+                    Delete a stream and all its messages from the recording, in place (permanent; the page asks first). Players
+                    reload
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+                    - name: stream
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: stream (topic) name
+        /api/recordings/{id}/streams/{stream}/duplicate:
+            post:
+                description: >-
+                    Copy a stream inside the same recording under a new name (default "<stream>_copy"), in place. Players
+                    reload
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    name:
+                                        type: string
+                                        description: the copy's name (default "<stream>_copy")
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+                    - name: stream
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: stream (topic) name
 nix:
     cache:
         aarch64-linux:

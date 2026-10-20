@@ -4,7 +4,7 @@ import { assert, assertEquals } from "@std/assert"
 import { DatabaseSync } from "node:sqlite"
 import { basename, join } from "node:path"
 import { handle } from "../backend/http.ts"
-import { buildRoutes, DESCRIPTION } from "../backend/routes.ts"
+import { buildRoutes, INFO } from "../backend/routes.ts"
 import { makeServices } from "../backend/services.ts"
 import {
     type Baseline,
@@ -162,7 +162,7 @@ Deno.test({
                     body: body === undefined ? undefined : JSON.stringify(body),
                 }),
                 routes,
-                DESCRIPTION,
+                INFO,
             )
             return { status: response!.status, body: await response!.json() }
         }

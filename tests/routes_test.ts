@@ -2,7 +2,7 @@
 import { assert, assertEquals } from "@std/assert"
 import { join } from "node:path"
 import { handle } from "../backend/http.ts"
-import { buildRoutes, DESCRIPTION } from "../backend/routes.ts"
+import { buildRoutes, INFO } from "../backend/routes.ts"
 import { makeServices } from "../backend/services.ts"
 import { lcmTf, range, tempDir, writeDb } from "./fixtures.ts"
 
@@ -27,7 +27,7 @@ async function app() {
         const response = await handle(
             new Request(`http://app/${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body) }),
             routes,
-            DESCRIPTION,
+            INFO,
         )
         return { status: response!.status, body: await response!.json() }
     }
@@ -84,9 +84,13 @@ Deno.test("api: an extra folder sent with the list: its rows, their actions by i
     assertEquals((await call("GET", `api/recordings/${encodeURIComponent(renamed.body.id)}`)).status, 404)
 })
 
-Deno.test("api: agent.json lists every route", async () => {
+Deno.test("api: openapi.json lists every route", async () => {
     const { call } = await app()
-    const manifest = await call("GET", "agent.json")
-    assert(manifest.body.endpoints.length >= 15)
-    assert(manifest.body.endpoints.every((e: { description: string }) => e.description.length > 10))
+    const doc = await call("GET", "openapi.json")
+    assertEquals(doc.body.openapi, "3.1.0")
+    const operations = Object.values(doc.body.paths).flatMap((item) => Object.values(item as object))
+    assert(operations.length >= 15)
+    assert(
+        operations.every((o: { summary?: string; description?: string }) => (o.summary ?? o.description)!.length > 10),
+    )
 })

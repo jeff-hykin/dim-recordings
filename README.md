@@ -46,7 +46,7 @@ dimos-desktop install https://github.com/jeff-hykin/dim-recordings
   background work (that index, the scrubbing thumbnails) only runs while no page is playing or scrubbing.
 
 Each of these is an HTTP endpoint (`backend/recordings/routes.ts`, `backend/replay/routes.ts`, listed in dimos.yaml's
-`agent:`), so Desktop's agent can do anything the page does.
+`provides:`), so Desktop's agent can do anything the page does.
 
 ## Backend → page
 
