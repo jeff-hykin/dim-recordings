@@ -139,12 +139,23 @@ export type RrdFile = {
     opens: OpenTarget[]
 }
 
+/** a recording's latest upload (itself, or a name.vN re-upload) */
 export type Uploaded = {
     path: string
     uploadId: string
     link: string | null
+    /** changed since that upload: by topic summary when one was kept then, else by size + mtime (`changedBy`) */
     changed: boolean
+    changedBy: "summary" | "size+mtime"
+    /** what moved, one line per stream ("tf: 10 → 12 messages") */
+    changes: string[]
+    /** the file's bytes changed (size or mtime), even when its streams look the same */
+    bytesChanged: boolean
     uploadedAt: number
+    /** the name it went up as */
+    name: string
+    /** what a re-upload would be called: name.v2.mcap, ... */
+    nextName: string
 }
 
 export type Recording = {
@@ -206,6 +217,8 @@ export type Job = {
 export type Upload = {
     id: string
     path: string
+    /** the recording it's of: `path`, or what a name.vN re-upload's symlink points at */
+    recording?: string
     name: string
     size: number
     state: "queued" | "uploading" | "done" | "failed" | "cancelled"
@@ -283,6 +296,8 @@ export const api = {
         ),
     reveal: (id: string) => call("POST", `api/recordings/${enc(id)}/reveal`, {}),
     upload: (id: string) => call<Upload>("POST", `api/recordings/${enc(id)}/upload`, {}),
+    reupload: (id: string, force = false) =>
+        call<Upload & { name: string }>("POST", `api/recordings/${enc(id)}/reupload`, { force }),
     tray: () => call<Tray>("GET", "api/uploads"),
     removeUpload: (id: string) => call("DELETE", `api/uploads/${enc(id)}`),
     retryUpload: (id: string) => call("POST", `api/uploads/${enc(id)}/retry`, {}),

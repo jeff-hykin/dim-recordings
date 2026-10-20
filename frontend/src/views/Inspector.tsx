@@ -53,6 +53,8 @@ export type InspectorActions = {
     replay: () => void
     rename: () => void
     upload: () => void
+    /** upload it again as name.vN (in ⋯ via `more`; a button too once it changed since its upload) */
+    reupload: () => void
     remove: () => void
     /** Open with: the targets the recording can open in */
     opens: MenuItem[]
@@ -709,6 +711,7 @@ export function Inspector(
             icon: "upload",
             onSelect: actions.upload,
         }
+    const changedSince = !busy && recording.uploaded?.changed ? recording.uploaded : null
     // a narrow pane folds Rename / Upload / Delete / Open with into ⋯ (Replay stays)
     const folded: MenuItem[] = narrow
         ? [
@@ -756,6 +759,13 @@ export function Inspector(
                             <Badge>.{recording.format}</Badge>
                             {recording.symlink && <Badge title="a symlink to a file elsewhere">link</Badge>}
                         </div>
+                        {changedSince && (
+                            <Text small muted data-testid="changed-since-upload">
+                                changed since it went up as {changedSince.name}
+                                {changedSince.changes.length ? `: ${changedSince.changes.slice(0, 3).join(", ")}` : ""}
+                                {changedSince.changes.length > 3 ? `, and ${changedSince.changes.length - 3} more` : ""}
+                            </Text>
+                        )}
                     </div>
                 </div>
                 <div className="rec-row-flex rec-acts">
@@ -787,6 +797,17 @@ export function Inspector(
                             >
                                 {uploadAction.label}
                             </Button>
+                            {changedSince && (
+                                <Button
+                                    size="sm"
+                                    icon="upload"
+                                    data-testid="action-reupload"
+                                    title={changedSince.changes.join("\n") || undefined}
+                                    onClick={actions.reupload}
+                                >
+                                    Re-upload as {changedSince.nextName}
+                                </Button>
+                            )}
                             <Button
                                 size="sm"
                                 variant="danger"

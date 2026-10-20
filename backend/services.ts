@@ -7,6 +7,7 @@ import { notifyDrive } from "./recordings/notify.ts"
 import { Library } from "./recordings/library.ts"
 import type { Services } from "./recordings/routes.ts"
 import { Thumbnailer } from "./recordings/thumb_worker.ts"
+import { Baselines } from "./recordings/reupload.ts"
 import { Uploads } from "./recordings/uploads.ts"
 
 export function makeServices(config: Config): Services {
@@ -18,5 +19,5 @@ export function makeServices(config: Config): Services {
     // a drive's recordings get previews too, first, so the transfer dialog can show which is which
     thumbnails.extra = () => drives.files()
     const transfers = new Transfers(library, drives)
-    return { library, jobs, thumbnails, uploads: new Uploads(config), drives, transfers }
+    return { library, jobs, thumbnails, uploads: new Uploads(config, new Baselines(config.dataDir)), drives, transfers }
 }

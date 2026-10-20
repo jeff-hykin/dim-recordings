@@ -22,6 +22,7 @@ import {
     toast,
     useBackendEvents,
     useBackendState,
+    useConfirm,
     useMobile,
     usePrompt,
 } from "dimos-react"
@@ -81,6 +82,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
     const [trayOpen, setTrayOpen] = useState(false)
     const [thumbVersion, setThumbVersion] = useState(1)
     const prompt = usePrompt()
+    const confirm = useConfirm()
     const { tray, error: trayError, refresh: refreshTray } = useTray()
     // plugged-in drives with recordings: a Transfer button while there are any (state/drives)
     const [drives] = useBackendState("drives", { url: "api/drives" }) as [
@@ -134,7 +136,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
     const current = selected ? everything.find((r) => r.id === selected) : undefined
     const inspected = current && current.format !== "rrd" ? current : undefined
     const uploadsByPath = new Map<string, Upload>(
-        (tray?.uploads ?? []).map((u) => [u.path, u]),
+        (tray?.uploads ?? []).map((u) => [u.recording ?? u.path, u]),
     )
     const waitingForLogin = !!tray &&
         (tray.waitingForLogin || !tray.account.loggedIn)
@@ -253,6 +255,46 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
         }
         refreshTray()
     }
+    /** uploads it again as name.vN (the earlier upload stays); asks first when its streams haven't changed */
+    const reupload = async (recording: Recording) => {
+        const uploaded = recording.uploaded
+        const live = uploadsByPath.get(recording.path)
+        if (!uploaded || (live && (live.state === "queued" || live.state === "uploading"))) {
+            setTrayOpen(true)
+            return
+        }
+        if (
+            !uploaded.changed && !(await confirm({
+                title: `Re-upload ${recording.name}`,
+                message: uploaded.bytesChanged
+                    ? `Its streams look the same as when it went up as ${uploaded.name}, though the file changed. Upload it again as ${uploaded.nextName}?`
+                    : `It hasn't changed since it went up as ${uploaded.name}. Upload it again as ${uploaded.nextName}?`,
+                confirmLabel: "Re-upload",
+            }))
+        ) {
+            return
+        }
+        try {
+            const queued = await api.reupload(recording.id, !uploaded.changed)
+            toast.ok(`uploading ${queued.name}`)
+            setTrayOpen(true)
+            if (tray && !tray.account.loggedIn) {
+                openCloudLogin()
+            }
+        } catch (e) {
+            fail(e)
+        }
+        refreshTray()
+    }
+    const reuploadItem = (recording: Recording): MenuItem[] =>
+        recording.uploaded
+            ? [{
+                label: `Re-upload as ${recording.uploaded.nextName}${recording.uploaded.changed ? "" : "…"}`,
+                icon: "upload",
+                title: recording.uploaded.changes.join("\n") || undefined,
+                onSelect: () => reupload(recording),
+            }]
+            : []
     const remove = async (recordings: Item[]) => {
         let gone = 0
         for (const recording of recordings) {
@@ -304,6 +346,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
             onSelect: () => open(recording, o.target),
         }))
     const moreMenu = (recording: Recording): MenuItem[] => [
+        ...reuploadItem(recording),
         {
             label: "Duplicate",
             icon: "copy",
@@ -419,6 +462,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                     icon: "upload",
                     onSelect: () => upload([recording as Recording]),
                 },
+                ...reuploadItem(recording as Recording),
             )
         }
         items.push("-", {
@@ -496,6 +540,16 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                                     {live.state === "queued" ? "queued for upload" : "uploading…"}
                                 </Text>
                             )}
+                            {r.uploaded?.changed &&
+                                !(live?.state === "uploading" || live?.state === "queued") && (
+                                <Text
+                                    small
+                                    as="div"
+                                    title={r.uploaded.changes.join("\n") || undefined}
+                                >
+                                    changed since {r.uploaded.name} went up
+                                </Text>
+                            )}
                         </>
                     }
                     meta={status}
@@ -528,6 +582,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
         replay: () => open(recording, "replayer"),
         rename: () => rename(recording),
         upload: () => upload([recording]),
+        reupload: () => reupload(recording),
         remove: () => setDeleting([recording]),
         opens: opensMenu(recording),
         more: moreMenu(recording),

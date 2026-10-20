@@ -11,6 +11,7 @@ import { environment, openIn, type OpenTarget, openTargets, reveal } from "./ope
 import { type Order, sections, type SortKey } from "./sort.ts"
 import { Thumbnailer } from "./thumb_worker.ts"
 import { ffmpeg } from "./thumbnails.ts"
+import { topicSummary } from "./reupload.ts"
 import { type Uploaded, Uploads } from "./uploads.ts"
 
 export type Services = {
@@ -34,10 +35,14 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             throw error instanceof NotFound ? new HttpError(404, error.message) : error
         }
     }
+    const summaryOf = (recording: Recording) =>
+        recording.inspection && !recording.inspection.error ? topicSummary(recording.inspection) : null
+    const localNames = async () => (await library.files()).map((file) => file.name)
     const row = async (
         recording: Recording,
         env: Awaited<ReturnType<typeof environment>>,
         uploaded: Record<string, Uploaded>,
+        names: string[],
     ) => {
         const { inspection, ...rest } = recording
         return {
@@ -50,7 +55,9 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             thumbnail: await thumbnails.stateOf(recording),
             opens: openTargets(recording.format, inspection, env),
             conversions: conversions(recording.format),
-            uploaded: uploaded[recording.path] ?? null,
+            uploaded: recording.format === "rrd"
+                ? null
+                : uploads.status(recording, summaryOf(recording), uploaded, names),
             rrds: recording.rrds.map((rrd) => ({
                 ...rrd,
                 opens: openTargets("rrd", null, env),
@@ -82,7 +89,8 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
                 const env = await environment(library.config)
                 const uploadedMap = await uploads.uploadedByPath()
                 const all = await library.list()
-                const rows = await Promise.all(all.map((recording) => row(recording, env, uploadedMap)))
+                const names = all.map((recording) => recording.name)
+                const rows = await Promise.all(all.map((recording) => row(recording, env, uploadedMap, names)))
                 const grouped = sections(rows, key, direction, Date.now() / 1000, Number(tz ?? 0) || 0)
                 return {
                     dir: library.dir,
@@ -114,7 +122,7 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
                 const recording = await find(String(id))
                 const env = await environment(library.config)
                 return {
-                    ...(await row(recording, env, await uploads.uploadedByPath())),
+                    ...(await row(recording, env, await uploads.uploadedByPath(), await localNames())),
                     inspection: recording.inspection,
                 }
             },
@@ -307,7 +315,43 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
                 if (recording.format === "rrd") {
                     throw new HttpError(400, "only .db and .mcap recordings upload")
                 }
-                return await uploads.start(recording.path)
+                return await uploads.start(recording.path, recording, summaryOf(recording))
+            },
+        },
+        {
+            method: "POST",
+            path: "api/recordings/{id}/reupload",
+            description:
+                "Upload an already uploaded recording again, as name.v2.mcap (then v3, ...; a name.v2 goes up as v3), " +
+                "keeping the earlier upload. The row's `uploaded` says whether it changed since (`changed`, by its topic " +
+                "summary: each stream's name, type, count and first/last time; `changes` lists what moved) and what it " +
+                "would be called (`nextName`). An unchanged one needs force: true",
+            params: {
+                ...ID,
+                force: { type: "boolean", description: "re-upload even when its topic summary hasn't changed" },
+            },
+            handler: async ({ id, force }) => {
+                const recording = await find(String(id))
+                if (recording.format === "rrd") {
+                    throw new HttpError(400, "only .db and .mcap recordings upload")
+                }
+                const summary = summaryOf(recording)
+                const status = uploads.status(recording, summary, await uploads.uploadedByPath(), await localNames())
+                if (!status) {
+                    throw new HttpError(400, `${recording.name} hasn't been uploaded from here yet: upload it first`)
+                }
+                if (await uploads.live(recording.path)) {
+                    throw new HttpError(409, `${recording.name} is already uploading`)
+                }
+                if (!status.changed && force !== true && force !== "true") {
+                    throw new HttpError(
+                        409,
+                        `${recording.name} hasn't changed since it went up as ${status.name} (${status.changedBy}); ` +
+                            "pass force: true to upload it again anyway",
+                    )
+                }
+                const path = await uploads.baselines.link(recording.path, status.nextName)
+                return { ...(await uploads.start(path, recording, summary)), name: status.nextName }
             },
         },
         {
