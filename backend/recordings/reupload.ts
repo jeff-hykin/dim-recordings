@@ -7,6 +7,7 @@ import type { Inspection } from "./inspect.ts"
 /** per stream (sorted by name): what an edit moves (rename, delete, trim, append, retype); times in ms */
 export type TopicSummary = { name: string; type: string; count: number; start: number | null; end: number | null }[]
 
+// TODO: an edit that changes values but not counts or times (a tf fixed in place) reads as unchanged; force re-upload covers it
 export function topicSummary(inspection: Pick<Inspection, "streams">): TopicSummary {
     const ms = (time: number | null) => time === null ? null : Math.round(time * 1000)
     const order = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
@@ -49,6 +50,7 @@ export function splitVersion(name: string): { base: string; version: number; ext
     return { base: match[1], version: match[2] === undefined ? 1 : Number(match[2]), ext: match[3] }
 }
 
+// TODO: versions only know this machine's uploads; a .vN uploaded from elsewhere can be reused
 /** the next version after the name's own and every taken one of the same base: foo.mcap → foo.v2.mcap, a v2 → v3 */
 export function versionedName(name: string, taken: Iterable<string>): string {
     const own = splitVersion(name)
@@ -152,6 +154,7 @@ export class Baselines {
 
     /** a symlink named `name` to the recording, in a folder named like the recording's (dimos reads a run's blueprint
      * from its folder's name) */
+    // TODO: links under reuploads/ are never cleaned up once their upload finishes
     async link(recording: string, name: string): Promise<string> {
         const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(recording))
         const hex = [...new Uint8Array(digest)].slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("")
