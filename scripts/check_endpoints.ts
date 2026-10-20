@@ -13,6 +13,8 @@ const want = describe(DESCRIPTION, buildRoutes(makeServices(config)))
 if (Deno.args.includes("--write")) {
     yaml.provides = { ...(yaml.provides as object | undefined), ...want }
     await Deno.writeTextFile(file, stringify(yaml, { lineWidth: 120 }))
+    // stringify's indents aren't deno fmt's (CI checks it)
+    await new Deno.Command(Deno.execPath(), { args: ["fmt", "-q", file.pathname] }).output()
     console.log(`wrote ${want.endpoints.length} endpoints into dimos.yaml`)
     Deno.exit(0)
 }
