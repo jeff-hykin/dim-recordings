@@ -3,11 +3,17 @@
 // endpoints.
 import type { Config } from "../config.ts"
 import { HttpError, stateChanged } from "../http.ts"
+import { CloudPreviews } from "./cloud_preview.ts"
 
 export type Uploaded = { path: string; uploadId: string; link: string | null; changed: boolean; uploadedAt: number }
 
 export class Uploads {
-    constructor(public config: Config) {}
+    /** TEMPORARY: the console preview for finished .mcap uploads, which dimos's gateway doesn't send yet */
+    previews: CloudPreviews
+
+    constructor(public config: Config) {
+        this.previews = new CloudPreviews(config)
+    }
 
     async #call(method: string, path: string, body?: unknown) {
         if (!this.config.desktopUrl) {
@@ -45,7 +51,9 @@ export class Uploads {
             return {}
         }
         try {
-            return (await this.#call("GET", "/dimos-gateway/cloud/uploads"))?.byPath ?? {}
+            const byPath = (await this.#call("GET", "/dimos-gateway/cloud/uploads"))?.byPath ?? {}
+            this.previews.consider(Object.values(byPath))
+            return byPath
         } catch {
             return {}
         }
@@ -63,6 +71,11 @@ export class Uploads {
                 error: error.message,
             })),
         ])
+        try {
+            this.previews.consider(Object.values(queue?.byPath ?? {}), account?.cloudUrl)
+        } catch {
+            // the preview is extra
+        }
         return { ...queue, account }
     }
 

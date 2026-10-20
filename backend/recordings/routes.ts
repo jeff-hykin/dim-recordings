@@ -311,6 +311,23 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             },
         },
         {
+            method: "POST",
+            path: "api/recordings/{id}/cloud-preview",
+            description:
+                "TEMPORARY: build an uploaded .mcap's console preview here and send it to the cloud (finished .mcap uploads " +
+                "get one on their own; this is for ones from before)",
+            params: ID,
+            handler: async ({ id }) => {
+                const recording = await find(String(id))
+                const entry = (await uploads.uploadedByPath())[recording.path]
+                if (!entry) {
+                    throw new HttpError(404, "this recording hasn't been uploaded from here")
+                }
+                await uploads.previews.force(entry)
+                return { ok: true, uploadId: entry.uploadId }
+            },
+        },
+        {
             method: "GET",
             path: "api/uploads",
             description:
