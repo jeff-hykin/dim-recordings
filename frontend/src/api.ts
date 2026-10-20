@@ -166,6 +166,8 @@ export type Recording = {
     modified: number
     path: string
     symlink: boolean
+    /** the extra folder (Settings) it was found in, as typed; absent for the shared recordings folder */
+    root?: string
     standalone?: boolean
     rrds: RrdFile[]
     recorded: number
@@ -184,8 +186,20 @@ export type Recording = {
     uploaded: Uploaded | null
 }
 
+/** An extra folder (Settings) and what the backend found in it. */
+export type ExtraDir = {
+    dir: string
+    /** with ~ expanded */
+    path: string
+    prefix: string
+    /** .db/.mcap recordings in it; null when it couldn't be read */
+    count: number | null
+    error: string | null
+}
+
 export type ListResponse = {
     dir: string
+    extraDirs: ExtraDir[]
     sort: SortKey
     order: Order
     sections: { label: string | null; recordings: Recording[] }[]
@@ -267,11 +281,11 @@ async function call<T>(
 const enc = encodeURIComponent
 
 export const api = {
-    list: (sort: SortKey, order: Order) =>
-        call<ListResponse>(
-            "GET",
-            `api/recordings?sort=${sort}&order=${order}&tz=${new Date().getTimezoneOffset()}`,
-        ),
+    listUrl: (sort: SortKey, order: Order, extraDirs: string[]) =>
+        `api/recordings?sort=${sort}&order=${order}&tz=${new Date().getTimezoneOffset()}&extraDirs=${
+            enc(JSON.stringify(extraDirs))
+        }`,
+    setExtraDirs: (dirs: string[]) => call<{ extraDirs: ExtraDir[] }>("PUT", "api/extra-dirs", { dirs }),
     get: (id: string) =>
         call<Recording & { inspection: Inspection | null }>(
             "GET",

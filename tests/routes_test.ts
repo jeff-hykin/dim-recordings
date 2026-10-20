@@ -31,7 +31,7 @@ async function app() {
         )
         return { status: response!.status, body: await response!.json() }
     }
-    return { dir, call }
+    return { dir, call, services }
 }
 
 Deno.test("api: list → summary → note → rename → duplicate → delete", async () => {
@@ -59,6 +59,29 @@ Deno.test("api: list → summary → note → rename → duplicate → delete", 
     assertEquals((await call("POST", "api/recordings/b.db/convert", { to: "zip" })).status, 400)
     assertEquals((await call("POST", "api/recordings/..%2Fx.db/rename", { name: "y" })).status, 404)
     assert(await Deno.stat(join(dir, "b.db")))
+})
+
+Deno.test("api: an extra folder sent with the list: its rows, their actions by id, its status", async () => {
+    const { call } = await app()
+    const extra = await tempDir()
+    await Deno.copyFile(join((await app()).dir, "a.db"), join(extra, "far.db"))
+    const query = encodeURIComponent(JSON.stringify([extra, "/no/such/dir"]))
+    const list = await call("GET", `api/recordings?extraDirs=${query}`)
+    assertEquals(list.body.extraDirs.map((d: { count: number | null }) => d.count), [1, null])
+    const far = list.body.sections.flatMap((s: { recordings: { id: string; root?: string }[] }) => s.recordings)
+        .find((r: { root?: string }) => r.root === extra)
+    assert(far.id.startsWith(".extra/"))
+    const id = encodeURIComponent(far.id)
+    assertEquals((await call("GET", `api/recordings/${id}`)).body.inspection.tf.edges[0].child, "odom")
+    assertEquals((await call("PUT", `api/recordings/${id}/note`, { text: "far away" })).status, 200)
+    const renamed = await call("POST", `api/recordings/${id}/rename`, { name: "near" })
+    assertEquals(renamed.body.id, far.id.replace("far.db", "near.db"))
+    assertEquals((await call("GET", `api/recordings/${encodeURIComponent(renamed.body.id)}`)).body.note, "far away")
+    // the list without the param keeps the folders; the settings call replaces them
+    assertEquals((await call("GET", "api/recordings")).body.extraDirs.length, 2)
+    const set = await call("PUT", "api/extra-dirs", { dirs: [] })
+    assertEquals(set.body.extraDirs, [])
+    assertEquals((await call("GET", `api/recordings/${encodeURIComponent(renamed.body.id)}`)).status, 404)
 })
 
 Deno.test("api: agent.json lists every route", async () => {

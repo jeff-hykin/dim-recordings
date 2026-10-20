@@ -47,6 +47,8 @@ import { Inspector, type InspectorActions, type MenuItem } from "./Inspector.tsx
 import { TransferDialog } from "./Transfer.tsx"
 import { openCloudLogin, UploadTray, useTray } from "./Uploads.tsx"
 import { Thumbnail } from "./Thumbnail.tsx"
+import { SettingsModal } from "./Settings.tsx"
+import { folderName, useExtraDirs } from "../extra_dirs.ts"
 
 const SORTS: { key: SortKey; order: Order; label: string }[] = [
     { key: "date", order: "desc", label: "Newest" },
@@ -80,6 +82,9 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
     const phone = useMobile(760)
     const [showDetail, setShowDetail] = useState(false)
     const [trayOpen, setTrayOpen] = useState(false)
+    const [settingsOpen, setSettingsOpen] = useState(false)
+    // the extra folders to scan (Settings; this page's localStorage only): the list's request carries them
+    const [extraDirs, setExtraDirs] = useExtraDirs()
     const [thumbVersion, setThumbVersion] = useState(1)
     const prompt = usePrompt()
     const confirm = useConfirm()
@@ -93,7 +98,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
 
     // the list is backend state: GET api/recordings, re-GET when the backend's stateChanged("recordings") arrives
     const [data, { error: listError }] = useBackendState("recordings", {
-        url: `api/recordings?sort=${sort}&order=${order}&tz=${new Date().getTimezoneOffset()}`,
+        url: api.listUrl(sort, order, extraDirs),
     }) as [ListResponse | undefined, { error: Error | null }]
     const error = listError ? String(listError.message ?? listError) : null
 
@@ -534,6 +539,11 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                                 : `${r.inspected ? duration(r.duration) : "…"} · ${bytes(recording.size)} · ${
                                     when(r.recorded, section)
                                 }`}
+                            {r.root && (
+                                <Text small muted title={r.root} data-testid="row-root">
+                                    {" "}· in {folderName(r.root)}
+                                </Text>
+                            )}
                             {live &&
                                 (live.state === "uploading" || live.state === "queued") && (
                                 <Text small as="div">
@@ -742,6 +752,13 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                     : (
                         <footer className="rec-list-foot">
                             <div className="rec-row-flex">
+                                <IconButton
+                                    icon="settings"
+                                    size="sm"
+                                    label="Settings: folders to scan"
+                                    data-testid="settings-button"
+                                    onClick={() => setSettingsOpen(true)}
+                                />
                                 <Text small muted mono>
                                     {everything.length} {everything.length === 1 ? "recording" : "recordings"} ·{" "}
                                     {bytes(total)}
@@ -811,6 +828,15 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                     onClose={() => setTrayOpen(false)}
                 />
             )}
+            <SettingsModal
+                open={settingsOpen}
+                onClose={() => setSettingsOpen(false)}
+                sharedDir={data?.dir}
+                sharedCount={everything.filter((r) => !r.root && r.format !== "rrd").length}
+                dirs={extraDirs}
+                setDirs={setExtraDirs}
+                statuses={data?.extraDirs}
+            />
             {transfer && <TransferDialog onClose={() => go({ view: "library" })} />}
             <Modal
                 open={!!deleting}

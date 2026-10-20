@@ -18,7 +18,7 @@ const ID = {
     id: {
         type: "string",
         required: true,
-        description: "recording id: its path inside the recordings folder",
+        description: "recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra folder's)",
     },
 }
 const STREAM = {

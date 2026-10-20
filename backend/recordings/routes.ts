@@ -6,7 +6,7 @@ import { conversions, Jobs, type Target } from "./convert.ts"
 import { which } from "./foxglove.ts"
 import type { Transfers } from "./drive_routes.ts"
 import type { Drives } from "./drives.ts"
-import { Library, NotFound, type Recording } from "./library.ts"
+import { cleanDirs, Library, NotFound, type Recording } from "./library.ts"
 import { environment, openIn, type OpenTarget, openTargets, reveal } from "./open.ts"
 import { type Order, sections, type SortKey } from "./sort.ts"
 import { Thumbnailer } from "./thumb_worker.ts"
@@ -24,7 +24,17 @@ export type Services = {
 }
 
 const ID = {
-    id: { type: "string", required: true, description: "recording id: its path inside the recordings folder" },
+    id: {
+        type: "string",
+        required: true,
+        description: "recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra folder's)",
+    },
+}
+const EXTRA_DIRS = {
+    type: "string",
+    description:
+        "the extra folders to scan too, a JSON array of paths (~ is expanded); they stay the extra folders until the next " +
+        "call that gives them (the page keeps its list in its own storage and sends it with each list)",
 }
 
 export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services): Route[] {
@@ -82,18 +92,24 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
                     type: "number",
                     description: "the viewer's Date.getTimezoneOffset() in minutes (for Today/Yesterday)",
                 },
+                extraDirs: EXTRA_DIRS,
             },
-            handler: async ({ sort, order, tz }) => {
+            handler: async ({ sort, order, tz, extraDirs }) => {
+                if (extraDirs !== undefined) {
+                    library.setExtraDirs(cleanDirs(extraDirs))
+                }
                 const key = (["date", "size", "duration", "name"].includes(String(sort)) ? sort : "date") as SortKey
                 const direction = (order === "asc" ? "asc" : "desc") as Order
                 const env = await environment(library.config)
                 const uploadedMap = await uploads.uploadedByPath()
-                const all = await library.list()
+                const scanned = await library.scan()
+                const all = await library.describeAll(scanned.files)
                 const names = all.map((recording) => recording.name)
                 const rows = await Promise.all(all.map((recording) => row(recording, env, uploadedMap, names)))
                 const grouped = sections(rows, key, direction, Date.now() / 1000, Number(tz ?? 0) || 0)
                 return {
                     dir: library.dir,
+                    extraDirs: scanned.extraDirs,
                     sort: key,
                     order: direction,
                     sections: grouped.map(({ label, items }) => ({ label, recordings: items })),
@@ -106,6 +122,25 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
                     },
                     thumbnails: { working: thumbnails.current },
                 }
+            },
+        },
+        {
+            method: "PUT",
+            path: "api/extra-dirs",
+            description:
+                "Scan these folders too, besides the shared recordings folder (what the page's Settings sets; it keeps the " +
+                "list itself): each folder's path, how many recordings it holds, or why it couldn't be read",
+            params: {
+                dirs: {
+                    type: "array",
+                    items: { type: "string" },
+                    required: true,
+                    description: "the folders' paths (~ is expanded); [] scans only the shared folder",
+                },
+            },
+            handler: async ({ dirs }) => {
+                library.setExtraDirs(cleanDirs(dirs))
+                return { extraDirs: (await library.scan()).extraDirs }
             },
         },
         {
@@ -168,7 +203,7 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             handler: async ({ id, name }) => {
                 const recording = await find(String(id))
                 const target = await renameRecording(recording.path, String(name))
-                const newId = target.slice(library.dir.length + 1)
+                const newId = await library.idOf(target)
                 library.moveNote(recording.id, newId)
                 library.emit({ type: "recordings", reason: "rename", id: newId })
                 return { ok: true, id: newId, path: target }
@@ -196,7 +231,7 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             handler: async ({ id, name }) => {
                 const recording = await find(String(id))
                 const target = await duplicateRecording(recording.path, name ? String(name) : undefined)
-                const newId = target.slice(library.dir.length + 1)
+                const newId = await library.idOf(target)
                 library.emit({ type: "recordings", reason: "duplicate", id: newId })
                 thumbnails.poke()
                 return { ok: true, id: newId, path: target }

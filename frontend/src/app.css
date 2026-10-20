@@ -92,6 +92,14 @@ body {
 .rec-list-foot.rec-row-flex {
     flex-direction: row;
 }
+.rec-settings-dirs {
+    margin: 10px 0;
+    max-height: 40vh;
+    overflow: auto;
+}
+.rec-settings-add {
+    margin-bottom: 4px;
+}
 .rec-names {
     max-height: 30vh;
     overflow: auto;

@@ -3,6 +3,8 @@
 import { lazy, Suspense, useEffect, useState } from "react"
 import { Button, EmptyState, ErrorBoundary } from "dimos-react"
 import { Library } from "./views/Library.tsx"
+import { api } from "./api.ts"
+import { readExtraDirs } from "./extra_dirs.ts"
 
 // the Replayer (three.js) loads only when a recording is opened in it
 const Replay = lazy(() => import("./views/Replay.tsx").then((module) => ({ default: module.Replay })))
@@ -30,6 +32,11 @@ export function go(route: Route) {
 
 export function App() {
     const [route, setRoute] = useState(parseRoute(location.hash))
+    // the backend learns this page's extra folders before the Replayer asks for a recording from one of them
+    const [dirsSent, setDirsSent] = useState(false)
+    useEffect(() => {
+        api.setExtraDirs(readExtraDirs()).catch(() => {}).finally(() => setDirsSent(true))
+    }, [])
     useEffect(() => {
         const update = () => setRoute(parseRoute(location.hash))
         addEventListener("hashchange", update)
@@ -58,7 +65,7 @@ export function App() {
             )}
         >
             {route.view === "replay"
-                ? (
+                ? dirsSent && (
                     <Suspense fallback={null}>
                         <Replay id={route.id} />
                     </Suspense>

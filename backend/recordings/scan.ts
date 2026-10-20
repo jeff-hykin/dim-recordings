@@ -16,6 +16,8 @@ export type FileEntry = {
     path: string
     /** a symlink into somewhere else (read-only use: this app never renames or deletes through one) */
     symlink: boolean
+    /** the extra folder (one the page added, as typed) it was found in; absent for the shared recordings folder */
+    root?: string
 }
 
 export type Listed = FileEntry & {
@@ -56,7 +58,7 @@ async function targetStat(path: string): Promise<FileInfo> {
     }
 }
 
-async function entry(root: string, relative: string): Promise<FileEntry | null> {
+async function entry(root: string, relative: string, idPrefix: string): Promise<FileEntry | null> {
     const name = relative.split("/").pop()!
     const format = formatOfName(name)
     if (!format || name.startsWith(".")) {
@@ -71,7 +73,7 @@ async function entry(root: string, relative: string): Promise<FileEntry | null> 
             return null
         }
         return {
-            id: relative,
+            id: idPrefix + relative,
             name,
             format,
             size: stat.size,
@@ -84,7 +86,8 @@ async function entry(root: string, relative: string): Promise<FileEntry | null> 
     }
 }
 
-export async function scanFiles(root: string): Promise<FileEntry[]> {
+/** `idPrefix` goes in front of each id (an extra folder's, so its ids can't collide with the shared folder's). */
+export async function scanFiles(root: string, idPrefix = ""): Promise<FileEntry[]> {
     const found: FileEntry[] = []
     const walk = async (relativeDir: string, depth: number) => {
         let entries: Awaited<ReturnType<typeof fs.readDir>> = []
@@ -104,7 +107,7 @@ export async function scanFiles(root: string): Promise<FileEntry[]> {
                 }
                 continue
             }
-            const file = await entry(root, relative)
+            const file = await entry(root, relative, idPrefix)
             if (file) {
                 found.push(file)
             }

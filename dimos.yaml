@@ -58,7 +58,24 @@ provides:
         tz:
           type: number
           description: the viewer's Date.getTimezoneOffset() in minutes (for Today/Yesterday)
+        extraDirs:
+          type: string
+          description: >-
+            the extra folders to scan too, a JSON array of paths (~ is expanded); they stay the extra folders until the
+            next call that gives them (the page keeps its list in its own storage and sends it with each list)
       role: context
+    - method: PUT
+      path: api/extra-dirs
+      description: >-
+        Scan these folders too, besides the shared recordings folder (what the page's Settings sets; it keeps the list
+        itself): each folder's path, how many recordings it holds, or why it couldn't be read
+      params:
+        dirs:
+          type: array
+          items:
+            type: string
+          required: true
+          description: 'the folders'' paths (~ is expanded); [] scans only the shared folder'
     - method: GET
       path: 'api/recordings/{id}'
       description: >-
@@ -71,7 +88,7 @@ provides:
         id: &ref_2
           type: string
           required: true
-          description: 'recording id: its path inside the recordings folder'
+          description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra folder''s)'
     - method: GET
       path: 'api/recordings/{id}/thumbnail'
       description: 'The preview sprite: its frames side by side (a jpeg; frame count and size in the list''s `thumbnail`)'
@@ -279,7 +296,7 @@ provides:
         id: &ref_3
           type: string
           required: true
-          description: 'recording id: its path inside the recordings folder'
+          description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra folder''s)'
     - method: GET
       path: 'api/replay/{id}/timeline'
       description: >-

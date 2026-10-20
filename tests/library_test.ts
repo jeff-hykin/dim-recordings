@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { deleteRecording, duplicateRecording, renameRecording } from "../backend/recordings/actions.ts"
 import { conversions, DTK_COMMIT, DTK_URL, dtkCommand } from "../backend/recordings/convert.ts"
 import { inspect, shortType, streamSummary } from "../backend/recordings/inspect.ts"
-import { Library } from "../backend/recordings/library.ts"
+import { cleanDirs, expandHome, Library } from "../backend/recordings/library.ts"
 import { pairRrds, resolveId, scanFiles } from "../backend/recordings/scan.ts"
 import { frameTimes, imageClass, pickMainCamera } from "../backend/recordings/thumbnails.ts"
 import { lcmImage, lcmTf, range, tempDir, writeDb, writeMcap } from "./fixtures.ts"
@@ -90,6 +90,47 @@ Deno.test("library: recorded = first message time, notes survive a rename, cache
     // the rrd followed the rename, so it's still paired
     assertEquals(list.find((r) => r.id === "stairs.db")!.rrds.map((r) => r.name), ["stairs.rrd"])
     await assertRejects(() => again.get("walk.db"))
+})
+
+Deno.test("library: extra folders the page supplies list too, each with its status; ids resolve only inside them", async () => {
+    const shared = await folder()
+    const extra = await folder()
+    const library = new Library({ recordingsDir: shared, dataDir: await tempDir(), desktopUrl: "", appName: "x" })
+    const notAFolder = join(shared, "notes.txt")
+    // the shared folder again and a sub-folder of it: nothing listed twice
+    library.setExtraDirs(
+        cleanDirs(JSON.stringify([extra, "/no/such/dir", notAFolder, shared, join(shared, "app"), "rel"])),
+    )
+    const { files, extraDirs } = await library.scan()
+    assertEquals(extraDirs.map((d) => [d.count, d.error]), [
+        [3, null],
+        [null, "no such folder"],
+        [null, "not a folder"],
+        [0, null],
+        [0, null],
+        [null, "not a full path (start it with / or ~)"],
+    ])
+    const prefix = extraDirs[0].prefix
+    assert(prefix.startsWith(".extra/"))
+    const fromExtra = files.filter((f) => f.root === extra).map((f) => f.id).sort()
+    assertEquals(
+        fromExtra,
+        ["app/inner.mcap", "drive.mcap", "other.rrd", "walk.db", "walk.rrd"].map((id) => prefix + id),
+    )
+    assertEquals(files.filter((f) => !f.root).length, 5)
+    // its rrds pair within it, and a recording from it opens by id like any other
+    const list = await library.list()
+    assertEquals(list.find((r) => r.id === `${prefix}walk.db`)!.rrds.map((r) => r.id), [`${prefix}walk.rrd`])
+    const walk = await library.get(`${prefix}walk.db`)
+    assertEquals([walk.path, walk.root, walk.recorded], [join(extra, "walk.db"), extra, T0])
+    assertEquals(await library.idOf(join(extra, "app", "x.db")), `${prefix}app/x.db`)
+    await assertRejects(() => library.get(`${prefix}../walk.db`))
+    await assertRejects(() => library.get(`${prefix}notes.txt`))
+    // removed from the page's list, its recordings are gone (and can't be addressed)
+    library.setExtraDirs([])
+    await assertRejects(() => library.get(`${prefix}walk.db`))
+    assertEquals(cleanDirs(["~/a/", " ", "~/a", 3]), ["~/a"])
+    assertEquals(expandHome("~/a"), join(Deno.env.get("HOME")!, "a"))
 })
 
 for (const name of ["walk.db", "drive.mcap"]) {
