@@ -7,7 +7,7 @@ const KEY = "dim-recordings.extraDirs"
 export function readExtraDirs(): string[] {
     try {
         const saved = JSON.parse(localStorage.getItem(KEY) ?? "[]")
-        return Array.isArray(saved) ? saved.filter((dir) => typeof dir === "string") : []
+        return Array.isArray(saved) ? cleanDirs(saved) : []
     } catch {
         return [] // storage blocked or garbled: just the shared folder
     }
@@ -19,6 +19,13 @@ function writeExtraDirs(dirs: string[]) {
     } catch {
         // storage blocked (a private window): the list lasts while this page does
     }
+}
+
+/** As the backend's cleanDirs (library.ts) keeps them, so the page can tell when a list answers the one it sent. */
+export function cleanDirs(list: unknown[]): string[] {
+    const dirs = list.filter((dir): dir is string => typeof dir === "string")
+        .map((dir) => dir.trim().replace(/(.)\/+$/, "$1"))
+    return [...new Set(dirs.filter(Boolean))].slice(0, 64)
 }
 
 /** The list, kept in step with this app's other windows. */
@@ -34,8 +41,9 @@ export function useExtraDirs(): [string[], (dirs: string[]) => void] {
         return () => removeEventListener("storage", update)
     }, [])
     const set = (next: string[]) => {
-        writeExtraDirs(next)
-        setDirs(next)
+        const clean = cleanDirs(next)
+        writeExtraDirs(clean)
+        setDirs(clean)
     }
     return [dirs, set]
 }

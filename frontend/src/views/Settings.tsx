@@ -2,18 +2,34 @@
 // The list lives in this page's localStorage only (extra_dirs.ts); the backend scans what the page sends it and says
 // what it found in each, or why it couldn't read it.
 import { useState } from "react"
-import { Button, IconButton, ListRow, Modal, Text, TextInput } from "dimos-react"
+import { Button, IconButton, ListRow, Modal, Spinner, Text, TextInput } from "dimos-react"
 import type { ExtraDir } from "../api.ts"
 
-export function SettingsModal({ open, onClose, sharedDir, sharedCount, dirs, setDirs, statuses }: {
-    open: boolean
-    onClose: () => void
-    sharedDir: string | undefined
-    sharedCount: number
-    dirs: string[]
-    setDirs: (dirs: string[]) => void
-    statuses: ExtraDir[] | undefined
-}) {
+export function SettingsModal(
+    {
+        open,
+        onClose,
+        sharedDir,
+        sharedCount,
+        dirs,
+        setDirs,
+        statuses,
+        loaded,
+        unreadIn,
+    }: {
+        open: boolean
+        onClose: () => void
+        sharedDir: string | undefined
+        sharedCount: number
+        dirs: string[]
+        setDirs: (dirs: string[]) => void
+        statuses: ExtraDir[] | undefined
+        /** false until the first list arrives */
+        loaded: boolean
+        /** how many of a folder's recordings (undefined for the shared one) haven't been read yet */
+        unreadIn: (dir: string | undefined) => number
+    },
+) {
     const [draft, setDraft] = useState("")
     const [problem, setProblem] = useState<string | null>(null)
     const add = () => {
@@ -36,12 +52,16 @@ export function SettingsModal({ open, onClose, sharedDir, sharedCount, dirs, set
     const status = (dir: string) => {
         const found = statuses?.find((s) => s.dir === dir)
         if (!found) {
-            return <Text small muted>scanning…</Text>
+            return <Scanning />
         }
         if (found.error) {
-            return <Text small tone="warn" data-testid="extra-dir-error">{found.error}</Text>
+            return (
+                <Text small tone="warn" data-testid="extra-dir-error">
+                    {found.error}
+                </Text>
+            )
         }
-        return <Text small muted>{found.count} {found.count === 1 ? "recording" : "recordings"}</Text>
+        return <Count count={found.count ?? 0} unread={unreadIn(dir)} />
     }
     return (
         <Modal
@@ -60,11 +80,13 @@ export function SettingsModal({ open, onClose, sharedDir, sharedCount, dirs, set
                 <ListRow
                     icon="folder"
                     title={<Text mono small title={sharedDir}>{sharedDir ?? "…"}</Text>}
-                    subtitle={
-                        <Text small muted>
-                            Desktop's recordings folder · {sharedCount} {sharedCount === 1 ? "recording" : "recordings"}
-                        </Text>
-                    }
+                    subtitle={loaded
+                        ? (
+                            <Text small muted>
+                                Desktop's recordings folder · <Count count={sharedCount} unread={unreadIn(undefined)} />
+                            </Text>
+                        )
+                        : <Scanning />}
                 />
                 {dirs.map((dir) => (
                     <ListRow
@@ -98,9 +120,30 @@ export function SettingsModal({ open, onClose, sharedDir, sharedCount, dirs, set
                     }}
                     onEnter={add}
                 />
-                <Button icon="plus" disabled={!draft.trim()} onClick={add}>Add folder</Button>
+                <Button icon="plus" disabled={!draft.trim()} onClick={add}>
+                    Add folder
+                </Button>
             </div>
             {problem && <Text small tone="warn">{problem}</Text>}
         </Modal>
+    )
+}
+
+function Scanning() {
+    return (
+        <span className="rec-row-flex" data-testid="extra-dir-scanning">
+            <Spinner size={12} label="scanning" />
+            <Text small muted>scanning…</Text>
+        </span>
+    )
+}
+
+/** "12 recordings", or "12 recordings · reading 3…" while some aren't read yet */
+function Count({ count, unread }: { count: number; unread: number }) {
+    return (
+        <Text small muted>
+            {count} {count === 1 ? "recording" : "recordings"}
+            {unread > 0 && ` · reading ${unread}…`}
+        </Text>
     )
 }

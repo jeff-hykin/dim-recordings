@@ -48,6 +48,7 @@ import { TransferDialog } from "./Transfer.tsx"
 import { openCloudLogin, UploadTray, useTray } from "./Uploads.tsx"
 import { Thumbnail } from "./Thumbnail.tsx"
 import { SettingsModal } from "./Settings.tsx"
+import { ScanBar, SkeletonRows } from "./Loading.tsx"
 import { folderName, useExtraDirs } from "../extra_dirs.ts"
 
 const SORTS: { key: SortKey; order: Order; label: string }[] = [
@@ -97,10 +98,28 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
     const onDrives = drives?.drives.reduce((sum, drive) => sum + drive.files.length, 0) ?? 0
 
     // the list is backend state: GET api/recordings, re-GET when the backend's stateChanged("recordings") arrives
-    const [data, { error: listError }] = useBackendState("recordings", {
-        url: api.listUrl(sort, order, extraDirs),
-    }) as [ListResponse | undefined, { error: Error | null }]
+    // (a new URL, from a new sort or folder list, re-GETs at once; the old list stays shown until it answers)
+    const [data, { error: listError, refresh: refreshList }] = useBackendState(
+        "recordings",
+        {
+            url: api.listUrl(sort, order, extraDirs),
+        },
+    ) as [
+        ListResponse | undefined,
+        { error: Error | null; refresh: () => Promise<void> },
+    ]
     const error = listError ? String(listError.message ?? listError) : null
+    // loading: no list yet, or the one shown answers an earlier sort / folder list (the backend is scanning for this one)
+    const answeredDirs = data?.extraDirs.map((dir) => dir.dir) ?? []
+    const stale = !!data &&
+        (data.sort !== sort || data.order !== order ||
+            JSON.stringify(answeredDirs) !== JSON.stringify(extraDirs))
+    const scanningDirs = data ? extraDirs.filter((dir) => !answeredDirs.includes(dir)) : extraDirs
+    const [refreshing, setRefreshing] = useState(false)
+    const refresh = () => {
+        setRefreshing(true)
+        refreshList().finally(() => setRefreshing(false))
+    }
 
     // live: the backend's events (a preview finished, a job moved), on its frontend topic `events`
     useBackendEvents((event: { type?: string; job?: Job }) => {
@@ -138,6 +157,9 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
     const everything = data?.sections.flatMap((s) => s.recordings) ?? []
     const shown = sections.flatMap((s) => s.recordings)
     const flagged = everything.filter((r) => (r.warnings ?? 0) > 0).length
+    // indexing: the recordings found but not read yet (a background job reads each, then the list re-GETs)
+    const readable = everything.filter((r) => r.format !== "rrd")
+    const unread = readable.filter((r) => !r.inspected).length
     const current = selected ? everything.find((r) => r.id === selected) : undefined
     const inspected = current && current.format !== "rrd" ? current : undefined
     const uploadsByPath = new Map<string, Upload>(
@@ -264,7 +286,10 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
     const reupload = async (recording: Recording) => {
         const uploaded = recording.uploaded
         const live = uploadsByPath.get(recording.path)
-        if (!uploaded || (live && (live.state === "queued" || live.state === "uploading"))) {
+        if (
+            !uploaded ||
+            (live && (live.state === "queued" || live.state === "uploading"))
+        ) {
             setTrayOpen(true)
             return
         }
@@ -541,7 +566,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                                 }`}
                             {r.root && (
                                 <Text small muted title={r.root} data-testid="row-root">
-                                    {" "}· in {folderName(r.root)}
+                                    {` · in ${folderName(r.root)}`}
                                 </Text>
                             )}
                             {live &&
@@ -674,7 +699,25 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                         app (✕) and open it again.
                     </Alert>
                 )}
-                <div className="rec-items">
+                <div className="rec-items" aria-busy={!data || stale || refreshing}>
+                    {!error && (!data || stale || refreshing)
+                        ? (
+                            <ScanBar
+                                label={!data
+                                    ? "Scanning the recordings folder…"
+                                    : scanningDirs.length
+                                    ? `Scanning ${scanningDirs.map(folderName).join(", ")}…`
+                                    : "Refreshing…"}
+                            />
+                        )
+                        : unread > 0 && (
+                            <ScanBar
+                                label={`Reading recordings… ${readable.length - unread} of ${readable.length}`}
+                                value={(readable.length - unread) / readable.length}
+                            />
+                        )}
+                    {!data && !error && <SkeletonRows count={6} />}
+                    {stale && scanningDirs.length > 0 && <SkeletonRows count={3} />}
                     {sections.map((section, index) => (
                         <section key={section.label ?? index}>
                             {section.label && (
@@ -691,7 +734,7 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                         </section>
                     ))}
                     {data && everything.length > 0 && !shown.length && <Text small muted>Nothing matches.</Text>}
-                    {data && !everything.length && (
+                    {data && !stale && !everything.length && (
                         <EmptyState
                             icon="record"
                             title="You don't have any recordings yet"
@@ -759,9 +802,20 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                                     data-testid="settings-button"
                                     onClick={() => setSettingsOpen(true)}
                                 />
+                                <IconButton
+                                    icon="refresh"
+                                    size="sm"
+                                    label="Scan the folders again"
+                                    data-testid="refresh-button"
+                                    disabled={refreshing}
+                                    onClick={refresh}
+                                />
                                 <Text small muted mono>
-                                    {everything.length} {everything.length === 1 ? "recording" : "recordings"} ·{" "}
-                                    {bytes(total)}
+                                    {data
+                                        ? `${everything.length} ${
+                                            everything.length === 1 ? "recording" : "recordings"
+                                        } · ${bytes(total)}`
+                                        : "scanning…"}
                                 </Text>
                                 <span className="rec-grow" />
                                 {free !== null && <Text small muted mono>{bytes(free)} free</Text>}
@@ -832,10 +886,13 @@ export function Library({ transfer = false }: { transfer?: boolean }) {
                 open={settingsOpen}
                 onClose={() => setSettingsOpen(false)}
                 sharedDir={data?.dir}
-                sharedCount={everything.filter((r) => !r.root && r.format !== "rrd").length}
+                sharedCount={everything.filter((r) => !r.root && r.format !== "rrd")
+                    .length}
                 dirs={extraDirs}
                 setDirs={setExtraDirs}
-                statuses={data?.extraDirs}
+                statuses={stale ? data?.extraDirs.filter((s) => extraDirs.includes(s.dir)) : data?.extraDirs}
+                loaded={!!data}
+                unreadIn={(dir) => readable.filter((r) => r.root === dir && !r.inspected).length}
             />
             {transfer && <TransferDialog onClose={() => go({ view: "library" })} />}
             <Modal

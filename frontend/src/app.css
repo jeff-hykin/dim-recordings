@@ -534,3 +534,12 @@ body {
 .rp-mobile .dr-topbar-right .dr-tabs__item span {
     display: none;
 }
+.rec-scan {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 12px 8px;
+}
+.rec-row-skeleton {
+    pointer-events: none;
+}

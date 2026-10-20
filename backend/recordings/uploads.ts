@@ -1,6 +1,6 @@
 // Uploads to the Dimensional cloud go through Desktop's dimos server (`/dimos-gateway/cloud/uploads`,
-// `/dimos-gateway/cloud/account`; the gateway's API 4.0). This only relays, so the page and the agent use one set of
-// endpoints.
+// `/dimos-gateway/cloud/account`; the gateway's API 4.0, the same in 5.x). This only relays, so the page and the agent
+// use one set of endpoints.
 import type { Config } from "../config.ts"
 import { HttpError, stateChanged } from "../http.ts"
 import { basename } from "node:path"
