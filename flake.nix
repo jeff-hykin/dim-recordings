@@ -18,6 +18,14 @@
             serverLine = target: backend: frontend:
                 let deno = nixpkgs-deno.legacyPackages.${target.stdenv.hostPlatform.system}.deno; in
                 "export PATH=${target.ffmpeg-headless}/bin:$PATH\nexport DIM_RECORDINGS_SQLITE_VEC=${target.sqlite-vec}/lib/vec0\nexec ${deno}/bin/deno run -A --no-lock --cached-only ${backend}/server.js --frontend ${frontend} \"$@\"";
+            # frontendDeps' hash per system (see frontendDeps): aarch64-darwin and x86_64-darwin (Rosetta: `nix build
+            # .#packages.x86_64-darwin.frontendDeps`) from a Mac, x86_64-linux and aarch64-linux from a Linux machine of that CPU
+            frontendDepsHash = {
+                aarch64-darwin = "sha256-LFEOkvwdDzZB7+X5YZOyhecy0Ni83wLAKZ51VQLB7gQ=";
+                x86_64-darwin = "sha256-PJxSwQTazoSmXhNFxRo67T35bAa/kxfhxcZoUHV6xk8=";
+                x86_64-linux = "sha256-KulE9j/kVj+3cu/RspFVZXaq0QYK5wcgSThTZbT2THc=";
+                aarch64-linux = "";
+            };
             # bin/dimos-app-server for <arch> Linux, written on any machine: its bash, deno and ffmpeg are the target's (cache.nixos.org downloads, nothing built)
             linuxApp = pkgs: arch: backend: frontend:
                 let linux = nixpkgs.legacyPackages."${arch}-linux"; in
@@ -28,26 +36,65 @@
                     text = "#!${linux.runtimeShell}\n${serverLine linux backend frontend}\n";
                 };
         in {
-            packages = forAll (pkgs: rec {
-                frontend = pkgs.buildNpmPackage {
-                    pname = "dim-recordings-frontend";
-                    version = "0.2.0";
-                    src = ./frontend;
-                    # `nix build .#frontend` prints the right hash when package-lock.json changes
-                    npmDepsHash = "sha256-t69phlGHlh20CY/mAT9UodeUGXzBmG+Gsx1jKOyMpNM=";
-                    # dimos-react is a git dependency, which npm unpacks through its cache (even with no prepare build)
-                    makeCacheWritable = true;
-                    installPhase = "cp -r dist $out";
+            packages = forAll (pkgs:
+                let
+                    deno = nixpkgs-deno.legacyPackages.${pkgs.stdenv.hostPlatform.system}.deno;
+                    files = paths: pkgs.lib.fileset.toSource { root = ./.; fileset = pkgs.lib.fileset.unions paths; };
+                    # DENO_DIR inside the build folder: deno bundle names its sources by their path from there
+                    denoEnv = "export HOME=$TMPDIR DENO_DIR=$PWD/.deno DENO_NO_UPDATE_CHECK=1 DENO_NO_PROMPT=1 SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+                in rec {
+                # frontend/deno.json's packages (`deno install --frozen`, deno.lock): npm ones in node_modules, dimos-react
+                # (jsr) in vendor/. The only derivation with network, so fixed-output; per system, since npm's native
+                # packages (rollup, esbuild) differ by OS and CPU. After changing frontend/deno.json or deno.lock: set this
+                # system's hash to "", run `nix build .#frontendDeps`, paste the "got:" hash
+                frontendDeps = pkgs.stdenvNoCC.mkDerivation {
+                    name = "dim-recordings-frontend-deps";
+                    src = files [ ./frontend/deno.json ./frontend/deno.lock ];
+                    nativeBuildInputs = [ deno pkgs.cacert ];
+                    buildPhase = ''
+                        ${denoEnv}
+                        cd frontend
+                        deno install --frozen
+                        # deno's own record of the install: not needed to build, and not byte-identical between installs
+                        rm -f node_modules/.deno/.setup-cache.bin
+                    '';
+                    installPhase = "mkdir $out && cp -R node_modules vendor $out/";
+                    dontFixup = true;
+                    outputHashMode = "recursive";
+                    outputHashAlgo = "sha256";
+                    outputHash = frontendDepsHash.${pkgs.stdenv.hostPlatform.system};
                 };
-                # backend/main.ts and its npm packages as one ES module (esbuild; backend/bundle), from package-lock.json
-                backendBundle = pkgs.buildNpmPackage {
-                    pname = "dim-recordings-backend";
-                    version = "0.2.0";
-                    src = ./backend;
-                    sourceRoot = "backend/bundle";
-                    # `nix build .#backendBundle` prints the right hash when backend/bundle/package-lock.json changes
-                    npmDepsHash = "sha256-71QJP1uCi5p8/UbPABm6OKJAWhia8CW3FtbxH0jpAfg=";
-                    installPhase = "mkdir -p $out && cp dist/server.js $out/server.js";
+                # the page: vite against those packages, offline
+                frontend = pkgs.stdenvNoCC.mkDerivation {
+                    name = "dim-recordings-frontend";
+                    src = files [ ./frontend ];
+                    nativeBuildInputs = [ deno ];
+                    buildPhase = ''
+                        ${denoEnv}
+                        cd frontend
+                        cp -R ${frontendDeps}/node_modules ${frontendDeps}/vendor .
+                        chmod -R u+w node_modules vendor
+                        deno run -A --cached-only --node-modules-dir=manual npm:vite build
+                    '';
+                    installPhase = "cp -R dist $out";
+                };
+                # backend/main.ts and its npm packages as one ES module (deno bundle, deno.lock): the server downloads
+                # nothing at run time. Fixed-output (it fetches the packages), the same file on every system. After
+                # changing backend/deps.ts or deno.lock: set this to "", run `nix build .#backendBundle`, paste the "got:"
+                backendBundle = pkgs.stdenvNoCC.mkDerivation {
+                    name = "dim-recordings-backend";
+                    src = files [ ./deno.json ./deno.lock ./backend ];
+                    nativeBuildInputs = [ deno pkgs.cacert ];
+                    buildPhase = ''
+                        ${denoEnv}
+                        # dim-app's zenoh.js (vendored for checkTopic) lazily imports the browser's zenoh-gateway client; a backend never does
+                        deno bundle --frozen --platform deno --external "node:*" --external ./vendor/zenoh-gateway/zenoh_gateway.js -o server.js backend/main.ts
+                    '';
+                    installPhase = "mkdir $out && cp server.js $out/server.js";
+                    dontFixup = true;
+                    outputHashMode = "recursive";
+                    outputHashAlgo = "sha256";
+                    outputHash = "sha256-oYxhjyXD+2QY6yPGJcIzbVswQ+n4TPzlyL+1UMgBI2U=";
                 };
                 dimosApp = pkgs.writeTextFile {
                     name = "dim-recordings";
