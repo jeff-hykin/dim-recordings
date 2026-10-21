@@ -64,6 +64,8 @@ interface Subscription {
 
 /** while scrubbing, a playhead that holds still this long gets full-quality frames */
 const SETTLE_MS = 350
+/** a request unanswered this long shows as loading (shorter ones would flicker during playback) */
+const WAIT_MS = 400
 
 /** A depth stream by its name (the backend sends those as raw 16UC1 / 32FC1). */
 export const isDepthStream = (name: string) => /depth/i.test(name)
@@ -86,6 +88,8 @@ export class ReplaySource {
     onReload: (() => void) | null = null
     /** the backend's answer time for the last request (ms) */
     rttMs: number | null = null
+    /** true while the view waits on the backend: connecting, or the playhead's request unanswered past WAIT_MS */
+    readonly waiting = new Store<boolean>(true)
     readonly #live = zenohSource()
     #ws: WebSocket | null = null
     #subs = new Map<number, Subscription>()
@@ -277,6 +281,7 @@ export class ReplaySource {
             if (this.#inFlight && message.seq === this.#inFlight.seq) {
                 this.rttMs = performance.now() - this.#inFlight.at
                 this.#inFlight = null
+                this.waiting.set(false)
             }
         } else if (message.op === "reload") {
             this.onReload?.()
@@ -397,6 +402,11 @@ export class ReplaySource {
         // a timed-out request (the socket hiccuped) frees the line
         if (this.#inFlight && now - this.#inFlight.at > 5000) {
             this.#inFlight = null
+        }
+        const waiting = this.#ws?.readyState !== WebSocket.OPEN ||
+            (this.#inFlight !== null && now - this.#inFlight.at > WAIT_MS)
+        if (waiting && !this.waiting.get()) {
+            this.waiting.set(true)
         }
         if (this.#ws?.readyState !== WebSocket.OPEN) {
             return

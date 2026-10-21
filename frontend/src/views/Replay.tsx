@@ -181,6 +181,7 @@ function ReplayView({ overview, source, onReload }: {
 }) {
     const tf = useMemo(() => new TfTree(), [source])
     const head = useStore(source.playhead)
+    const waiting = useStore(source.waiting)
     const mobile = useMobile()
     const [tab, setTab] = useState<SideTab | null>(() => (matchMedia("(max-width: 720px)").matches ? null : "layers"))
     const [expanded, setExpanded] = usePersistentState("replay.timeline.expanded", false)
@@ -303,9 +304,13 @@ function ReplayView({ overview, source, onReload }: {
                     )}
                 </Scene3D>
                 <CameraPanels topics={source.topics} state={cameras} onState={setCameras} mobile={mobile} />
-                {head.scrubbing && (
-                    <Badge className="rp-scrub-hint" tone="info">scrubbing · thumbnails until you let go</Badge>
-                )}
+                {head.scrubbing
+                    ? <Badge className="rp-scrub-hint" tone="info">scrubbing · thumbnails until you let go</Badge>
+                    : waiting && (
+                        <Badge className="rp-scrub-hint" tone="info" data-testid="replay-loading">
+                            <Spinner size={12} /> loading…
+                        </Badge>
+                    )}
             </div>
             <PlaybackBar
                 className="rp-playback"
