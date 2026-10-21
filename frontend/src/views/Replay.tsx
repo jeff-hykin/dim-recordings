@@ -261,6 +261,7 @@ function ReplayView({ overview, source, onReload }: {
                     followFrame={robotFrame}
                     robotFrame={robotFrame}
                     follow={settings.follow}
+                    followTurns={settings.followTurns !== false}
                     onFollowChange={(follow: boolean) => setSettings((old) => ({ ...old, follow }))}
                     onViewer={(viewer: { fixedFrame: string; onFrame: (fn: () => void) => () => void }) => {
                         viewer.onFrame(() =>

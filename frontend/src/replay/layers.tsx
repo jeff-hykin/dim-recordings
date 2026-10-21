@@ -5,6 +5,8 @@ export interface ReplaySettings {
     /** "" = the TF tree's world-ish root */
     fixedFrame: string
     follow: boolean
+    /** while following, the camera turns with the robot's heading (a view saved before this setting reads it as on) */
+    followTurns?: boolean
     /** "" = base_link */
     followFrame: string
     robotModel: boolean
@@ -14,6 +16,7 @@ export interface ReplaySettings {
 export const DEFAULT_SETTINGS: ReplaySettings = {
     fixedFrame: "",
     follow: true,
+    followTurns: true,
     followFrame: "",
     robotModel: true,
     showStats: false,

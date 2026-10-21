@@ -47,6 +47,13 @@ function SettingsTab({ settings, onSettings, robotChoice, onRobotChoice, recordi
                 label="Camera follows the robot"
                 onChange={(follow: boolean) => onSettings({ follow })}
             />
+            {settings.follow && (
+                <Toggle
+                    value={settings.followTurns !== false}
+                    label="Camera turns with the robot"
+                    onChange={(followTurns: boolean) => onSettings({ followTurns })}
+                />
+            )}
             <Toggle
                 value={settings.robotModel}
                 label="Robot model"
