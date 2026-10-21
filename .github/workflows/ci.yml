@@ -29,5 +29,5 @@ jobs:
             - run: echo "DIM_RECORDINGS_SQLITE_VEC=$(nix build --no-link --print-out-paths .#sqliteVec)/lib/vec0" >> "$GITHUB_ENV"
             - run: deno task test
             - run: deno task check
-            - run: cd frontend && npm ci && npm run typecheck
+            - run: cd frontend && deno install --frozen && deno task check
             - run: deno fmt --check && deno lint

@@ -1,0 +1,52 @@
+{
+    "nodeModulesDir": "auto",
+    "vendor": true,
+    "tasks": {
+        "dev": "deno run -A npm:vite",
+        "build": "deno task check && deno run -A npm:vite build",
+        "check": "deno check src/main.tsx"
+    },
+    "fmt": {
+        "indentWidth": 4,
+        "semiColons": false,
+        "lineWidth": 120,
+        "exclude": [
+            "dist",
+            "node_modules",
+            "vendor",
+            "src/dim-app"
+        ]
+    },
+    "lint": {
+        "exclude": [
+            "dist",
+            "node_modules",
+            "vendor",
+            "src/dim-app"
+        ]
+    },
+    "imports": {
+        "dimos-react": "jsr:@robotics/dimos-react@0.2.4",
+        "dimos-react/": "jsr:/@robotics/dimos-react@0.2.4/",
+        "@types/react": "npm:@types/react@^19.1.0",
+        "@types/react-dom": "npm:@types/react-dom@^19.1.0",
+        "@types/three": "npm:@types/three@^0.180.0",
+        "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^5.0.0",
+        "react": "npm:react@^19.1.0",
+        "react-dom": "npm:react-dom@^19.1.0",
+        "three": "npm:three@^0.180.0",
+        "vite": "npm:vite@^7.1.0"
+    },
+    "compilerOptions": {
+        "lib": [
+            "ES2022",
+            "DOM",
+            "DOM.Iterable",
+            "deno.ns"
+        ],
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "jsxImportSourceTypes": "@types/react",
+        "strict": true
+    }
+}

@@ -81,7 +81,7 @@ back, with drop-to-latest and thumbnail-while-scrubbing), not an event feed.
 
 ```sh
 deno task test && deno task check     # backend tests (tiny .db/.mcap files made on the fly), dimos.yaml ↔ routes check
-cd frontend && npm install && npm run build
+cd frontend && deno task check && deno task build   # deno.json + deno.lock: npm packages in node_modules, dimos-react in vendor/
 deno run -A backend/main.ts --port 8787 --recordings-dir <dir> --data-dir <dir> [--desktop-url http://127.0.0.1:7341]
 nix build .#dimosApp                  # what Desktop builds: bin/dimos-app-server
 cd backend/bundle && npm install && node build.mjs   # the one-file backend the nix build runs (no downloads at run time)
