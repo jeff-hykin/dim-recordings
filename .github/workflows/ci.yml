@@ -29,5 +29,10 @@ jobs:
             - run: echo "DIM_RECORDINGS_SQLITE_VEC=$(nix build --no-link --print-out-paths .#sqliteVec)/lib/vec0" >> "$GITHUB_ENV"
             - run: deno task test
             - run: deno task check
-            - run: cd frontend && deno install --frozen && deno task check
             - run: deno fmt --check && deno lint
+            # the page's deno: the version the flake builds it with (nixos-25.11's), whose deno.lock this is
+            - uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.6.10
+            - run: deno install --frozen && deno task check
+              working-directory: frontend

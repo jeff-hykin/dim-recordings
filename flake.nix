@@ -45,8 +45,8 @@
                 in rec {
                 # frontend/deno.json's packages (`deno install --frozen`, deno.lock): npm ones in node_modules, dimos-react
                 # (jsr) in vendor/. The only derivation with network, so fixed-output; per system, since npm's native
-                # packages (rollup, esbuild) differ by OS and CPU. After changing frontend/deno.json or deno.lock: set this
-                # system's hash to "", run `nix build .#frontendDeps`, paste the "got:" hash
+                # packages (rollup, esbuild) differ by OS and CPU. After changing frontend/deno.json or deno.lock: `deno task
+                # update-hashes` refreshes this system's hash
                 frontendDeps = pkgs.stdenvNoCC.mkDerivation {
                     name = "dim-recordings-frontend-deps";
                     src = files [ ./frontend/deno.json ./frontend/deno.lock ];
@@ -79,8 +79,8 @@
                     installPhase = "cp -R dist $out";
                 };
                 # backend/main.ts and its npm packages as one ES module (deno bundle, deno.lock): the server downloads
-                # nothing at run time. Fixed-output (it fetches the packages), the same file on every system. After
-                # changing backend/deps.ts or deno.lock: set this to "", run `nix build .#backendBundle`, paste the "got:"
+                # nothing at run time. Fixed-output (it fetches the packages), the same file on every system;
+                # `deno task update-hashes` refreshes it after backend/deps.ts or deno.lock change
                 backendBundle = pkgs.stdenvNoCC.mkDerivation {
                     name = "dim-recordings-backend";
                     src = files [ ./deno.json ./deno.lock ./backend ];
