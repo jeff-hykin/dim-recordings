@@ -84,7 +84,7 @@ deno task test && deno task check     # backend tests (tiny .db/.mcap files made
 cd frontend && deno task check && deno task build   # deno.json + deno.lock: npm packages in node_modules, dimos-react in vendor/
 deno run -A backend/main.ts --port 8787 --recordings-dir <dir> --data-dir <dir> [--desktop-url http://127.0.0.1:7341]
 nix build .#dimosApp                  # what Desktop builds: bin/dimos-app-server
-cd backend/bundle && npm install && node build.mjs   # the one-file backend the nix build runs (no downloads at run time)
+deno bundle --platform deno --external "node:*" --external ./vendor/zenoh-gateway/zenoh_gateway.js -o server.js backend/main.ts   # the one-file backend the nix build runs
 ```
 
 Converting runs dtk at a pinned commit (`DTK_COMMIT` in `backend/recordings/convert.ts`, fetched by deno on first use;

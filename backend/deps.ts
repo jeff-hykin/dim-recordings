@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-import-prefix
-// npm packages, pinned here with inline specifiers: the nix build ships backend/ alone (no deno.json import map).
+// npm packages, pinned here with inline specifiers; the nix build bundles backend/main.ts with them (deno bundle, deno.lock).
 export { McapIndexedReader, McapRecordBuilder, McapWriter } from "npm:@mcap/core@2.1.6"
 export { decompress as zstdDecompress } from "npm:fzstd@0.1.1"
 export { parse as parseMessageDefinition } from "npm:@foxglove/rosmsg@5.0.4"
