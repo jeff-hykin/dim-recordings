@@ -1,5 +1,6 @@
 title: Recordings
-spec-version: v1.1
+version: "0.2.24"
+spec-version: v1.3
 uses:
     "@dimos-gateway":
         - GET /cloud/uploads
@@ -18,6 +19,19 @@ uses:
         endpoints:
             - POST api/open
         optional: true
+# spec v1.2: what the page may do on zenoh (dim-app's zenoh.js, as zenoh's ACL config): its server's state topics and
+# the dimos server's events (the uploads tray). Read only: it publishes nothing.
+zenoh:
+    default_permission: deny
+    read:
+        - id: own-frontend-topics
+          messages: [declare_subscriber, put] # subscribe, and receive its samples
+          key_exprs: ["**/apps/dim-recordings/frontend/**"]
+          permission: allow
+        - id: dimos-events
+          messages: [declare_subscriber, put]
+          key_exprs: ["**/dimos/events/*"]
+          permission: allow
 caches:
     - url: "https://dimos-desktop.cachix.org"
       key: "dimos-desktop.cachix.org-1:A4P35aGJGmCan92LWyamtSFXMqaVE+VRFYnrJ8QMTeQ="
