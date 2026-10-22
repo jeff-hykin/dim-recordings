@@ -1,6 +1,6 @@
 // A URDF as dimos's UrdfManager shares it, ported from the Controller (its core/urdf.ts and core/robotDescription.ts):
-// the XML on /urdf_info (std_msgs.String) and each mesh's file on /mesh_info (shape_msgs.MeshFile, named by its
-// `package://` URI). parseUrdf turns the XML into links and joints, meshGeometry a mesh file into a geometry,
+// the XML on /robot_description (std_msgs.String) and each mesh's file on /file_info or a topic under it (files.MeshFile,
+// named by its `package://` URI, `?hash=<sha256>` included; older recordings: /urdf_info and /mesh_info). parseUrdf turns the XML into links and joints, meshGeometry a mesh file into a geometry,
 // Kinematics does the forward kinematics and UrdfModel is the three.js robot, filled in as meshes arrive.
 import * as THREE from "three"
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js"
@@ -166,7 +166,7 @@ export function meshUris(description: UrdfDescription): string[] {
     return [...new Set(uris)]
 }
 
-/** shape_msgs.MeshFile's wire form (dimos/msgs/shape_msgs/MeshFile.py): `<f64 ts><u32 uri length><uri><file bytes>`, little endian. */
+/** files.MeshFile's wire form (shape_msgs.MeshFile's before it): `<f64 ts><u32 uri length><uri><file bytes>`, little endian. */
 export function decodeMeshFile(bytes: Uint8Array): { ts: number; uri: string; data: Uint8Array } {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
     if (bytes.byteLength < 12) {
@@ -253,7 +253,8 @@ export class Kinematics {
             this.#origins.set(joint.name, originMatrix(joint.origin))
         }
         const childLinks = new Set(description.joints.map((joint) => joint.child))
-        this.root = description.links.find((link) => !childLinks.has(link.name))?.name ?? description.links[0]?.name ?? ""
+        this.root = description.links.find((link) => !childLinks.has(link.name))?.name ?? description.links[0]?.name ??
+            ""
         const visit = (link: string) => {
             for (const joint of description.joints) {
                 if (joint.parent === link) {
@@ -314,7 +315,8 @@ export class Kinematics {
                 positions[joint.name] = translation.setFromMatrixPosition(motion).dot(axis)
             } else {
                 rotation.setFromRotationMatrix(motion)
-                positions[joint.name] = 2 * Math.atan2(new THREE.Vector3(rotation.x, rotation.y, rotation.z).dot(axis), rotation.w)
+                positions[joint.name] = 2 *
+                    Math.atan2(new THREE.Vector3(rotation.x, rotation.y, rotation.z).dot(axis), rotation.w)
             }
         }
         return positions

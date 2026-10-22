@@ -593,6 +593,30 @@ provides:
                       schema:
                           type: number
                       description: seconds since the start (default 0)
+        /api/replay/{id}/raw:
+            get:
+                description: >-
+                    One stream's message number `index`, its encoded bytes as published (a .db's lz4 framing undone; the
+                    x-message-time header is its time): what the Replayer reads a robot's meshes from (file_info/**)
+                parameters:
+                    - name: id
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: 'recording id: its path inside the recordings folder (.extra/<hash>/<path> for an extra
+                          folder''s)'
+                    - name: stream
+                      in: query
+                      schema:
+                          type: string
+                      required: true
+                      description: stream (topic) name
+                    - name: index
+                      in: query
+                      schema:
+                          type: number
+                      description: 'the message''s number in its stream, from 0'
         /api/replay/{id}/path:
             get:
                 description: >-

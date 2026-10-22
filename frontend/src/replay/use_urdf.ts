@@ -1,10 +1,12 @@
-// The recording's robot model, the way the Controller gets it live: the URDF from its urdf_info stream (the latest
-// message) and each mesh from its mesh_info stream (MeshFile, named by URI). The Controller asks for meshes on
-// /mesh_request; a recording holds whatever was asked for while it ran (dim-controller's recorder asks for every mesh
-// its URDF names), read here once, two at a time.
+// The recording's robot model, the way the Controller gets it live: the URDF from its robot_description stream (the
+// latest message) and each mesh from its file_info streams (files.MeshFile, named by URI). The Controller asks for files
+// on /file_request and they're answered on /file_info or any topic under it; dim-controller's recorder asks for every
+// mesh its URDF names and keeps each answer under its own topic, so every file_info stream is read, once, two at a time.
+// Older recordings' urdf_info and mesh_info (shape_msgs.MeshFile, the same bytes) are read when the new names are absent.
 import { useEffect, useMemo, useState } from "react"
 import type * as THREE from "three"
 import type { Overview } from "./api.ts"
+import { descriptionStream, fileStreams } from "./urdf_streams.ts"
 import { decodeMeshFile, meshGeometry, meshUris, parseUrdf, type UrdfDescription } from "./urdf.ts"
 
 const MESHES_IN_FLIGHT = 2
@@ -18,23 +20,21 @@ export interface RecordingUrdf {
     meshVersion: number
     meshesLoaded: number
     meshesWanted: number
-    /** mesh_info messages in the recording (0: the URDF's meshes weren't recorded) */
+    /** file_info (or mesh_info) messages in the recording (0: the URDF's meshes weren't recorded) */
     meshesRecorded: number
     problem: string | null
 }
-
-const streamNamed = (overview: Overview, name: string) =>
-    overview.streams.find((each) => new RegExp(`(^|/)${name}$`).test(each.name) && each.count > 0)
 
 export function useRecordingUrdf(overview: Overview): RecordingUrdf {
     const geometries = useMemo(() => new Map<string, THREE.BufferGeometry>(), [overview])
     const [xml, setXml] = useState<string | null>(null)
     const [meshVersion, setMeshVersion] = useState(0)
     const [problem, setProblem] = useState<string | null>(null)
-    const meshStream = streamNamed(overview, "mesh_info")
+    const meshStreams = useMemo(() => fileStreams(overview.streams), [overview])
+    const descriptionTopic = descriptionStream(overview.streams)?.name ?? "robot_description"
 
     useEffect(() => {
-        const stream = streamNamed(overview, "urdf_info")
+        const stream = descriptionStream(overview.streams)
         if (!stream) {
             return
         }
@@ -58,24 +58,30 @@ export function useRecordingUrdf(overview: Overview): RecordingUrdf {
         try {
             return { description: parseUrdf(xml), parseProblem: null }
         } catch (error) {
-            return { description: null, parseProblem: `urdf_info: ${error instanceof Error ? error.message : error}` }
+            return {
+                description: null,
+                parseProblem: `${descriptionTopic}: ${error instanceof Error ? error.message : error}`,
+            }
         }
-    }, [xml])
+    }, [xml, descriptionTopic])
     const wanted = useMemo(() => new Set(description ? meshUris(description) : []), [description])
 
     useEffect(() => {
-        if (!meshStream || !wanted.size) {
+        if (!meshStreams.length || !wanted.size) {
             return
         }
         let gone = false
+        const messages = meshStreams.flatMap((stream) =>
+            Array.from({ length: stream.count }, (_, index) => ({ stream: stream.name, index }))
+        )
         let next = 0
         const failures: string[] = []
         const load = async () => {
-            while (!gone && next < meshStream.count && [...wanted].some((uri) => !geometries.has(uri))) {
-                const index = next++
+            while (!gone && next < messages.length && [...wanted].some((uri) => !geometries.has(uri))) {
+                const { stream, index } = messages[next++]
                 const response = await fetch(
                     `api/replay/${encodeURIComponent(overview.id)}/raw?stream=${
-                        encodeURIComponent(meshStream.name)
+                        encodeURIComponent(stream)
                     }&index=${index}`,
                 )
                 if (gone || !response.ok) {
@@ -90,7 +96,7 @@ export function useRecordingUrdf(overview: Overview): RecordingUrdf {
                     setMeshVersion((version) => version + 1)
                 } catch (error) {
                     failures.push(error instanceof Error ? error.message : String(error))
-                    setProblem(`mesh_info: ${failures.length} unreadable (${failures[0]})`)
+                    setProblem(`${stream}: ${failures.length} unreadable (${failures[0]})`)
                 }
             }
         }
@@ -100,7 +106,7 @@ export function useRecordingUrdf(overview: Overview): RecordingUrdf {
         return () => {
             gone = true
         }
-    }, [overview, meshStream, wanted, geometries])
+    }, [overview, meshStreams, wanted, geometries])
 
     useEffect(() => () => geometries.forEach((geometry) => geometry.dispose()), [geometries])
 
@@ -111,7 +117,7 @@ export function useRecordingUrdf(overview: Overview): RecordingUrdf {
         meshVersion,
         meshesLoaded: [...wanted].filter((uri) => geometries.has(uri)).length,
         meshesWanted: wanted.size,
-        meshesRecorded: meshStream?.count ?? 0,
+        meshesRecorded: meshStreams.reduce((total, stream) => total + stream.count, 0),
         problem: parseProblem ?? problem,
     }
 }

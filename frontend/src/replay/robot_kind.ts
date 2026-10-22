@@ -1,7 +1,8 @@
 // Which robot a recording is of, so the Replayer draws its stand-in (dimos-react's ROBOT_KINDS) or none at all. The
 // Controller's rule (its core/robotType.ts) asks the running blueprint; a recording carries no blueprint, so the
 // evidence is the recording itself, first match wins:
-// 1. its URDF (a urdf_info stream, as dimos's UrdfManager publishes it): the robot's name, then its link names;
+// 1. its URDF (a robot_description stream as dimos's UrdfManager publishes it, or an older urdf_info one): the
+//    robot's name, then its link names;
 // 2. its TF frame names (an R1 Pro's torso_link4 / head_link / left_arm_link7, a Go2's go2_odom / FL_hip, a G1's pelvis);
 // 3. its file name (go2 → dog, r1 / r1pro / alfred → wheeled, g1 → humanoid, drone);
 // 4. nothing: null, and no model is drawn (never a dog by default).

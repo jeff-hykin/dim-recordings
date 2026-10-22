@@ -35,17 +35,18 @@ dimos-desktop install https://github.com/jeff-hykin/dim-recordings
 
 - **Replayer** (`#/replay/<id>`): [dimos-react](https://github.com/jeff-hykin/dimos-react)'s 3D view (the Controller's:
   3D with point clouds, poses and the odometry route, camera panels, the tf tree, layers) playing the recording, with no
-  drive / WASD / arm controls. Like the Controller it draws the robot from its URDF (`urdf_info`, meshes from
-  `mesh_info`, which dim-controller's recorder asks for while it records; a stand-in when they weren't recorded), and a sim
-  run's world with its grass (`scene_data`). A timeline docked at the bottom plays, pauses, changes speed and scrubs; expanded, it has
-  a row per stream with a tick per message (scroll to zoom), a switch to draw or hide it, and rename / duplicate /
-  delete, which edit the `.db` or `.mcap` in place. Nothing is loaded up front: the backend reads a stream's message
-  times when it's first needed and a message when the playhead reaches it. While scrubbing, cameras show 192-px
-  thumbnails (made in the background for jpeg/png streams, thinned on the fly for raw ones) and clouds are thinned to 6k
-  points; playing or paused, everything is full resolution. A jump shows the whole tf tree as it was then, from an index
-  of every tf message; reading it means decompressing most of a big `.mcap` (36 s for a 1.6 GB zstd one), so it's read
-  in the background, and until it gets there a jump sends the tf of the moment before and then the whole tree. The
-  background work (that index, the scrubbing thumbnails) only runs while no page is playing or scrubbing.
+  drive / WASD / arm controls. Like the Controller it draws the robot from its URDF (`robot_description`, meshes from
+  `file_info` and every topic under it, which dim-controller's recorder asks for while it records; older recordings'
+  `urdf_info` and `mesh_info` too; a stand-in when they weren't recorded), and a sim run's world with its grass
+  (`scene_data`). A timeline docked at the bottom plays, pauses, changes speed and scrubs; expanded, it has a row per
+  stream with a tick per message (scroll to zoom), a switch to draw or hide it, and rename / duplicate / delete, which
+  edit the `.db` or `.mcap` in place. Nothing is loaded up front: the backend reads a stream's message times when it's
+  first needed and a message when the playhead reaches it. While scrubbing, cameras show 192-px thumbnails (made in the
+  background for jpeg/png streams, thinned on the fly for raw ones) and clouds are thinned to 6k points; playing or
+  paused, everything is full resolution. A jump shows the whole tf tree as it was then, from an index of every tf
+  message; reading it means decompressing most of a big `.mcap` (36 s for a 1.6 GB zstd one), so it's read in the
+  background, and until it gets there a jump sends the tf of the moment before and then the whole tree. The background
+  work (that index, the scrubbing thumbnails) only runs while no page is playing or scrubbing.
 
 Each of these is an HTTP endpoint (`backend/recordings/routes.ts`, `backend/replay/routes.ts`, listed in dimos.yaml's
 `provides:`), so Desktop's agent can do anything the page does.

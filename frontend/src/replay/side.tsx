@@ -1,18 +1,7 @@
 // The Replayer's side panel over the 3D view: Layers (dimos-react's LayersPanel: each stream's switch and settings),
 // TF (its TfPanel: the tree at the playhead, problems, hover to find a frame) and Settings (followed frame, the robot
 // model, rendering, stats).
-import {
-    type ChoiceItem,
-    Field,
-    IconButton,
-    KeyValue,
-    Panel,
-    Segmented,
-    Slider,
-    Tabs,
-    Text,
-    Toggle,
-} from "dimos-react"
+import { type ChoiceItem, Field, IconButton, KeyValue, Panel, Segmented, Slider, Tabs, Text, Toggle } from "dimos-react"
 import { FramePicker, LayersPanel, RenderingSettings, ROBOT_KINDS, TfPanel } from "dimos-react/three"
 import type { ReplaySettings, RobotChoice } from "./layers.tsx"
 import type { RobotKindAnswer } from "./robot_kind.ts"
@@ -69,8 +58,9 @@ function SimSection({ settings, onSettings, simScene, simProblem, sim, onSim }: 
                 onChange={(simWorld: boolean) => onSettings({ simWorld })}
             />
             <Text muted small>
-                {simScene.id} · {simScene.bodies.length} bodies · {geoms} geoms ·{" "}
-                {Object.keys(simScene.meshes).length} meshes{movers ? ` · ${movers} moving` : ""}
+                {simScene.id} · {simScene.bodies.length} bodies · {geoms} geoms · {Object.keys(simScene.meshes).length}
+                {" "}
+                meshes{movers ? ` · ${movers} moving` : ""}
             </Text>
             {settings.simWorld && (
                 <>
@@ -94,7 +84,11 @@ function SimSection({ settings, onSettings, simScene, simProblem, sim, onSim }: 
                             onChange={(cutAbove: number) => onSim({ cutAbove })}
                         />
                     </Field>
-                    <Toggle value={sim.lights} label="The world's lights" onChange={(lights: boolean) => onSim({ lights })} />
+                    <Toggle
+                        value={sim.lights}
+                        label="The world's lights"
+                        onChange={(lights: boolean) => onSim({ lights })}
+                    />
                     <Toggle
                         value={sim.grass}
                         label="Grass"

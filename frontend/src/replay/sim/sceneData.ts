@@ -212,7 +212,9 @@ export function buildScene(data: SceneData): BuiltScene {
                 const field = data.hfields[geom.hfield]
                 // a textured hill (World Builder's speckled grass) carries its green in the texture, not its rgba
                 const source = geom.texture ? data.textures[geom.texture] : undefined
-                const green = source ? averageColor(bytes(source.pixels), source.channels) : new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace)
+                const green = source
+                    ? averageColor(bytes(source.pixels), source.channels)
+                    : new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace)
                 const blades = grassFor({ ...field, heights: floats(field.heights) }, green)
                 blades.mesh.visible = false
                 mesh.add(blades.mesh)
@@ -228,7 +230,11 @@ export function buildScene(data: SceneData): BuiltScene {
                 : new THREE.PointLight(color, 20, 0, 1.5)
             made.position.set(...light.pos)
             if (made instanceof THREE.DirectionalLight || made instanceof THREE.SpotLight) {
-                made.target.position.set(light.pos[0] + light.dir[0], light.pos[1] + light.dir[1], light.pos[2] + light.dir[2])
+                made.target.position.set(
+                    light.pos[0] + light.dir[0],
+                    light.pos[1] + light.dir[1],
+                    light.pos[2] + light.dir[2],
+                )
                 group.add(made.target)
             }
             made.visible = false

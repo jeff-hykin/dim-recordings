@@ -117,7 +117,12 @@ function bladeGeometry(): THREE.BufferGeometry {
 }
 
 function grassMaterial(): THREE.MeshStandardMaterial {
-    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, side: THREE.DoubleSide })
+    const material = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        roughness: 0.85,
+        metalness: 0,
+        side: THREE.DoubleSide,
+    })
     material.onBeforeCompile = (shader) => {
         shader.uniforms.uWindTime = windTime
         shader.vertexShader = shader.vertexShader
@@ -154,7 +159,11 @@ export function grassFor(field: HeightField, color: THREE.Color): { mesh: THREE.
     const tint = new THREE.Color()
     placeBlades(field, capacity).forEach((blade, i) => {
         rotation.setFromAxisAngle(axis, blade.yaw)
-        matrix.compose(new THREE.Vector3(blade.x, blade.y, blade.z), rotation, new THREE.Vector3(blade.width, blade.width, blade.height))
+        matrix.compose(
+            new THREE.Vector3(blade.x, blade.y, blade.z),
+            rotation,
+            new THREE.Vector3(blade.width, blade.width, blade.height),
+        )
         mesh.setMatrixAt(i, matrix)
         tint.setHSL(
             hsl.h + (blade.clump - 0.5) * 0.035 + (hash(i, 1.9) - 0.5) * 0.012,
@@ -185,7 +194,8 @@ export function isSoftwareRenderer(renderer: string): boolean {
 /** The GPU's name as WebGL reports it ("" when there's no WebGL or the browser hides it). */
 export function probeRendererName(): string {
     try {
-        const gl = document.createElement("canvas").getContext("webgl2") ?? document.createElement("canvas").getContext("webgl")
+        const gl = document.createElement("canvas").getContext("webgl2") ??
+            document.createElement("canvas").getContext("webgl")
         if (!gl) {
             return ""
         }

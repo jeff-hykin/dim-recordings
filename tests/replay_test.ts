@@ -753,8 +753,8 @@ Deno.test("api: raw gives a message's bytes as published, a .db's lz4 framing un
     }
     writeDb(join(dir, "meshes.db"), [
         {
-            name: "mesh_info",
-            payload: "dimos.msgs.shape_msgs.MeshFile.MeshFile",
+            name: "file_info/r1",
+            payload: "dimos.msgs.files.MeshFile.MeshFile",
             codec: "lz4+lcm",
             times: [T0, T0 + 1],
             blob: (i) => new Uint8Array(lz4.compress(meshFile(`package://r/${i}.stl`))),
@@ -763,11 +763,14 @@ Deno.test("api: raw gives a message's bytes as published, a .db's lz4 framing un
     const routes = buildRoutes(
         makeServices({ recordingsDir: dir, dataDir: await tempDir(), desktopUrl: "", appName: "dim-recordings" }),
     )
-    const get = (url: string) => handle(new Request(`http://app/${url}`), routes, DESCRIPTION)
-    const second = await get("api/replay/meshes.db/raw?stream=mesh_info&index=1")
+    const get = (url: string) => handle(new Request(`http://app/${url}`), routes, INFO)
+    const second = await get(`api/replay/meshes.db/raw?stream=${encodeURIComponent("file_info/r1")}&index=1`)
     assertEquals(second!.status, 200)
     assertEquals(new Uint8Array(await second!.arrayBuffer()), meshFile("package://r/1.stl"))
-    assertEquals((await get("api/replay/meshes.db/raw?stream=mesh_info&index=2"))!.status, 404)
+    assertEquals(
+        (await get(`api/replay/meshes.db/raw?stream=${encodeURIComponent("file_info/r1")}&index=2`))!.status,
+        404,
+    )
     await closeAll()
     await Deno.remove(dir, { recursive: true })
 })

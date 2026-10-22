@@ -54,9 +54,9 @@ export function useRecordingScene(overview: Overview): { scene: SceneData | null
         }
         let gone = false
         fetch(
-            `api/replay/${encodeURIComponent(overview.id)}/message?stream=${
-                encodeURIComponent(stream.name)
-            }&t=${overview.end - overview.start}`,
+            `api/replay/${encodeURIComponent(overview.id)}/message?stream=${encodeURIComponent(stream.name)}&t=${
+                overview.end - overview.start
+            }`,
         )
             .then((response) => (response.ok ? response.json() : null))
             .then((body) => {

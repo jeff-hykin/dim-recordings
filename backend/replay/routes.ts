@@ -432,7 +432,7 @@ export function replayRoutes({ library }: Services): Route[] {
             path: "api/replay/{id}/raw",
             description:
                 "One stream's message number `index`, its encoded bytes as published (a .db's lz4 framing undone; the " +
-                "x-message-time header is its time): what the Replayer reads a robot's meshes from (mesh_info)",
+                "x-message-time header is its time): what the Replayer reads a robot's meshes from (file_info/**)",
             params: {
                 ...ID,
                 stream: STREAM,
