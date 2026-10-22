@@ -28,6 +28,6 @@ export default defineConfig({
     base: "./",
     plugins: [httpsFromVendor(), react()],
     server: {
-        proxy: Object.fromEntries(["/api", "/dimos", "/agent", "/mcp", "/apps"].map((path) => [path, desktop])),
+        proxy: Object.fromEntries(["/api", "/gateways", "/mcp", "/apps"].map((path) => [path, desktop])),
     },
 })
