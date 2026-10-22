@@ -1,5 +1,5 @@
 // Refreshes flake.nix's fixed-output hashes for this machine: the page's `deno install` (frontendDeps, one hash per
-// system) and the bundled backend (backendBundle, one for all). Each is blanked, built, and set to the hash nix reports.
+// system) and the backend's `deno install` (backendDeps, one for all). Each is blanked, built, and set to the hash nix reports.
 // Run after changing frontend/deno.json, deno.json, either deno.lock or backend/deps.ts; other systems' frontendDeps
 // hashes are refreshed the same way on a machine of that system (CI's ubuntu runner is x86_64-linux).
 //   deno task update-hashes
@@ -40,7 +40,7 @@ function setHash(pattern: RegExp, hash: string): string {
 
 const targets: [string, RegExp][] = [
     ["frontendDeps", new RegExp(`${system} = "[^"]*";`)],
-    ["backendBundle", /outputHash = "[^"]*";\n(?=[\s\S]*?dimosApp = )/],
+    ["backendDeps", /outputHash = "[^"]*";\n(?=[\s\S]*?backendBundle = )/],
 ]
 for (const [attr, pattern] of targets) {
     const old = setHash(pattern, "")

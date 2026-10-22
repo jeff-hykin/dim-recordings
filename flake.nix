@@ -78,23 +78,48 @@
                     '';
                     installPhase = "cp -R dist $out";
                 };
-                # backend/main.ts and its npm packages as one ES module (deno bundle, deno.lock): the server downloads
-                # nothing at run time. Fixed-output (it fetches the packages), the same file on every system;
-                # `deno task update-hashes` refreshes it after backend/deps.ts or deno.lock change
-                backendBundle = pkgs.stdenvNoCC.mkDerivation {
-                    name = "dim-recordings-backend";
-                    src = files [ ./deno.json ./deno.lock ./backend ];
+                # backend/deps.ts's npm packages (`deno install --frozen`, deno.lock) in node_modules: fixed-output (it fetches
+                # them), the same on every system (plain JS); `deno task update-hashes` refreshes it after backend/deps.ts or
+                # deno.lock change
+                backendDeps = pkgs.stdenvNoCC.mkDerivation {
+                    name = "dim-recordings-backend-deps";
+                    src = files [ ./deno.json ./deno.lock ./backend/deps.ts ./backend/recordings/lz4js.d.ts ];
                     nativeBuildInputs = [ deno pkgs.cacert ];
                     buildPhase = ''
                         ${denoEnv}
-                        # dim-app's zenoh.js (vendored for checkTopic) lazily imports the browser's zenoh-gateway client; a backend never does
-                        deno bundle --frozen --platform deno --external "node:*" --external ./vendor/zenoh-gateway/zenoh_gateway.js -o server.js backend/main.ts
+                        deno install --frozen --node-modules-dir=auto --entrypoint backend/deps.ts
+                        rm -f node_modules/.deno/.setup-cache.bin
                     '';
-                    installPhase = "mkdir $out && cp server.js $out/server.js";
+                    installPhase = "mkdir $out && cp -R node_modules $out/";
                     dontFixup = true;
                     outputHashMode = "recursive";
                     outputHashAlgo = "sha256";
-                    outputHash = "sha256-oYxhjyXD+2QY6yPGJcIzbVswQ+n4TPzlyL+1UMgBI2U=";
+                    outputHash = "sha256-fMCPsaWnLDd/vYDPE9aamIsGtHmF6uES+f5HgsHHdJ0=";
+                };
+                # backend/main.ts and those packages as one ES module (deno bundle, offline, with nixpkgs' esbuild where deno
+                # would download its own; deno 2.6 wants 0.25.5, 25.11's): the server downloads nothing at run time
+                backendBundle = let
+                    esbuild = nixpkgs-deno.legacyPackages.${pkgs.stdenv.hostPlatform.system}.esbuild;
+                    esbuildName = {
+                        aarch64-darwin = "darwin-arm64";
+                        x86_64-darwin = "darwin-x64";
+                        x86_64-linux = "linux-x64";
+                        aarch64-linux = "linux-arm64";
+                    }.${pkgs.stdenv.hostPlatform.system};
+                in pkgs.stdenvNoCC.mkDerivation {
+                    name = "dim-recordings-backend";
+                    src = files [ ./deno.json ./deno.lock ./backend ];
+                    nativeBuildInputs = [ deno ];
+                    buildPhase = ''
+                        ${denoEnv}
+                        cp -R ${backendDeps}/node_modules .
+                        chmod -R u+w node_modules
+                        mkdir -p $DENO_DIR/dl/esbuild-${esbuild.version}
+                        ln -s ${esbuild}/bin/esbuild $DENO_DIR/dl/esbuild-${esbuild.version}/esbuild-${esbuildName}
+                        # dim-app's zenoh.js (vendored for checkTopic) lazily imports the browser's zenoh-gateway client; a backend never does
+                        deno bundle --frozen --node-modules-dir=manual --platform deno --external "node:*" --external ./vendor/zenoh-gateway/zenoh_gateway.js -o server.js backend/main.ts
+                    '';
+                    installPhase = "mkdir $out && cp server.js $out/server.js";
                 };
                 dimosApp = pkgs.writeTextFile {
                     name = "dim-recordings";
