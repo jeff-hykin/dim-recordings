@@ -16,9 +16,9 @@ export type Config = {
     recordingsDir: string
     /** this app's own files: notes, thumbnails, the inspection cache (never inside a recording) */
     dataDir: string
-    /** Desktop's HTTP base, for /api/apps, /api/open-app and other apps' endpoints; "" outside Desktop */
+    /** Desktop's HTTP base, for /gateways/desktop/info/apps, /gateways/desktop/ui/apps/{pkg}/open and other apps' endpoints; "" outside Desktop */
     desktopUrl: string
-    /** this app's name in Desktop (what /api/open-app calls it) */
+    /** this app's name in Desktop (its {pkg} in /gateways/desktop/ui/apps/{pkg}/open) */
     appName: string
 }
 

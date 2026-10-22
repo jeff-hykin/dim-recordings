@@ -76,7 +76,7 @@ Deno.test("change detection: topics, counts and first/last times, not stream ord
     assertEquals(judge(entry, baseline, null).changedBy, "size+mtime")
 })
 
-/** Desktop's /dimos-gateway/cloud/uploads, finishing each upload at once; byPath's `changed` is size + mtime */
+/** Desktop's /gateways/dimos/cloud/uploads, finishing each upload at once; byPath's `changed` is size + mtime */
 function fakeDesktop() {
     const uploads: { id: string; path: string; name: string; state: string }[] = []
     const byPath: Record<string, Omit<GatewayEntry, "changed">> = {}
@@ -97,10 +97,10 @@ function fakeDesktop() {
     }
     const server = Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, async (request) => {
         const url = new URL(request.url)
-        if (url.pathname === "/dimos-gateway/cloud/account") {
+        if (url.pathname === "/gateways/dimos/cloud/account") {
             return Response.json({ loggedIn: true })
         }
-        if (url.pathname !== "/dimos-gateway/cloud/uploads") {
+        if (url.pathname !== "/gateways/dimos/cloud/uploads") {
             return new Response("not found", { status: 404 })
         }
         if (request.method === "POST") {

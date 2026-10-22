@@ -1,5 +1,5 @@
-// Uploads to the Dimensional cloud go through Desktop's dimos server (`/dimos-gateway/cloud/uploads`,
-// `/dimos-gateway/cloud/account`; the gateway's API 4.0, the same in 5.x). This only relays, so the page and the agent
+// Uploads to the Dimensional cloud go through Desktop's dimos server (`/gateways/dimos/cloud/uploads`,
+// `/gateways/dimos/cloud/account`; the gateway's API 4.0, the same in 5.x). This only relays, so the page and the agent
 // use one set of endpoints.
 import type { Config } from "../config.ts"
 import { HttpError, stateChanged } from "../http.ts"
@@ -71,7 +71,7 @@ export class Uploads {
             return {}
         }
         try {
-            const byPath = (await this.#call("GET", "/dimos-gateway/cloud/uploads"))?.byPath ?? {}
+            const byPath = (await this.#call("GET", "/gateways/dimos/cloud/uploads"))?.byPath ?? {}
             this.previews.consider(Object.values(byPath))
             return byPath
         } catch {
@@ -90,7 +90,7 @@ export class Uploads {
                 at: Date.now(),
             })
         }
-        return this.#call("POST", "/dimos-gateway/cloud/uploads", { path })
+        return this.#call("POST", "/gateways/dimos/cloud/uploads", { path })
     }
 
     /** the recording's latest upload (itself or a vN), judged against its summary now; null when never uploaded */
@@ -129,15 +129,15 @@ export class Uploads {
     /** the queued or running upload of this recording (itself or a vN), if any */
     async live(recording: string): Promise<{ id: string; path: string; state: string } | undefined> {
         const paths = new Set(this.baselines.pathsOf(recording))
-        const queue = await this.#call("GET", "/dimos-gateway/cloud/uploads")
+        const queue = await this.#call("GET", "/gateways/dimos/cloud/uploads")
         const uploads = (queue?.uploads ?? []) as { id: string; path: string; state: string }[]
         return uploads.find((u) => paths.has(u.path) && (u.state === "queued" || u.state === "uploading"))
     }
 
     async tray() {
         const [queue, account] = await Promise.all([
-            this.#call("GET", "/dimos-gateway/cloud/uploads"),
-            this.#call("GET", "/dimos-gateway/cloud/account").catch((error) => ({
+            this.#call("GET", "/gateways/dimos/cloud/uploads"),
+            this.#call("GET", "/gateways/dimos/cloud/account").catch((error) => ({
                 loggedIn: false,
                 error: error.message,
             })),
@@ -157,10 +157,10 @@ export class Uploads {
     }
 
     remove(id: string) {
-        return this.#call("DELETE", `/dimos-gateway/cloud/uploads?id=${encodeURIComponent(id)}`)
+        return this.#call("DELETE", `/gateways/dimos/cloud/uploads?id=${encodeURIComponent(id)}`)
     }
 
     retry(id: string) {
-        return this.#call("POST", "/dimos-gateway/cloud/uploads", { retry: id })
+        return this.#call("POST", "/gateways/dimos/cloud/uploads", { retry: id })
     }
 }

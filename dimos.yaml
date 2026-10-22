@@ -1,6 +1,6 @@
 title: Recordings
 version: "0.2.25"
-spec-version: v1.3
+spec-version: v1.4
 uses:
     "@dimos-gateway":
         - GET /cloud/uploads
@@ -8,8 +8,14 @@ uses:
         - DELETE /cloud/uploads
         - GET /cloud/account
     "@desktop-gateway":
-        - POST /api/open-app
-        - GET /api/apps
+        - POST /ui/apps/{pkg}/open
+        - GET /info/apps
+        # a plugged-in drive's "Transfer recordings" notification
+        - POST /ui/notifications
+        # dim-app's frontend_publish.js (backend): state changes and events to the page
+        - POST /ui/apps/{pkg}/frontend/{topic}
+        # dim-app's zenoh.js (the page's zenoh connection): where the zenoh-gateway and this app's namespace are
+        - GET /management/gateways/zenoh
     "@zenoh-gateway": ">=0.5 <0.6"
     dim-map-builder:
         endpoints:
@@ -43,9 +49,6 @@ provides:
         - api/uploads/*
         - api/thumbnails/*
         - api/notes/*
-        - api/open-app
-        - api/apps
-        - api/events/*
     paths:
         /api/recordings:
             get:
@@ -305,7 +308,7 @@ provides:
         /api/recordings/{id}/upload:
             post:
                 description: >-
-                    Upload a recording to the Dimensional cloud (Desktop's /dimos-gateway/uploads; queues until logged in).
+                    Upload a recording to the Dimensional cloud (Desktop's /gateways/dimos/cloud/uploads; queues until logged in).
                     Follow it with GET api/uploads; when done the row carries `uploaded.link`
                 parameters:
                     - name: id

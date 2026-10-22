@@ -342,7 +342,7 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             method: "POST",
             path: "api/recordings/{id}/upload",
             description:
-                "Upload a recording to the Dimensional cloud (Desktop's /dimos-gateway/uploads; queues until logged in). Follow it with " +
+                "Upload a recording to the Dimensional cloud (Desktop's /gateways/dimos/cloud/uploads; queues until logged in). Follow it with " +
                 "GET api/uploads; when done the row carries `uploaded.link`",
             params: ID,
             handler: async ({ id }) => {

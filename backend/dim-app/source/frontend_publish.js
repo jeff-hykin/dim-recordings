@@ -1,5 +1,5 @@
 // Backend → frontend for an app's server (Deno; Desktop's docs/events.md): one HTTP call to Desktop's relay,
-// `POST <desktopUrl>/desktop/frontend/<app>/<topic…>`, which publishes the body unchanged on
+// `POST <desktopUrl>/gateways/desktop/ui/apps/<app>/frontend/<topic…>`, which publishes the body unchanged on
 // `<ns>/apps/<app>/frontend/<topic…>`, where the app's pages subscribe (zenoh.js's subscribeFrontend).
 //
 //     import { publishFrontend, stateChanged } from "./dim-app/source/frontend_publish.js"
@@ -77,7 +77,8 @@ export function publishFrontend(topic, payload, options = {}) {
         return Promise.resolve(null)
     }
     const { body, contentType } = encode(payload, options.contentType)
-    const url = `${app.desktopUrl.replace(/\/+$/, "")}/desktop/frontend/${encodeURIComponent(app.name)}/${topic}`
+    const desktop = app.desktopUrl.replace(/\/+$/, "")
+    const url = `${desktop}/gateways/desktop/ui/apps/${encodeURIComponent(app.name)}/frontend/${topic}`
     const item = { url, body, contentType, fetchImpl: options.fetch ?? ((...args) => globalThis.fetch(...args)) }
     if (options.ordered === false) {
         return send(item)

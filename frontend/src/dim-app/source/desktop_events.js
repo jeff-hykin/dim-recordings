@@ -8,7 +8,7 @@
 //
 // Browser: a subscription on the page's one zenoh-gateway connection (zenoh.js's getZenoh()). Events published while that
 // connection was down are gone; `onDesktopReconnect(callback)` says when to re-GET. Deno (an app's backend, which has
-// no zenoh-gateway): Desktop's deprecated `GET /api/events` stream from DIMOS_APP's desktopUrl (Server-Sent Events, kept by
+// no zenoh-gateway): Desktop's `GET /gateways/desktop/ui/events` stream from DIMOS_APP's desktopUrl (Server-Sent Events, kept by
 // Desktop for one release), reconnecting with backoff (0.5 s doubling to 10 s). Never throws.
 
 import { getZenoh } from "./zenoh.js"
@@ -163,7 +163,7 @@ function onDesktopEventStream(type, callback, options) {
             if (!base) {
                 console.debug("[dim-app] onDesktopEvent: no Desktop URL (not under dimOS Desktop); no events")
             } else {
-                connection = connectFetch(new URL("/api/events", base).href)
+                connection = connectFetch(new URL("/gateways/desktop/ui/events", base).href)
             }
         } catch (error) {
             console.debug("[dim-app] onDesktopEvent: couldn't connect:", error)

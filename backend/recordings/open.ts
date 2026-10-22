@@ -48,7 +48,7 @@ export function openTargets(format: string, inspection: Inspection | null, env: 
     return out
 }
 
-/** Installed apps (Desktop's GET /api/apps), re-read at most every 10 s. */
+/** Installed apps (Desktop's GET /gateways/desktop/info/apps), re-read at most every 10 s. */
 let appsCache: { at: number; names: string[] } = { at: 0, names: [] }
 export async function installedApps(config: Config): Promise<string[]> {
     if (!config.desktopUrl) {
@@ -58,9 +58,10 @@ export async function installedApps(config: Config): Promise<string[]> {
         return appsCache.names
     }
     try {
-        const response = await fetch(`${config.desktopUrl}/api/apps`)
-        const body = await response.json() as { apps?: { name: string; stopped?: boolean }[] }
-        appsCache = { at: Date.now(), names: (body.apps ?? []).map((app) => app.name) }
+        const response = await fetch(`${config.desktopUrl}/gateways/desktop/info/apps`)
+        type App = { name: string; stopped?: boolean }
+        const body = await response.json() as App[] | { apps?: App[] }
+        appsCache = { at: Date.now(), names: (Array.isArray(body) ? body : body.apps ?? []).map((app) => app.name) }
     } catch {
         appsCache = { at: Date.now(), names: [] }
     }
@@ -85,6 +86,11 @@ async function desktop(config: Config, path: string, body: unknown) {
         throw new Error(`${path}: ${response.status} ${text.slice(0, 300)}`)
     }
     return text ? JSON.parse(text) : {}
+}
+
+/** Opens (or switches to) an installed app in the user's last active Desktop window, at `path` when given. */
+function openApp(config: Config, app: string, path?: string) {
+    return desktop(config, `/gateways/desktop/ui/apps/${encodeURIComponent(app)}/open`, path ? { path } : {})
 }
 
 function spawn(command: string[]) {
@@ -117,10 +123,7 @@ export async function openIn(
     }
     switch (target) {
         case "replayer":
-            await desktop(config, "/api/open-app", {
-                app: config.appName,
-                path: `#/replay/${encodeURIComponent(recording.id)}`,
-            })
+            await openApp(config, config.appName, `#/replay/${encodeURIComponent(recording.id)}`)
             return { ok: true, opened: `the Replayer on ${recording.name}` }
         case "map-editor":
             await desktop(config, `/apps/${MAP_EDITOR_APP}/api/open`, {
@@ -131,7 +134,7 @@ export async function openIn(
                 writable: !recording.symlink || await writableFile(recording.path),
             })
             if (show) {
-                await desktop(config, "/api/open-app", { app: MAP_EDITOR_APP })
+                await openApp(config, MAP_EDITOR_APP)
             }
             return { ok: true, opened: `the Map Editor on ${recording.name}`, app: MAP_EDITOR_APP }
         case "foxglove":
@@ -141,7 +144,7 @@ export async function openIn(
             if (env.apps.includes(RERUN_APP)) {
                 await desktop(config, `/apps/${RERUN_APP}/api/open`, { path: recording.path })
                 if (show) {
-                    await desktop(config, "/api/open-app", { app: RERUN_APP })
+                    await openApp(config, RERUN_APP)
                 }
                 return { ok: true, opened: `the Rerun app on ${recording.name}`, app: RERUN_APP }
             }

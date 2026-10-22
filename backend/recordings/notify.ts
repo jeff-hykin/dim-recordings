@@ -1,4 +1,4 @@
-// One Desktop notification per plugged-in drive with recordings on it (Desktop's POST /api/notifications); its action
+// One Desktop notification per plugged-in drive with recordings on it (Desktop's POST /gateways/desktop/ui/notifications); its action
 // opens this app on the transfer dialog (`open:<app>/#/transfer`: Desktop's shell opens the app at that path).
 import type { Config } from "../config.ts"
 import type { Drive } from "./drives.ts"
@@ -22,7 +22,7 @@ export async function notifyDrive(config: Config, drive: Drive) {
     if (!config.desktopUrl) {
         return
     }
-    const response = await fetch(`${config.desktopUrl}/api/notifications`, {
+    const response = await fetch(`${config.desktopUrl}/gateways/desktop/ui/notifications`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(driveNotification(config.appName, drive)),
