@@ -3,8 +3,8 @@
 // with no TF frame follows its parent through the joint's origin. Meshes fill in as they load.
 import { useEffect, useRef } from "react"
 import * as THREE from "three"
-import { useLayer } from "dimos-react/three"
-import { type DisplayMode, Kinematics, UrdfModel } from "./urdf.ts"
+import { Kinematics, useLayer } from "dimos-react/three"
+import { type DisplayMode, UrdfModel } from "./urdf.ts"
 import type { RecordingUrdf } from "./use_urdf.ts"
 
 export function UrdfRobot({ urdf, display, opacity, onPlaced }: {

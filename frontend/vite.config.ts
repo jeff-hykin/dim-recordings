@@ -5,41 +5,18 @@ import { defineConfig, type Plugin } from "vite"
 
 const config = JSON.parse(readFileSync(new URL("./deno.json", import.meta.url), "utf8"))
 
-// deno.json's `jsr:` imports (dimos-react) from vendor/, where `deno install` puts them (vendor: true): the package's
-// export map (its _meta.json) picks the file, so `dimos-react/three` is its ./three export
-function jsrFromVendor(): Plugin {
-    const packages = Object.entries(config.imports as Record<string, string>).flatMap(([name, target]) => {
-        const match = target.match(/^jsr:(@[^/@]+\/[^/@]+)@(.+)$/)
-        if (!match) {
-            return []
-        }
-        const folder = new URL(`./vendor/jsr.io/${match[1]}/`, import.meta.url)
-        const exports = JSON.parse(readFileSync(new URL(`${match[2]}_meta.json`, folder), "utf8")).exports
-        return [{ name, root: new URL(`${match[2]}/`, folder), exports: exports as Record<string, string> }]
-    })
+// deno.json's https imports (dimos-react's source at its tag) from vendor/, where `deno install` puts them (vendor: true)
+function httpsFromVendor(): Plugin {
+    const remote = Object.entries(config.imports as Record<string, string>).filter(([, target]) =>
+        target.startsWith("https://")
+    )
+    const local = (url: string) => new URL(`./vendor/${url.replace(/^https:\/\//, "")}`, import.meta.url).pathname
     return {
-        name: "jsr-from-vendor",
+        name: "https-from-vendor",
         enforce: "pre",
         resolveId(id) {
-            for (const { name, root, exports } of packages) {
-                const subpath = id === name ? "." : id.startsWith(`${name}/`) ? `.${id.slice(name.length)}` : null
-                if (subpath && exports[subpath]) {
-                    return new URL(exports[subpath], root).pathname
-                }
-            }
-            return null
-        },
-    }
-}
-
-// that source imports `npm:<package>@<range>/<path>`: resolve it as the bare `<package>/<path>`, from node_modules
-function npmSpecifiers(): Plugin {
-    return {
-        name: "npm-specifiers",
-        enforce: "pre",
-        resolveId(id, importer) {
-            const match = id.match(/^npm:\/?((?:@[^/@]+\/)?[^/@]+)(?:@[^/]*)?(\/.*)?$/)
-            return match ? this.resolve(match[1] + (match[2] ?? ""), importer, { skipSelf: true }) : null
+            const found = remote.find(([name]) => name === id)
+            return found ? local(found[1]) : null
         },
     }
 }
@@ -49,7 +26,7 @@ function npmSpecifiers(): Plugin {
 const desktop = process.env.DESKTOP ?? "http://127.0.0.1:8787"
 export default defineConfig({
     base: "./",
-    plugins: [jsrFromVendor(), npmSpecifiers(), react()],
+    plugins: [httpsFromVendor(), react()],
     server: {
         proxy: Object.fromEntries(["/api", "/dimos", "/agent", "/mcp", "/apps"].map((path) => [path, desktop])),
     },

@@ -7,13 +7,13 @@ import { useEffect, useMemo, useState } from "react"
 import type * as THREE from "three"
 import type { Overview } from "./api.ts"
 import { descriptionStream, fileStreams } from "./urdf_streams.ts"
-import { decodeMeshFile, meshGeometry, meshUris, parseUrdf, type UrdfDescription } from "./urdf.ts"
+import { decodeMeshFile, meshGeometry, meshUris, parseUrdf, type RobotDescription } from "dimos-react/three"
 
 const MESHES_IN_FLIGHT = 2
 
 export interface RecordingUrdf {
     xml: string | null
-    description: UrdfDescription | null
+    description: RobotDescription | null
     /** loaded meshes by URI, shared by every model built from the description */
     geometries: Map<string, THREE.BufferGeometry>
     /** bumped whenever a mesh is loaded */
