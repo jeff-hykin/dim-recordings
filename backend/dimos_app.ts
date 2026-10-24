@@ -41,8 +41,8 @@ export function readDimosApp(): DimosApp {
     return { ...EMPTY, ...(json ? JSON.parse(json) : {}) }
 }
 
-/** DIMOS_APP, read once; the raw JSON is logged once so the App Store's log shows it. */
+/** DIMOS_APP, read once; logged once with the gateway token masked for the App Store's log. */
 export const dimosApp: DimosApp = readDimosApp()
 if (Deno.env.get("DIMOS_APP")) {
-    console.error(`DIMOS_APP: ${Deno.env.get("DIMOS_APP")}`)
+    console.error(`DIMOS_APP: ${JSON.stringify({ ...dimosApp, zenohGatewayToken: "***" })}`)
 }
