@@ -13,7 +13,7 @@ function flag(name: string): string | undefined {
     return index === -1 ? undefined : Deno.args[index + 1]
 }
 
-const config = loadConfig()
+const config = await loadConfig()
 const services = makeServices(config)
 const routes = buildRoutes(services)
 // pages: the list is state ("recordings": they re-GET api/recordings), the rest are events (frontend topic `events`)

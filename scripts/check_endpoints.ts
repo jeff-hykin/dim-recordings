@@ -17,7 +17,7 @@ function operations(doc: { paths?: object } | undefined): string[] {
 
 const file = new URL("../dimos.yaml", import.meta.url)
 const yaml = parse(await Deno.readTextFile(file)) as Record<string, unknown>
-const config = { ...loadConfig(), dataDir: await Deno.makeTempDir(), recordingsDir: await Deno.makeTempDir() }
+const config = { ...(await loadConfig()), dataDir: await Deno.makeTempDir(), recordingsDir: await Deno.makeTempDir() }
 const want = openapi(INFO, buildRoutes(makeServices(config)))
 if (Deno.args.includes("--write")) {
     const provides = (yaml.provides ?? {}) as { info?: object }

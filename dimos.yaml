@@ -7,6 +7,8 @@ uses:
         - POST /cloud/uploads
         - DELETE /cloud/uploads
         - GET /cloud/account
+        # where recordings go: the gateway's one answer, which is also every run's --record-dir (backend/config.ts)
+        - GET /history/recordings
     "@desktop-gateway":
         - POST /ui/apps/{pkg}/open
         - GET /info/apps

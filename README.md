@@ -1,7 +1,12 @@
 # dim-recordings
 
-A [dimOS Desktop](https://github.com/jeff-hykin/dimos-desktop) app for the robot recordings in Desktop's recordings
+A [dimOS Desktop](https://github.com/jeff-hykin/dimos-desktop) app for the robot recordings in dimos's recordings
 folder: memory2 `.db` files, `.mcap` files, and the Rerun `.rrd` files made from them.
+
+Which folder that is comes from the dimos gateway (`GET /gateways/dimos/history/recordings` → `{path}`), the one
+authority on it: the same resolver answers every run's `--record-dir`, so this is where a recording made from Desktop
+lands. `DIMOS_APP`'s `recordingsDir` is the fallback when the gateway can't be reached. Nothing here reads `DIMOS_HOME`
+or looks inside it: an app is told what it needs in `DIMOS_APP` and asks Desktop's HTTP API for the rest.
 
 ```sh
 dimos-desktop install https://github.com/jeff-hykin/dim-recordings
@@ -87,6 +92,7 @@ back, with drop-to-latest and thumbnail-while-scrubbing), not an event feed.
 deno task test && deno task check     # backend tests (tiny .db/.mcap files made on the fly), dimos.yaml ↔ routes check
 cd frontend && deno task check && deno task build   # deno.json + deno.lock: npm packages in node_modules, dimos-react in vendor/
 deno run -A backend/main.ts --port 8787 --recordings-dir <dir> --data-dir <dir> [--desktop-url http://127.0.0.1:7341]
+#   no --recordings-dir: it asks --desktop-url's gateway, else ~/recordings (--data-dir's default: ~/.local/share/dim-recordings)
 nix build .#dimosApp                  # what Desktop builds: bin/dimos-app-server
 deno bundle --platform deno --external "node:*" --external ./vendor/zenoh-gateway/zenoh_gateway.js -o server.js backend/main.ts   # the one-file backend the nix build runs
 ```

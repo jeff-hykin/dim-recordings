@@ -8,6 +8,7 @@ import { atOrBefore, openSource, type Source, type StreamMeta } from "../replay/
 import { decodeCdrImage, type DecodedImage, decodeLcmCompressedImage, decodeLcmImage } from "./messages.ts"
 import { compressedSize, ffmpeg, imageClass, writeFrame } from "./thumbnails.ts"
 import type { Config } from "../config.ts"
+import { dimosApp } from "../dimos_app.ts"
 
 // dimos/cloud/constants.py
 const PREVIEW_FORMAT = "dimos-spatial-preview-v2"
@@ -553,8 +554,8 @@ export async function buildPreview(path: string): Promise<Record<string, unknown
 
 // ── sending it: after an .mcap upload finishes ──
 
-/** The dimos cloud key: DIMOS_API_KEY, dimos's credentials file, else asked of a dimos python (it holds the keyring item;
- * macOS's `security` would pop a dialog). */
+/** The dimos cloud key: DIMOS_API_KEY, dimos's credentials file, else asked of the python dimos runs with (DIMOS_APP's
+ * dimosPython, which holds the keyring item; macOS's `security` would pop a dialog). */
 async function apiKey(): Promise<string | null> {
     const fromEnv = Deno.env.get("DIMOS_API_KEY")?.trim()
     if (fromEnv) {
@@ -577,33 +578,15 @@ async function apiKey(): Promise<string | null> {
             // not there
         }
     }
-    const dimosHome = Deno.env.get("DIMOS_HOME") ?? join(home, ".dimos")
-    const pythons: string[] = []
-    const explicit = Deno.env.get("DIMOS_PYTHON")
-    if (explicit) {
-        pythons.push(explicit)
-    }
-    try {
-        // the running gateways' pythons, Desktop's own (its sockets live under DIMOS_HOME/desktop) first
-        const { stdout } = await new Deno.Command("ps", {
-            args: ["-axww", "-o", "command="],
-            stdout: "piped",
-            stderr: "null",
-        })
-            .output()
-        const lines = new TextDecoder().decode(stdout).split("\n").filter((l) => / -m experimental\.gateway\b/.test(l))
-        lines.sort((a, b) =>
-            Number(!a.includes(join(dimosHome, "desktop"))) - Number(!b.includes(join(dimosHome, "desktop")))
-        )
-        for (const line of lines) {
-            const program = line.trim().split(/\s+/)[0]
-            if (/python/.test(program) && !pythons.includes(program)) {
-                pythons.push(program)
-            }
-        }
-    } catch {
-        // no ps
-    }
+    // the python dimos runs with, as DIMOS_APP reports it (never a search for Desktop's files): DIMOS_PYTHON wins for
+    // a run outside Desktop, then the gateway's own interpreter, then dimos's venv in the checkout it named
+    const pythons = new Set(
+        [
+            Deno.env.get("DIMOS_PYTHON"),
+            dimosApp.dimosPython,
+            dimosApp.dimosDir ? join(dimosApp.dimosDir, ".venv", "bin", "python") : null,
+        ].filter((python): python is string => !!python),
+    )
     for (const python of pythons) {
         try {
             const { success, stdout } = await new Deno.Command(python, {
