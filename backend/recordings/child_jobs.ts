@@ -110,12 +110,16 @@ export function inChild<K extends JobName>(
     dropped.delete(path)
     return turn(lane, path, async (): Promise<unknown> => {
         // this module as a program: in the nix build that's the one bundled server.js, which starts here too (main.ts)
+        // a checkout: its own deno.json and lock, as the server was run; the bundle: offline, nothing to resolve
+        const fromCheckout = import.meta.url.endsWith("/child_jobs.ts")
+        const resolution = fromCheckout
+            ? ["--config", new URL("../../deno.json", import.meta.url).pathname]
+            : ["--no-lock", "--cached-only"]
         const deno = [
             Deno.execPath(),
             "run",
             "-A",
-            "--no-lock",
-            "--cached-only",
+            ...resolution,
             `--v8-flags=--max-old-space-size=${CHILD_HEAP_MB}`,
             import.meta.url,
             CHILD_JOB_FLAG,
