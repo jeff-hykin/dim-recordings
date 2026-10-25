@@ -673,7 +673,7 @@ export function Inspector(
         return () => {
             live = false
         }
-    }, [recording.id, recording.modified])
+    }, [recording.id, recording.modified, recording.inspected])
     useEffect(() => {
         if (!saved) {
             setNote(recording.note)

@@ -1,8 +1,8 @@
 // Preview clips: a background job that picks each recording's main camera (RGB before grayscale before depth, then
 // the highest resolution) and saves 15 small frames from its start, middle and end as one sprite (frames side by
-// side), which the list plays and scrubs. Deliberately slow: one recording at a time, ffmpeg under `nice -n 19`, a
-// pause between frames and between recordings. Each finished recording logs its wall and CPU time.
-import { openDb } from "./sqlite.ts"
+// side), which the list plays and scrubs. It runs in a background job (child_jobs.ts: a child process under nice /
+// ionice, one recording at a time) and ffmpeg under `nice -n 19`. Each finished recording logs its wall and CPU time.
+import { idAtOrAfter, openDb, quoteName } from "./sqlite.ts"
 import { join } from "node:path"
 import process from "node:process"
 import { channelType, type Inspection, type StreamInfo } from "./inspect.ts"
@@ -12,8 +12,6 @@ import { which } from "./foxglove.ts"
 
 export const FRAMES = 15
 export const WIDTH = 320
-const PAUSE_BETWEEN_FRAMES_MS = 250
-const PAUSE_BETWEEN_RECORDINGS_MS = 2000
 
 export type ThumbMeta = {
     frames: number
@@ -109,10 +107,13 @@ async function dbSource(path: string, inspection: Inspection): Promise<Source> {
     const db = await openDb(path)
     const decode = (blob: Uint8Array) => withSize(decodeLcmImage(unwrapBlob(new Uint8Array(blob))))
     const frameAt = (stream: string, time: number) => {
-        const quoted = stream.replaceAll('"', '""')
-        const row = db.prepare(
-            `SELECT b.data AS data FROM "${quoted}" AS s JOIN "${quoted}_blob" AS b ON b.id = s.id WHERE s.ts >= ? ORDER BY s.ts LIMIT 1`,
-        ).get(time) as { data: Uint8Array } | undefined
+        // the id by bisecting ids (a few rowid lookups): `WHERE ts >= ? ORDER BY ts` scans the table, ts has no index
+        const id = idAtOrAfter(db, stream, time)
+        const row = id === null
+            ? undefined
+            : db.prepare(`SELECT data FROM ${quoteName(`${stream}_blob`)} WHERE id = ?`).get(id) as
+                | { data: Uint8Array }
+                | undefined
         return Promise.resolve(row ? decode(row.data) : null)
     }
     return {
@@ -284,15 +285,12 @@ export async function writeFrame(image: DecodedImage, out: string) {
     ], data)
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
 /** Builds the sprite for one recording into `folder` (sprite.jpg + meta.json). */
 export async function buildThumbnail(
     path: string,
     format: "db" | "mcap",
     inspection: Inspection,
     folder: string,
-    pause = PAUSE_BETWEEN_FRAMES_MS,
 ): Promise<ThumbMeta | null> {
     const started = performance.now()
     const cpuBefore = process.cpuUsage()
@@ -316,7 +314,6 @@ export async function buildThumbnail(
                 ffmpegRuns++
                 written++
             }
-            await sleep(pause)
         }
         if (!written) {
             return null
@@ -367,5 +364,3 @@ export async function buildThumbnail(
         source.close()
     }
 }
-
-export { PAUSE_BETWEEN_RECORDINGS_MS }

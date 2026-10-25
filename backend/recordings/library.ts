@@ -2,7 +2,8 @@
 // disk under the app data dir, keyed by format + size + mtime), notes, thumbnails and what can open it.
 import { isAbsolute, join, relative } from "node:path"
 import type { Config } from "../config.ts"
-import { inspect, type Inspection } from "./inspect.ts"
+import { inChild, JobCancelled, laneFor } from "./child_jobs.ts"
+import type { Inspection } from "./inspect.ts"
 import { type FileEntry, type Listed, pairRrds, resolveId, scanFiles } from "./scan.ts"
 import { fs } from "./slow_fs.ts"
 
@@ -72,8 +73,8 @@ async function realOf(path: string): Promise<string> {
 
 export class Library {
     #inspections = new Map<string, Inspection>()
-    #pending = new Set<string>()
-    #queue: Promise<void> = Promise.resolve()
+    /** inspections queued or running (child_jobs.ts runs them one at a time per cost lane), by key */
+    #pending = new Map<string, Promise<Inspection>>()
     #notes: Record<string, string> | null = null
     listeners = new Set<Listener>()
     /** the extra folders the page sent last (with its list; in memory only: the page's localStorage is the record) */
@@ -151,38 +152,39 @@ export class Library {
         }
     }
 
-    /** Reads it now (or waits for the queued read). */
+    /** Waits for its inspection (queued if it wasn't). */
     async inspection(file: FileEntry): Promise<Inspection> {
-        const cached = await this.cached(file)
-        if (cached) {
-            return cached
-        }
-        await this.#queue
-        return this.#inspections.get(Library.key(file)) ?? await this.#read(file)
+        return await this.cached(file) ?? await this.#enqueue(file)
     }
 
-    #enqueue(file: FileEntry) {
-        const key = Library.key(file)
-        if (this.#pending.has(key)) {
-            return
+    /** Settles once no inspection is queued or running (tests; a shutdown). */
+    async idle() {
+        while (this.#pending.size) {
+            await Promise.allSettled([...this.#pending.values()])
         }
-        this.#pending.add(key)
-        this.#queue = this.#queue.then(async () => {
-            try {
-                await this.#read(file)
-                this.emit({ type: "recordings", reason: "inspected", id: file.id })
-            } finally {
-                this.#pending.delete(key)
-            }
-        })
+    }
+
+    #enqueue(file: FileEntry): Promise<Inspection> {
+        const key = Library.key(file)
+        let pending = this.#pending.get(key)
+        if (!pending) {
+            pending = this.#read(file).finally(() => this.#pending.delete(key))
+            this.#pending.set(key, pending)
+            pending.then(() => this.emit({ type: "recordings", reason: "inspected", id: file.id }), () => {})
+        }
+        return pending
     }
 
     async #read(file: FileEntry): Promise<Inspection> {
         const key = Library.key(file)
         let result: Inspection
         try {
-            result = await inspect(file.path)
+            // in a child process: a big file's read never holds the server's thread, and its memory dies with it
+            result = await inChild("inspect", [file.path], { lane: laneFor(file.size), path: file.path })
         } catch (error) {
+            if (error instanceof JobCancelled) {
+                throw error // the file went away: nothing to keep
+            }
             result = {
                 format: file.format === "mcap" ? "mcap" : "db",
                 start: null,
@@ -320,7 +322,9 @@ export class Library {
         if (!found) {
             throw new NotFound(`no such recording: ${id}`)
         }
-        if (found.format !== "rrd" && !("inspection" in found && found.inspection)) {
+        // a small file not read yet is read now (its own lane, a moment); a big one answers without it, and the
+        // `recordings` event when it's read brings it
+        if (found.format !== "rrd" && !("inspection" in found && found.inspection) && laneFor(found.size) === "small") {
             return this.#describe(found, await this.inspection(found), this.notes()[id] ?? "")
         }
         return "recorded" in found ? found as Recording : this.#describe(found, null, this.notes()[id] ?? "")

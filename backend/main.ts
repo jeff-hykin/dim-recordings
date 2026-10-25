@@ -7,6 +7,12 @@ import { handle, publishEvent, stateChanged } from "./http.ts"
 import { buildRoutes, INFO } from "./routes.ts"
 import { within } from "./recordings/slow_fs.ts"
 import { makeServices } from "./services.ts"
+import { isChildJob, runChildJob } from "./recordings/child_jobs.ts"
+
+// the bundled server.js run as a background job's child (child_jobs.ts): that job, not the server
+if (isChildJob) {
+    await runChildJob()
+}
 
 function flag(name: string): string | undefined {
     const index = Deno.args.indexOf(`--${name}`)

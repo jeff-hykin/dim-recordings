@@ -2,6 +2,7 @@
 import { dirname } from "node:path"
 import { HttpError, type Route } from "../http.ts"
 import { deleteRecording, duplicateRecording, renameRecording } from "./actions.ts"
+import { cancelJobsFor } from "./child_jobs.ts"
 import { conversions, Jobs, type Target } from "./convert.ts"
 import { which } from "./foxglove.ts"
 import type { Transfers } from "./drive_routes.ts"
@@ -151,7 +152,8 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
                 "p99 and largest gap, the tf frame tree (edges with rate and first/last time, roots, frames with two parents) " +
                 "— what `dtk data summary` prints — and warnings (kind, message, detail, stream/frame, at = seconds in): a " +
                 "broken tf tree (two parents, cycle, separate trees, a stream's frame tf never publishes, transforms that stop " +
-                "early or start late) and streams with outlier gaps, a rate drop, or a late start / early stop",
+                "early or start late) and streams with outlier gaps, a rate drop, or a late start / early stop. The inspection " +
+                "is null while a file over 512 MB is still being read in the background (the list's `inspected` says when)",
             params: ID,
             handler: async ({ id }) => {
                 const recording = await find(String(id))
@@ -217,6 +219,7 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             params: ID,
             handler: async ({ id }) => {
                 const recording = await find(String(id))
+                cancelJobsFor(recording.path) // a preview or inspection reading it stops: it would read a deleted file
                 await deleteRecording(recording.path)
                 library.setNote(recording.id, "")
                 library.emit({ type: "recordings", reason: "delete", id })
@@ -433,7 +436,7 @@ export function recordingRoutes({ library, jobs, thumbnails, uploads }: Services
             path: "api/thumbnails",
             description:
                 "The preview job: which recording it's working on, and the last results with their wall and CPU time (it runs " +
-                "one recording at a time under nice -n 19, pausing between frames)",
+                "one recording at a time in a child process under nice -n 19 and ionice)",
             handler: () => ({
                 working: thumbnails.current,
                 ffmpeg: ffmpeg() ?? null,

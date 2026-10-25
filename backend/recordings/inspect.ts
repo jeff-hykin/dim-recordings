@@ -1,7 +1,9 @@
 // What's inside a recording: per-stream type, encoding, count, rate and gaps, the tf frame tree (a port of
 // `dtk data summary`, tools/db_summary.js), and what looks wrong (warnings.ts). Reads indexes and timestamps, a .db's
 // whole tf stream (an .mcap's tf in windows across it), and each stream's first message for its frame.
-import { openDb } from "./sqlite.ts"
+import type { DatabaseSync } from "node:sqlite"
+import { shares, sortRuns, windowsOf } from "./budget.ts"
+import { idRange, openDb, pagesOfIds, quoteName } from "./sqlite.ts"
 import { decodeCdrFrames, decodeLcmFrames, type Edge, readCdrFrameId, readLcmFrameId, unwrapBlob } from "./messages.ts"
 import { logTimesFromIndexes, openMcap } from "./mcap.ts"
 import { type EdgeSpan, streamWarnings, tfWarnings, type Warning } from "./warnings.ts"
@@ -27,6 +29,8 @@ export type StreamInfo = {
     p99Ratio: number
     maxGap: number
     gapRatio: number
+    /** the share of its messages read for the gaps and rates, when it was too big to read whole (windows across it) */
+    sampled?: number
 }
 
 export type TfTree = {
@@ -79,7 +83,8 @@ export function shortType(name: string): string {
     return parts.slice(-2).join(".")
 }
 
-export function gapStats(name: string, count: number, times: number[]) {
+/** `times` ascending, or windows of a big stream with NaN between them (no gap spans a NaN) */
+export function gapStats(name: string, count: number, times: ArrayLike<number>) {
     let start: number | null = null
     let end: number | null = null
     let maxGap = 0
@@ -89,13 +94,19 @@ export function gapStats(name: string, count: number, times: number[]) {
         end = times[times.length - 1]
     }
     if (times.length > 1) {
-        const gaps = new Float64Array(times.length - 1)
+        const all = new Float64Array(times.length - 1)
+        let n = 0
         for (let i = 1; i < times.length; i++) {
-            gaps[i - 1] = times[i] - times[i - 1]
+            const gap = times[i] - times[i - 1]
+            if (!Number.isNaN(gap)) {
+                all[n++] = gap
+            }
         }
-        gaps.sort()
-        maxGap = gaps[gaps.length - 1]
-        p99Gap = gaps[Math.min(gaps.length - 1, Math.max(0, Math.ceil(gaps.length * 0.99) - 1))]
+        const gaps = all.subarray(0, n).sort()
+        if (n) {
+            maxGap = gaps[n - 1]
+            p99Gap = gaps[Math.min(n - 1, Math.max(0, Math.ceil(n * 0.99) - 1))]
+        }
     }
     const duration = start !== null && end !== null ? end - start : 0
     const hz = duration > 0 ? count / duration : 0
@@ -241,7 +252,7 @@ function finish(
     format: "db" | "mcap",
     streams: StreamInfo[],
     tf: TfTree,
-    timesOf: (name: string) => number[],
+    timesOf: (name: string) => ArrayLike<number>,
     headerFrames: Map<string, string>,
     sampledEvery = 0,
     sampledWindow = 0,
@@ -261,6 +272,14 @@ function finish(
         ...tfWarnings(tf.edges, start, end, placed, sampledEvery, sampledWindow),
         ...streams.filter((s) => !quiet.has(s.name)).flatMap((s) =>
             streamWarnings(s.name, timesOf(s.name), start, end, usualStart, usualEnd, /TFMessage$/.test(s.type))
+                .map((w) =>
+                    s.sampled && (w.kind === "gap" || w.kind === "rate drop")
+                        ? {
+                            ...w,
+                            detail: `${w.detail} · in the ${Math.max(1, Math.round(s.sampled * 100))}% of it read`,
+                        }
+                        : w
+                )
         ),
     ]
     const rank = (w: Warning) => {
@@ -281,9 +300,55 @@ function finish(
     }
 }
 
-/** an .mcap's tf is read in this many windows of TF_WINDOW seconds across it (a whole read decompresses every chunk) */
+/** a recording's tf is read in this many windows of TF_WINDOW seconds across it when it's too big to read whole */
 const TF_WINDOWS = 16
 const TF_WINDOW = 1
+/** most tf messages read (and decoded) from one tf stream: past it, the windows */
+const TF_WHOLE_MOST = 20_000
+/** most messages read from a static tf stream (its edges don't change; a republished one repeats them) */
+const TF_STATIC_MOST = 1_000
+/** most message times an inspection holds at once, over all its streams (8 bytes each): a stream bigger than its share
+ * is read in windows across it */
+export const TIMES_BUDGET = 4_000_000
+
+/** windows at the start, the end and evenly between, so a tf edge that stops or starts partway shows up */
+function tfWindows(start: number, end: number): { windows: [number, number][]; sampledEvery: number } {
+    const span = end - start
+    if (span <= TF_WINDOWS * TF_WINDOW) {
+        return { windows: [[start, end]], sampledEvery: 0 }
+    }
+    const windows: [number, number][] = []
+    for (let i = 0; i < TF_WINDOWS; i++) {
+        const from = start + (span - TF_WINDOW) * i / (TF_WINDOWS - 1)
+        windows.push([from, from + TF_WINDOW])
+    }
+    return { windows, sampledEvery: (span - TF_WINDOW) / (TF_WINDOWS - 1) }
+}
+
+function coverageOf(windows: number, sampledEvery: number) {
+    return windows > 1 ? `${TF_WINDOWS} windows of ${TF_WINDOW} s, every ${Math.round(sampledEvery)} s` : "all of it"
+}
+
+/** A .db stream's times by id (no sort over ts, which has no index): whole when `keep` holds it, else windows of
+ * consecutive ids across it with NaN between them. */
+function dbTimes(db: DatabaseSync, table: string, range: { low: number; high: number }, keep: number): Float64Array {
+    const count = range.high - range.low + 1
+    const windows = windowsOf(count, keep)
+    const times = new Float64Array(windows.reduce((sum, [, length]) => sum + length, 0) + windows.length - 1)
+    let n = 0
+    for (const [index, [first, length]] of windows.entries()) {
+        if (index > 0) {
+            times[n++] = NaN
+        }
+        const from = range.low + first
+        for (const rows of pagesOfIds<{ id: number; ts: number }>(db, "ts", quoteName(table), [from, from + length])) {
+            for (const row of rows) {
+                times[n++] = row.ts
+            }
+        }
+    }
+    return sortRuns(times.subarray(0, n))
+}
 
 export async function inspectDb(path: string): Promise<Inspection> {
     const db = await openDb(path)
@@ -297,9 +362,18 @@ export async function inspectDb(path: string): Promise<Inspection> {
                 r.name
             ),
         )
+        const ranges = rows.map(({ name }) => {
+            try {
+                return tables.has(name) ? idRange(db, name) : null
+            } catch {
+                return null // a stream registered without its table
+            }
+        })
+        const counts = ranges.map((range) => range ? range.high - range.low + 1 : 0)
+        const keeps = shares(counts, TIMES_BUDGET)
         const streams: StreamInfo[] = []
-        const timesByName = new Map<string, number[]>()
-        for (const { name, config } of rows) {
+        const timesByName = new Map<string, Float64Array>()
+        for (const [i, { name, config }] of rows.entries()) {
             let payload = ""
             let codec = ""
             try {
@@ -309,47 +383,81 @@ export async function inspectDb(path: string): Promise<Inspection> {
             } catch {
                 // a config that isn't JSON: the stream still has rows
             }
-            const quoted = name.replaceAll('"', '""')
-            let times: number[] = []
+            const range = ranges[i]
+            let times: Float64Array = new Float64Array(0)
             try {
-                times = (db.prepare(`SELECT ts FROM "${quoted}" ORDER BY ts`).all() as { ts: number }[]).map((r) =>
-                    r.ts
-                )
+                times = range ? dbTimes(db, name, range, keeps[i]) : times
             } catch {
-                // a stream registered without its table
+                // an unreadable table: no times
             }
+            // whole: the rows read are its count (ids can skip); in windows, its id span is
+            const whole = counts[i] <= keeps[i]
+            const count = whole ? times.length : counts[i]
             timesByName.set(name, times)
             streams.push({
-                ...gapStats(name, times.length, times),
+                ...gapStats(name, count, times),
                 type: shortType(payload),
                 encoding: codec,
                 hasSchema: true,
+                ...(whole ? {} : { sampled: keeps[i] / counts[i] }),
             })
         }
         const names = tfStreams(streams)
         const samples: TfSample[] = []
+        let sampledEvery = 0
+        let windowCount = 1
         for (const name of names) {
-            const quoted = name.replaceAll('"', '""')
+            const stream = streams.find((s) => s.name === name)!
+            const range = ranges[rows.findIndex((row) => row.name === name)]
+            if (!range || !tables.has(`${name}_blob`)) {
+                continue // blobs kept somewhere else (a file blob store): no tree
+            }
             const isStatic = name.endsWith("_static")
-            try {
-                const blobs = db.prepare(
-                    `SELECT s.ts AS ts, b.data AS data FROM "${quoted}" AS s JOIN "${quoted}_blob" AS b ON b.id = s.id ORDER BY s.ts`,
-                ).all() as { ts: number; data: Uint8Array }[]
-                for (const { ts, data } of blobs) {
-                    samples.push({
-                        time: ts,
-                        edges: decodeLcmFrames(unwrapBlob(new Uint8Array(data))),
-                        static: isStatic,
-                        window: 0,
-                    })
+            const join = `${quoteName(name)} AS s JOIN ${quoteName(`${name}_blob`)} AS b ON b.id = s.id`
+            const count = range.high - range.low + 1
+            const read = (window: number, from: number, length: number) => {
+                for (
+                    const page of pagesOfIds<{ id: number; ts: number; data: Uint8Array }>(
+                        db,
+                        "s.ts AS ts, b.data AS data",
+                        join,
+                        [from, from + length],
+                        { idColumn: "s.id" },
+                    )
+                ) {
+                    for (const { ts, data } of page) {
+                        try {
+                            samples.push({
+                                time: ts,
+                                edges: decodeLcmFrames(unwrapBlob(new Uint8Array(data))),
+                                static: isStatic,
+                                window,
+                            })
+                        } catch {
+                            // one undecodable message
+                        }
+                    }
                 }
-            } catch {
-                // blobs kept somewhere else (a file blob store): no tree
+            }
+            if (isStatic || count <= TF_WHOLE_MOST) {
+                read(0, range.low, Math.min(count, isStatic ? TF_STATIC_MOST : TF_WHOLE_MOST))
+                continue
+            }
+            // TF_WINDOW seconds' worth of rows at its rate, in windows of consecutive ids across it
+            const span = tfWindows(stream.start ?? 0, stream.end ?? 0)
+            sampledEvery = span.sampledEvery
+            windowCount = span.windows.length
+            const perWindow = Math.max(
+                1,
+                Math.min(Math.floor(TF_WHOLE_MOST / TF_WINDOWS), Math.ceil(stream.hz * TF_WINDOW)),
+            )
+            for (const [window, [first, length]] of windowsOf(count, perWindow * TF_WINDOWS, TF_WINDOWS).entries()) {
+                read(window, range.low + first, length)
             }
         }
+        samples.sort((a, b) => a.time - b.time)
         const headerFrames = new Map<string, string>()
         for (const stream of streams) {
-            const quoted = stream.name.replaceAll('"', '""')
             if (names.includes(stream.name) || !stream.count || !tables.has(`${stream.name}_blob`)) {
                 continue
             }
@@ -357,8 +465,11 @@ export async function inspectDb(path: string): Promise<Inspection> {
                 continue // jpeg frames carry no header
             }
             try {
+                // the first by id (a rowid lookup): by ts would scan the table
                 const first = db.prepare(
-                    `SELECT b.data AS data FROM "${quoted}" AS s JOIN "${quoted}_blob" AS b ON b.id = s.id ORDER BY s.ts LIMIT 1`,
+                    `SELECT b.data AS data FROM ${quoteName(stream.name)} AS s JOIN ${
+                        quoteName(`${stream.name}_blob`)
+                    } AS b ON b.id = s.id ORDER BY s.id LIMIT 1`,
                 ).get() as { data: Uint8Array } | undefined
                 const frame = first ? readLcmFrameId(unwrapBlob(new Uint8Array(first.data))) : null
                 if (frame) {
@@ -371,9 +482,11 @@ export async function inspectDb(path: string): Promise<Inspection> {
         return finish(
             "db",
             streams,
-            buildTree(names.length ? names.join(" + ") : null, "all of it", samples),
+            buildTree(names.length ? names.join(" + ") : null, coverageOf(windowCount, sampledEvery), samples),
             (name) => timesByName.get(name) ?? [],
             headerFrames,
+            sampledEvery,
+            windowCount > 1 ? TF_WINDOW : 0,
         )
     } finally {
         db.close()
@@ -385,19 +498,15 @@ export async function inspectMcap(path: string): Promise<Inspection> {
     try {
         const { reader } = mcap
         const channels = [...reader.channelsById.values()].sort((a, b) => a.topic.localeCompare(b.topic))
-        let timesById = await logTimesFromIndexes(mcap)
-        if (timesById === null) {
-            timesById = new Map(channels.map((channel) => [channel.id, [] as number[]]))
-            for await (const message of reader.readMessages()) {
-                timesById.get(message.channelId)?.push(Number(message.logTime) / 1e9)
-            }
-        }
+        // no chunk indexes (an unindexed file): counts from its statistics, no times (a pass would read all of it)
+        const timesById = await logTimesFromIndexes(mcap, TIMES_BUDGET) ?? new Map()
         const streams: (StreamInfo & { channel: typeof channels[number] })[] = []
-        const timesByName = new Map<string, number[]>()
+        const timesByName = new Map<string, Float64Array>()
         for (const channel of channels) {
             const schema = reader.schemasById.get(channel.schemaId)
-            const times = (timesById.get(channel.id) ?? []).sort((a, b) => a - b)
-            const count = Number(reader.statistics?.channelMessageCounts.get(channel.id) ?? times.length)
+            const read = timesById.get(channel.id)
+            const times = read?.times ?? new Float64Array(0)
+            const count = read?.count ?? Number(reader.statistics?.channelMessageCounts.get(channel.id) ?? 0)
             // a raw-LCM channel has no schema; its type rides in the channel metadata
             const typeName = channelType(schema, channel.metadata)
             const name = channel.topic.replace(/^\//, "")
@@ -407,6 +516,7 @@ export async function inspectMcap(path: string): Promise<Inspection> {
                 type: shortType(typeName),
                 encoding: channel.messageEncoding,
                 hasSchema: !!schema && schema.data.byteLength > 0,
+                ...(read && !read.whole && count > 0 ? { sampled: Math.min(1, times.length / count) } : {}),
                 channel,
             })
         }
@@ -416,23 +526,14 @@ export async function inspectMcap(path: string): Promise<Inspection> {
         const ends = streams.map((s) => s.end).filter((t): t is number => t !== null)
         const start = starts.length ? Math.min(...starts) : 0
         const end = ends.length ? Math.max(...ends) : 0
-        // windows at the start, the end and evenly between, so a tf edge that stops or starts partway shows up
-        const windows: [number, number][] = []
-        const span = end - start
-        if (span <= TF_WINDOWS * TF_WINDOW) {
-            windows.push([start, end])
-        } else {
-            for (let i = 0; i < TF_WINDOWS; i++) {
-                const from = start + (span - TF_WINDOW) * i / (TF_WINDOWS - 1)
-                windows.push([from, from + TF_WINDOW])
-            }
-        }
-        const sampledEvery = windows.length > 1 ? (span - TF_WINDOW) / (TF_WINDOWS - 1) : 0
+        const { windows, sampledEvery } = tfWindows(start, end)
         for (const name of names) {
             const stream = streams.find((s) => s.name === name)!
             const isStatic = name.endsWith("_static")
             const decode = stream.encoding === "cdr" ? decodeCdrFrames : decodeLcmFrames
             const ranges: ([number, number] | null)[] = isStatic ? [null] : windows
+            // a whole static stream is read: a republished one would decompress every chunk it's in, so it stops early
+            let most = isStatic ? TF_STATIC_MOST : TF_WHOLE_MOST
             for (const [index, range] of ranges.entries()) {
                 const window = range
                     ? {
@@ -442,6 +543,9 @@ export async function inspectMcap(path: string): Promise<Inspection> {
                     : {}
                 try {
                     for await (const message of reader.readMessages({ topics: [stream.channel.topic], ...window })) {
+                        if (most-- <= 0) {
+                            break
+                        }
                         samples.push({
                             time: Number(message.logTime) / 1e9,
                             edges: decode(message.data),
@@ -473,9 +577,7 @@ export async function inspectMcap(path: string): Promise<Inspection> {
             }
         }
         const plain = streams.map(({ channel: _channel, ...rest }) => rest)
-        const coverage = windows.length > 1
-            ? `${TF_WINDOWS} windows of ${TF_WINDOW} s, every ${Math.round(sampledEvery)} s`
-            : "all of it"
+        const coverage = coverageOf(windows.length, sampledEvery)
         return finish(
             "mcap",
             plain,

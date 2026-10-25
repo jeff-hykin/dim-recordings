@@ -8,7 +8,8 @@ import { NotFound, type Recording } from "../recordings/library.ts"
 import type { Services } from "../recordings/routes.ts"
 import { unwrapBlob } from "../recordings/messages.ts"
 import { ffmpeg } from "../recordings/thumbnails.ts"
-import { editDb, STREAM_NAME } from "./edit_db.ts"
+import { inChild } from "../recordings/child_jobs.ts"
+import { STREAM_NAME } from "./edit_db.ts"
 import { editMcap } from "./edit_mcap.ts"
 import { bytesPerPixel, decodeImage, decodeObject, type ImageFrame } from "./payload.ts"
 import { acquire, closeNow, Session } from "./player.ts"
@@ -99,9 +100,11 @@ export function replayRoutes({ library }: Services): Route[] {
         let result: Record<string, unknown>
         try {
             if (recording.format === "db") {
-                result = editDb(
-                    recording.path,
-                    op === "delete" ? { op, stream } : { op, stream, to: to! },
+                // in a child process: copying a big stream's rows is one long SQLite call that would hold the server
+                result = await inChild(
+                    "editDb",
+                    [recording.path, op === "delete" ? { op, stream } : { op, stream, to: to! }],
+                    { lane: "user", path: recording.path },
                 )
             } else {
                 result = await editMcap(
@@ -157,7 +160,7 @@ export function replayRoutes({ library }: Services): Route[] {
                             type: meta.type,
                             kind: meta.kind,
                             encoding: meta.encoding,
-                            count: times.length,
+                            count: meta.count,
                             start: first,
                             end: last,
                         })
@@ -210,7 +213,7 @@ export function replayRoutes({ library }: Services): Route[] {
                     const all = await Promise.all(
                         source.streams.map(async (meta) => ({
                             meta,
-                            times: (await source.index(meta.name)).times,
+                            ...(await source.index(meta.name)),
                         })),
                     )
                     const firsts = all.filter((s) => s.times.length).map((s) => s.times[0])
@@ -226,7 +229,7 @@ export function replayRoutes({ library }: Services): Route[] {
                         from: windowFrom,
                         to: windowTo,
                         bins: slices,
-                        streams: all.map(({ meta, times }) => {
+                        streams: all.map(({ meta, times, stride }) => {
                             const counts = new Array(slices).fill(0)
                             const first = Math.max(0, atOrBefore(times, windowFrom))
                             let last = first
@@ -241,7 +244,7 @@ export function replayRoutes({ library }: Services): Route[] {
                                             slices - 1,
                                             Math.floor(((times[i] - windowFrom) / span) * slices),
                                         )
-                                    ]++
+                                    ] += stride
                                 }
                                 last = i
                             }
@@ -249,9 +252,9 @@ export function replayRoutes({ library }: Services): Route[] {
                             return {
                                 name: meta.name,
                                 kind: meta.kind,
-                                count: times.length,
+                                count: meta.count,
                                 counts,
-                                ...(inWindow <= exactUpTo
+                                ...(stride === 1 && inWindow <= exactUpTo
                                     ? { times: Array.from(times.subarray(first, last + 1)) }
                                     : {}),
                             }

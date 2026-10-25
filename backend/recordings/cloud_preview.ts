@@ -9,6 +9,7 @@ import { decodeCdrImage, type DecodedImage, decodeLcmCompressedImage, decodeLcmI
 import { compressedSize, ffmpeg, imageClass, writeFrame } from "./thumbnails.ts"
 import type { Config } from "../config.ts"
 import { dimosApp } from "../dimos_app.ts"
+import { inChild, laneFor } from "./child_jobs.ts"
 
 // dimos/cloud/constants.py
 const PREVIEW_FORMAT = "dimos-spatial-preview-v2"
@@ -691,7 +692,9 @@ export class CloudPreviews {
         const state = await this.#load()
         const tries = (state.done[entry.uploadId]?.tries ?? 0) + 1
         try {
-            const doc = await buildPreview(entry.path)
+            // in a child process (niced, by cost lane): reading a big .mcap never holds the server
+            const size = (await Deno.stat(entry.path)).size
+            const doc = await inChild("cloudPreview", [entry.path], { lane: laneFor(size), path: entry.path })
             if (!doc) {
                 state.done[entry.uploadId] = {
                     path: entry.path,

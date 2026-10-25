@@ -110,7 +110,8 @@ provides:
                     two parents) — what `dtk data summary` prints — and warnings (kind, message, detail, stream/frame, at
                     = seconds in): a broken tf tree (two parents, cycle, separate trees, a stream's frame tf never publishes,
                     transforms that stop early or start late) and streams with outlier gaps, a rate drop, or a late start
-                    / early stop
+                    / early stop. The inspection is null while a file over 512 MB is still being read in the background
+                    (the list's `inspected` says when)
                 parameters:
                     - name: id
                       in: path
@@ -386,7 +387,7 @@ provides:
             get:
                 description: >-
                     The preview job: which recording it's working on, and the last results with their wall and CPU time (it
-                    runs one recording at a time under nice -n 19, pausing between frames)
+                    runs one recording at a time in a child process under nice -n 19 and ionice)
         /api/drives:
             get:
                 description: >-

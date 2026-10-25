@@ -1,10 +1,13 @@
 // A recording opened for playback, read lazily: opening reads only the stream list and, per stream when first asked,
 // its message times (a .db's `ts` column; an .mcap's MessageIndex records, 16 bytes a message). A message's payload is
 // read when the playhead needs it: one blob from SQLite, or one chunk of the .mcap (decompressed, kept in a small LRU).
-// Nothing ever reads the whole file into memory.
+// Nothing ever reads the whole file into memory, and the indexes of all its streams together hold at most
+// INDEX_BUDGET messages: a stream too big for its share keeps every `stride`-th message (playback and scrubbing see
+// that many fewer; its count stays the true one).
 import { lz4, zstdDecompress } from "../deps.ts"
 import { openMcap } from "../recordings/mcap.ts"
-import { openDb } from "../recordings/sqlite.ts"
+import { shares } from "../recordings/budget.ts"
+import { idRange, openDb, pagesOfIds, quoteName } from "../recordings/sqlite.ts"
 import { channelType, formatOf, shortType } from "../recordings/inspect.ts"
 import type { DatabaseSync } from "node:sqlite"
 
@@ -26,7 +29,21 @@ export type StreamMeta = {
 export type StreamIndex = {
     /** message times in seconds, ascending */
     times: Float64Array
+    /** how many of the stream's messages each entry stands for (1: all of them; more for a stream past its share) */
+    stride: number
 }
+
+/** most index entries one open recording keeps over all its streams (16-20 bytes each) */
+export const INDEX_BUDGET = 3_000_000
+
+/** one in how many of each count an index keeps, so all of them fit in INDEX_BUDGET */
+function stridesOf(counts: number[]): number[] {
+    const keeps = shares(counts, INDEX_BUDGET)
+    return counts.map((count, i) => count <= keeps[i] ? 1 : Math.ceil(count / Math.max(1, keeps[i])))
+}
+
+/** lets the server answer others between pages of an index read (a yield, no wait) */
+const yieldThread = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 export interface Source {
     readonly format: "db" | "mcap"
@@ -92,7 +109,9 @@ class DbSource implements Source {
     readonly format = "db"
     readonly streams: StreamMeta[] = []
     #db: DatabaseSync
-    #indexes = new Map<string, StreamIndex & { ids: Float64Array }>()
+    #indexes = new Map<string, Promise<StreamIndex & { ids: Float64Array }>>()
+    #ranges = new Map<string, { low: number; high: number } | null>()
+    #strides = new Map<string, number>()
 
     constructor(readonly path: string, db: DatabaseSync) {
         this.#db = db
@@ -114,8 +133,10 @@ class DbSource implements Source {
             }
             let count = 0
             try {
-                count = (this.#db.prepare(`SELECT COUNT(*) AS n FROM "${quote(name)}"`)
-                    .get() as { n: number }).n
+                // from the id range (two rowid lookups), not COUNT(*): that walks every row on the server's thread
+                const range = idRange(this.#db, name)
+                this.#ranges.set(name, range)
+                count = range ? range.high - range.low + 1 : 0
             } catch {
                 continue // registered without its table
             }
@@ -128,41 +149,70 @@ class DbSource implements Source {
                 count,
             })
         }
+        const strides = stridesOf(this.streams.map((s) => s.count))
+        this.streams.forEach((s, i) => this.#strides.set(s.name, strides[i]))
     }
 
-    index(stream: string): Promise<StreamIndex> {
+    index(stream: string): Promise<StreamIndex & { ids: Float64Array }> {
         let found = this.#indexes.get(stream)
         if (!found) {
             const meta = this.streams.find((s) => s.name === stream)
             if (!meta) {
-                throw new Error(`no stream ${stream}`)
+                return Promise.reject(new Error(`no stream ${stream}`))
             }
-            const times = new Float64Array(meta.count)
-            const ids = new Float64Array(meta.count)
-            let n = 0
-            const statement = this.#db.prepare(
-                `SELECT id, ts FROM "${quote(stream)}" ORDER BY ts`,
-            )
-            for (
-                const row of statement.iterate() as Iterable<{ id: number; ts: number }>
-            ) {
-                if (n >= times.length) {
-                    break // rows added since the count: they wait for a reopen
+            found = this.#readIndex(stream, this.#ranges.get(stream) ?? null, this.#strides.get(stream) ?? 1)
+            this.#indexes.set(stream, found)
+        }
+        return found
+    }
+
+    /** By id, a page at a time with the thread handed back between pages (ts has no index: ORDER BY ts would sort
+     * the whole table in one call), sorted by time after when arrival order wasn't time order. */
+    async #readIndex(
+        stream: string,
+        range: { low: number; high: number } | null,
+        stride: number,
+    ): Promise<StreamIndex & { ids: Float64Array }> {
+        if (!range) {
+            return { times: new Float64Array(0), ids: new Float64Array(0), stride }
+        }
+        const size = Math.ceil((range.high - range.low + 1) / stride)
+        const times = new Float64Array(size)
+        const ids = new Float64Array(size)
+        let n = 0
+        let ordered = true
+        const pages = pagesOfIds<{ id: number; ts: number }>(this.#db, "ts", quoteName(stream), [
+            range.low,
+            range.high + 1,
+        ], { every: stride })
+        for (const rows of pages) {
+            for (const row of rows) {
+                if (n >= size) {
+                    break
                 }
                 times[n] = row.ts
                 ids[n] = row.id
+                ordered &&= n === 0 || row.ts >= times[n - 1]
                 n++
             }
-            found = { times: times.subarray(0, n), ids: ids.subarray(0, n) }
-            this.#indexes.set(stream, found)
+            await yieldThread()
+            if (this.#closed) {
+                break // what's read so far: a closed source answers nothing more anyway
+            }
         }
-        return Promise.resolve(found)
+        if (ordered) {
+            return { times: times.subarray(0, n), ids: ids.subarray(0, n), stride }
+        }
+        const order = new Uint32Array(n).map((_, i) => i).sort((a, b) => times[a] - times[b] || a - b)
+        return {
+            times: Float64Array.from(order, (i) => times[i]),
+            ids: Float64Array.from(order, (i) => ids[i]),
+            stride,
+        }
     }
 
     async read(stream: string, i: number): Promise<Uint8Array> {
-        const { ids } = await this.index(stream) as StreamIndex & {
-            ids: Float64Array
-        }
+        const { ids } = await this.index(stream)
         const row = this.#db.prepare(
             `SELECT data FROM "${quote(stream)}_blob" WHERE id = ?`,
         ).get(ids[i]) as
@@ -268,56 +318,104 @@ class McapSource implements Source {
         return source
     }
 
-    /** One pass over every chunk's MessageIndex block (a few MB even for a big file) builds every channel's index. */
+    /** Every chunk's MessageIndex records (16 bytes a message; one read a chunk) give every channel's index in one
+     * pass, each kept to its share of INDEX_BUDGET: every `stride`-th entry, straight into typed arrays. */
     #buildIndexes(): Promise<void> {
         this.#indexed ??= (async () => {
-            const lists = new Map<
-                number,
-                { times: number[]; chunks: number[]; offsets: number[] }
-            >()
-            for (let c = 0; c < this.#chunks.length; c++) {
-                const chunk = this.#chunks[c]
-                if (chunk.indexLength === 0n) {
+            const ids = [...this.#channelOf.values()]
+            let counts = ids.map((id) => this.streams.find((s) => this.#channelOf.get(s.name) === id)?.count ?? 0)
+            if (!this.mcap.reader.statistics) {
+                // no statistics: a counting pass first (entries are counted by their records' lengths, not read)
+                const counted = new Map<number, number>()
+                await this.#eachIndexRecord((channelId, _c, _view, _entries, length) => {
+                    counted.set(channelId, (counted.get(channelId) ?? 0) + Math.floor(length / 16))
+                })
+                counts = ids.map((id) => counted.get(id) ?? 0)
+            }
+            const strides = stridesOf(counts)
+            type Building = { times: Float64Array; chunks: Uint32Array; offsets: Float64Array; n: number; seen: number }
+            const building = new Map<number, Building & { stride: number }>()
+            for (const [i, id] of ids.entries()) {
+                const size = Math.ceil(counts[i] / strides[i]) + 1
+                building.set(id, {
+                    times: new Float64Array(size),
+                    chunks: new Uint32Array(size),
+                    offsets: new Float64Array(size),
+                    n: 0,
+                    seen: 0,
+                    stride: strides[i],
+                })
+            }
+            await this.#eachIndexRecord((channelId, c, view, entries, length) => {
+                const list = building.get(channelId)
+                if (!list) {
+                    return
+                }
+                for (let entry = entries; entry + 16 <= entries + length; entry += 16) {
+                    if (list.seen++ % list.stride !== 0 || list.n >= list.times.length) {
+                        continue
+                    }
+                    list.times[list.n] = Number(view.getBigUint64(entry, true)) / 1e9
+                    list.chunks[list.n] = c
+                    list.offsets[list.n] = Number(view.getBigUint64(entry + 8, true))
+                    list.n++
+                }
+            })
+            for (const [channelId, list] of building) {
+                const n = list.n
+                const times = list.times.subarray(0, n)
+                let ordered = true
+                for (let i = 1; i < n && ordered; i++) {
+                    ordered = times[i] >= times[i - 1]
+                }
+                if (ordered) {
+                    this.#indexes.set(channelId, {
+                        times,
+                        chunks: list.chunks.subarray(0, n),
+                        offsets: list.offsets.subarray(0, n),
+                        stride: list.stride,
+                    })
                     continue
                 }
-                const block = await this.mcap.read(chunk.indexStart, chunk.indexLength)
-                const view = new DataView(
-                    block.buffer,
-                    block.byteOffset,
-                    block.byteLength,
-                )
-                let pos = 0
-                while (pos + 9 <= block.byteLength) {
-                    const opcode = view.getUint8(pos)
-                    const recordLength = Number(view.getBigUint64(pos + 1, true))
-                    pos += 9
-                    if (opcode === MESSAGE_INDEX_OPCODE) {
-                        const channelId = view.getUint16(pos, true)
-                        const entriesEnd = pos + 6 + view.getUint32(pos + 2, true)
-                        let list = lists.get(channelId)
-                        if (!list) {
-                            list = { times: [], chunks: [], offsets: [] }
-                            lists.set(channelId, list)
-                        }
-                        for (let entry = pos + 6; entry + 16 <= entriesEnd; entry += 16) {
-                            list.times.push(Number(view.getBigUint64(entry, true)) / 1e9)
-                            list.chunks.push(c)
-                            list.offsets.push(Number(view.getBigUint64(entry + 8, true)))
-                        }
-                    }
-                    pos += recordLength
-                }
-            }
-            for (const [channelId, list] of lists) {
-                const order = list.times.map((_, i) => i).sort((a, b) => list.times[a] - list.times[b])
+                const order = new Uint32Array(n).map((_, i) => i).sort((a, b) => times[a] - times[b] || a - b)
                 this.#indexes.set(channelId, {
-                    times: Float64Array.from(order, (i) => list.times[i]),
+                    times: Float64Array.from(order, (i) => times[i]),
                     chunks: Uint32Array.from(order, (i) => list.chunks[i]),
                     offsets: Float64Array.from(order, (i) => list.offsets[i]),
+                    stride: list.stride,
                 })
             }
         })()
         return this.#indexed
+    }
+
+    /** Calls `each` with every MessageIndex record (its channel, chunk, a view, where its entries start and their
+     * length), a chunk's block at a time, handing the thread back between chunks. */
+    async #eachIndexRecord(
+        each: (channelId: number, chunk: number, view: DataView, entries: number, length: number) => void,
+    ) {
+        for (let c = 0; c < this.#chunks.length; c++) {
+            const chunk = this.#chunks[c]
+            if (chunk.indexLength === 0n) {
+                continue
+            }
+            const block = await this.mcap.read(chunk.indexStart, chunk.indexLength)
+            const view = new DataView(block.buffer, block.byteOffset, block.byteLength)
+            let pos = 0
+            while (pos + 9 <= block.byteLength) {
+                const opcode = view.getUint8(pos)
+                const recordLength = Number(view.getBigUint64(pos + 1, true))
+                pos += 9
+                if (opcode === MESSAGE_INDEX_OPCODE) {
+                    const length = Math.min(view.getUint32(pos + 2, true), block.byteLength - pos - 6)
+                    each(view.getUint16(pos, true), c, view, pos + 6, length)
+                }
+                pos += recordLength
+            }
+            if (this.#closed) {
+                return // closed: the rest isn't wanted
+            }
+        }
     }
 
     async index(stream: string): Promise<StreamIndex> {
@@ -326,7 +424,7 @@ class McapSource implements Source {
             throw new Error(`no stream ${stream}`)
         }
         await this.#buildIndexes()
-        return this.#indexes.get(channelId) ?? { times: new Float64Array(0) }
+        return this.#indexes.get(channelId) ?? { times: new Float64Array(0), stride: 1 }
     }
 
     /** a chunk's records, decompressed (an LRU keeps the last ~96 MB) */

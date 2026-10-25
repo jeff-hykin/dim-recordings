@@ -1,10 +1,12 @@
-// The background job behind the preview clips: one recording at a time, with pauses (thumbnails.ts), each result
-// kept under the app data dir by the file's identity (format + size + mtime, so a rename keeps it).
+// The background job behind the preview clips: one recording at a time, each built in a child process (child_jobs.ts:
+// niced, by cost lane), each result kept under the app data dir by the file's identity (format + size + mtime, so a
+// rename keeps it).
 import { join } from "node:path"
 import { Library } from "./library.ts"
-import { type PathPreview, pathPreview } from "./path_preview.ts"
+import { inChild, JobCancelled, laneFor } from "./child_jobs.ts"
+import type { PathPreview } from "./path_preview.ts"
 import type { FileEntry } from "./scan.ts"
-import { buildThumbnail, ffmpeg, PAUSE_BETWEEN_RECORDINGS_MS, type ThumbMeta } from "./thumbnails.ts"
+import { ffmpeg, type ThumbMeta } from "./thumbnails.ts"
 
 /** What a recording with no camera was marked before odometry paths: it's looked at again once. */
 const OLD_NO_CAMERA = "no camera stream"
@@ -94,7 +96,8 @@ export class Thumbnailer {
                 console.error("thumbnails:", error)
             }
             await new Promise<void>((resolve) => {
-                const timer = setTimeout(resolve, did || this.#poked ? PAUSE_BETWEEN_RECORDINGS_MS : 30_000)
+                // straight on while there's work (the jobs are niced and one at a time); idle, look again later
+                const timer = setTimeout(resolve, did || this.#poked ? 0 : 30_000)
                 this.#wake = () => {
                     clearTimeout(timer)
                     resolve()
@@ -122,11 +125,12 @@ export class Thumbnailer {
                 if (cameras && !ffmpeg()) {
                     continue // stays pending until there's an ffmpeg
                 }
+                const job = { lane: laneFor(file.size), path: file.path }
                 const meta = cameras
-                    ? await buildThumbnail(file.path, file.format as "db" | "mcap", inspection, folder)
+                    ? await inChild("thumbnail", [file.path, file.format as "db" | "mcap", inspection, folder], job)
                     : null
                 // no camera: the odometry path from above, when it has one
-                const path = meta ? null : await pathPreview(file.path)
+                const path = meta ? null : await inChild("pathPreview", [file.path], job)
                 if (path) {
                     await Deno.writeTextFile(`${folder}.path.json`, JSON.stringify(path))
                 } else if (!meta) {
@@ -139,6 +143,9 @@ export class Thumbnailer {
                 }
                 this.#record(file.id, meta, (performance.now() - started) / 1000, undefined, path?.stream)
             } catch (error) {
+                if (error instanceof JobCancelled) {
+                    continue // the file went away
+                }
                 const message = error instanceof Error ? error.message : String(error)
                 await Deno.writeTextFile(
                     `${folder}.none.json`,

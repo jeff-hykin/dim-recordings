@@ -1,5 +1,6 @@
 // Opening an .mcap for indexed reads (summary section, per-topic time ranges), the same way dtk's tools do.
 import { lz4, McapIndexedReader, zstdDecompress } from "../deps.ts"
+import { shares, sortRuns, windowsOf } from "./budget.ts"
 import { reachable } from "./slow_fs.ts"
 
 export type McapFile = {
@@ -51,27 +52,67 @@ export async function openMcap(path: string): Promise<McapFile> {
 const MESSAGE_INDEX_OPCODE = 0x07
 
 /**
- * Every message's log time per channel, from the MessageIndex records after each chunk (16 bytes a message), so a
- * big file's gaps and rates cost a few MB of reads, not a decompressing pass. null when the file has no indexes.
+ * Each channel's message log times from the MessageIndex records after each chunk (16 bytes a message), at most
+ * `budget` times over all channels: a channel too big for its share keeps windows of consecutive chunks across it,
+ * with NaN between them. Only the chunks some channel keeps are read. null when the file has no indexes.
  * (dtk tools/db_summary.js)
  */
-export async function logTimesFromIndexes(mcap: McapFile): Promise<Map<number, number[]> | null> {
-    const chunks = mcap.reader.chunkIndexes
+export async function logTimesFromIndexes(
+    mcap: McapFile,
+    budget: number,
+): Promise<Map<number, { times: Float64Array; count: number; whole: boolean }> | null> {
+    const { reader } = mcap
+    const chunks = [...reader.chunkIndexes].sort((a, b) =>
+        Number(a.messageStartTime - b.messageStartTime) || Number(a.chunkStartOffset - b.chunkStartOffset)
+    )
     if (chunks.length === 0) {
         return null
     }
-    const timesById = new Map<number, number[]>()
-    for (const chunk of chunks) {
+    const ids = [...reader.channelsById.keys()]
+    // per channel, the chunks it's in, in time order
+    const chunksOf = new Map<number, number[]>(ids.map((id) => [id, []]))
+    for (const [c, chunk] of chunks.entries()) {
+        for (const id of chunk.messageIndexOffsets.keys()) {
+            chunksOf.get(id)?.push(c)
+        }
+    }
+    const counts = ids.map((id) => {
+        const counted = reader.statistics?.channelMessageCounts.get(id)
+        // no statistics: assume it's big, so it's read in windows (a channel in few chunks is read whole anyway)
+        return counted !== undefined ? Number(counted) : Number.MAX_SAFE_INTEGER
+    })
+    const keeps = shares(counts, budget)
+    type Want = { times: Float64Array; n: number; last: number; whole: boolean }
+    const wants = new Map<number, Want>()
+    /** chunk → the channels that want its index entries */
+    const byChunk = new Map<number, number[]>()
+    for (const [k, id] of ids.entries()) {
+        const list = chunksOf.get(id)!
+        const whole = counts[k] <= keeps[k]
+        let picked = list
+        if (!whole && list.length) {
+            // the share of its chunks that holds about its share of messages, in windows of consecutive chunks
+            const chunkShare = Math.max(1, Math.floor(list.length * keeps[k] / counts[k]))
+            picked = windowsOf(list.length, chunkShare).flatMap(([first, length]) => list.slice(first, first + length))
+        }
+        wants.set(id, { times: new Float64Array(Math.max(0, keeps[k]) + 16), n: 0, last: -2, whole })
+        for (const c of picked) {
+            byChunk.set(c, [...(byChunk.get(c) ?? []), id])
+        }
+    }
+    const cursor = new Map<number, number>(ids.map((id) => [id, 0]))
+    for (const c of [...byChunk.keys()].sort((a, b) => a - b)) {
+        const chunk = chunks[c]
+        const wanted = new Set(byChunk.get(c)!.filter((id) => wants.get(id)!.n < wants.get(id)!.times.length))
         const offsets = [...chunk.messageIndexOffsets.values()]
-        if (offsets.length === 0 || chunk.messageIndexLength === 0n) {
+        if (!wanted.size || !offsets.length || chunk.messageIndexLength === 0n) {
             continue
         }
         let start = offsets[0]
         for (const offset of offsets) {
-            if (offset < start) {
-                start = offset
-            }
+            start = offset < start ? offset : start
         }
+        // the chunk's MessageIndex records, one read: 16 bytes a message, a few hundred KB at most
         const block = await mcap.read(start, chunk.messageIndexLength)
         const view = new DataView(block.buffer, block.byteOffset, block.byteLength)
         let pos = 0
@@ -79,20 +120,38 @@ export async function logTimesFromIndexes(mcap: McapFile): Promise<Map<number, n
             const opcode = view.getUint8(pos)
             const recordLength = Number(view.getBigUint64(pos + 1, true))
             pos += 9
-            if (opcode === MESSAGE_INDEX_OPCODE) {
-                const channelId = view.getUint16(pos, true)
-                const entriesEnd = pos + 6 + view.getUint32(pos + 2, true)
-                let times = timesById.get(channelId)
-                if (!times) {
-                    times = []
-                    timesById.set(channelId, times)
+            const id = opcode === MESSAGE_INDEX_OPCODE ? view.getUint16(pos, true) : -1
+            if (wanted.has(id)) {
+                const want = wants.get(id)!
+                // its place among the chunks it's in: a skipped one means a window ended, and no gap spans it
+                const list = chunksOf.get(id)!
+                let at = cursor.get(id)!
+                while (at < list.length && list[at] < c) {
+                    at++
                 }
-                for (let entry = pos + 6; entry + 16 <= entriesEnd; entry += 16) {
-                    times.push(Number(view.getBigUint64(entry, true)) / 1e9)
+                cursor.set(id, at)
+                if (want.n > 0 && at !== want.last + 1) {
+                    want.times[want.n++] = NaN
+                }
+                want.last = at
+                const entriesEnd = pos + 6 + view.getUint32(pos + 2, true)
+                for (let entry = pos + 6; entry + 16 <= entriesEnd && want.n < want.times.length; entry += 16) {
+                    want.times[want.n++] = Number(view.getBigUint64(entry, true)) / 1e9
                 }
             }
             pos += recordLength
         }
     }
-    return timesById
+    const out = new Map<number, { times: Float64Array; count: number; whole: boolean }>()
+    for (const [k, id] of ids.entries()) {
+        const want = wants.get(id)!
+        let times = want.times.subarray(0, want.n)
+        while (times.length && Number.isNaN(times[times.length - 1])) {
+            times = times.subarray(0, times.length - 1)
+        }
+        const whole = want.whole && !times.some(Number.isNaN)
+        const counted = counts[k] === Number.MAX_SAFE_INTEGER ? times.length : counts[k]
+        out.set(id, { times: sortRuns(times), count: counted, whole })
+    }
+    return out
 }

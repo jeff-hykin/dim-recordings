@@ -90,6 +90,9 @@ Deno.test("library: recorded = first message time, notes survive a rename, cache
     // the rrd followed the rename, so it's still paired
     assertEquals(list.find((r) => r.id === "stairs.db")!.rrds.map((r) => r.name), ["stairs.rrd"])
     await assertRejects(() => again.get("walk.db"))
+    // the other files' inspections run in the background (child processes): let them finish
+    await library.idle()
+    await again.idle()
 })
 
 Deno.test("library: extra folders the page supplies list too, each with its status; ids resolve only inside them", async () => {
@@ -131,6 +134,7 @@ Deno.test("library: extra folders the page supplies list too, each with its stat
     await assertRejects(() => library.get(`${prefix}walk.db`))
     assertEquals(cleanDirs(["~/a/", " ", "~/a", 3]), ["~/a"])
     assertEquals(expandHome("~/a"), join(Deno.env.get("HOME")!, "a"))
+    await library.idle()
 })
 
 for (const name of ["walk.db", "drive.mcap"]) {

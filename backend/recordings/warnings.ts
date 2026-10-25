@@ -251,11 +251,12 @@ const median = (sorted: Float64Array | number[]) => sorted.length ? sorted[Math.
  * start and stop (`usualStart`, `usualEnd`: their medians), so one stream that runs on past the rest doesn't make every
  * other one "stop early". A gap is an outlier when it's past max(1 s, 10× the median
  * interval, median + 6 MADs). A stream silent in such gaps for over 20% of its span is published on demand (a
- * command, a goal), not broken: it says nothing.
+ * command, a goal), not broken: it says nothing. `times` may be windows of a big stream with NaN between them: no
+ * interval spans a NaN, so the stretches between windows are neither gaps nor rates.
  */
 export function streamWarnings(
     name: string,
-    times: number[],
+    times: ArrayLike<number>,
     start: number | null,
     end: number | null,
     usualStart = start,
@@ -270,7 +271,12 @@ export function streamWarnings(
     for (let i = 1; i < times.length; i++) {
         intervals[i - 1] = times[i] - times[i - 1]
     }
-    const sorted = intervals.slice().sort()
+    const all = intervals.slice().sort() // NaN sorts last
+    let usable = all.length
+    while (usable > 0 && Number.isNaN(all[usable - 1])) {
+        usable--
+    }
+    const sorted = all.subarray(0, usable)
     const typical = median(sorted)
     if (!(typical > 0)) {
         return out
@@ -285,7 +291,7 @@ export function streamWarnings(
         }
     }
     const silent = gaps.reduce((sum, g) => sum + g.length, 0)
-    const active = times[times.length - 1] - times[0]
+    const active = sorted.reduce((sum, interval) => sum + interval, 0)
     if (gaps.length >= 3 && silent > active * 0.2) {
         return out // published on demand (a command, a goal): its silences and its start and stop are its own
     }
@@ -325,7 +331,7 @@ export function streamWarnings(
         let i = 0
         for (let from = times[0]; from < times[times.length - 1]; from += window) {
             const inWindow: number[] = []
-            while (i < intervals.length && times[i + 1] <= from + window) {
+            while (i < intervals.length && (Number.isNaN(times[i + 1]) || times[i + 1] <= from + window)) {
                 if (times[i] >= from && intervals[i] <= threshold) {
                     inWindow.push(intervals[i])
                 }
