@@ -1,6 +1,6 @@
 title: Recordings
-version: "0.3.4"
-spec-version: v1.4
+version: "0.4.0"
+spec-version: v1.5
 uses:
     "@dimos-gateway":
         - GET /cloud/uploads
@@ -10,14 +10,29 @@ uses:
         # where recordings go: the gateway's one answer, which is also every run's --record-dir (backend/config.ts)
         - GET /history/recordings
     "@desktop-gateway":
-        - POST /ui/apps/{pkg}/open
-        - GET /info/apps
-        # a plugged-in drive's "Transfer recordings" notification
-        - POST /ui/notifications
-        # dim-app's frontend_publish.js (backend): state changes and events to the page
-        - POST /ui/apps/{pkg}/frontend/{topic}
-        # dim-app's zenoh.js (the page's zenoh connection): where the zenoh-gateway and this app's namespace are
-        - GET /management/gateways/zenoh
+        env:
+            # what this server reads of DIMOS_APP (backend/config.ts, recordings/cloud_preview.ts); `app check` says
+            # when Desktop doesn't set one, and a launch that can't resolve one says so in this app's log
+            DIMOS_APP.socket: the unix socket this server binds
+            DIMOS_APP.name: names this install in its own links and notifications
+            DIMOS_APP.dataDir: its own folder, for the thumbnail cache and settings
+            DIMOS_APP.desktopUrl: Desktop's loopback origin, which the gateway is asked through
+            DIMOS_APP.dimosDir: the dimos checkout a cloud preview renders with
+            DIMOS_APP.dimosPython: the python that checkout's venv provides
+            # the last resort only: GET /history/recordings above is the answer, and this is what is used when the
+            # gateway can't be reached (config.ts gatewayRecordingsDir)
+            DIMOS_APP.recordingsDir:
+                required: false
+                description: where recordings go when the gateway is down
+        endpoints:
+            - POST /ui/apps/{pkg}/open
+            - GET /info/apps
+            # a plugged-in drive's "Transfer recordings" notification
+            - POST /ui/notifications
+            # dim-app's frontend_publish.js (backend): state changes and events to the page
+            - POST /ui/apps/{pkg}/frontend/{topic}
+            # dim-app's zenoh.js (the page's zenoh connection): where the zenoh-gateway and this app's namespace are
+            - GET /management/gateways/zenoh
     "@zenoh-gateway": ">=0.5 <0.6"
     dim-map-builder:
         endpoints:

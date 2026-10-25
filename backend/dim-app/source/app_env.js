@@ -15,13 +15,12 @@ const FIELDS = [
     "zenohPrefix",
     "dimosDir",
     "dimosPython",
-    "recordingsDir",
 ]
 
 /**
  * `{ version, name, socket, url, path, dataDir, desktopUrl, zenohGatewayUrl, zenohConnect, zenohNamespace, zenohPrefix,
- * dimosDir, dimosPython, recordingsDir }` from DIMOS_APP; a field it doesn't have (or all of them, run outside
- * Desktop) is null.
+ * dimosDir, dimosPython }` from DIMOS_APP; a field it doesn't have (or all of them, run outside Desktop) is null.
+ * Where recordings are kept isn't here: ask the dimos gateway, `recordingsDir()` from recordings.js.
  */
 export function readDimosApp() {
     let json
