@@ -23,7 +23,7 @@
             frontendDepsHash = {
                 aarch64-darwin = "sha256-0/BU0AJdqE/8kb2oeXbHnsp7GzFIN07OWyt7KE9FIRU=";
                 x86_64-darwin = "sha256-83hUHkdBs6ndCrQC0CFicZkwlqKSqlruSQUl3IBP3i8=";
-                x86_64-linux = "sha256-/DZLToEFS/BriyFjlTQSACSBoUGfpHKO/sEe7sAYkws=";
+                x86_64-linux = "sha256-qn6Kf5zn7UW2+phR2cKLl5Evo4mK2n6DKEGXnLFy2d8=";
                 aarch64-linux = "";
             };
             # bin/dimos-app-server for <arch> Linux, written on any machine: its bash, deno and ffmpeg are the target's (cache.nixos.org downloads, nothing built)
