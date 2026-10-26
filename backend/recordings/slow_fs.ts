@@ -20,7 +20,7 @@ export class NotResponding extends Error {
 
 /** `work`, or a NotResponding after `ms` (for promises that are already off the main thread). */
 export function within<T>(work: Promise<T>, what: string, ms = fsTimeoutMs()): Promise<T> {
-    let timer: number | undefined
+    let timer: ReturnType<typeof setTimeout> | undefined
     const late = new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new NotResponding(what, ms)), ms)
     })

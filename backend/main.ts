@@ -38,7 +38,7 @@ services.library.listeners.add((event) => {
         publishEvent(event)
     }
 })
-let changeTimer: number | undefined
+let changeTimer: ReturnType<typeof setTimeout> | undefined
 /** Watches a folder (and its sub-folders) for new, changed and removed recordings; null when it can't be watched. */
 function watchFolder(path: string): Deno.FsWatcher | null {
     let watcher: Deno.FsWatcher

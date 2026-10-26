@@ -40,7 +40,7 @@ const TF_RECENT = 0.3
 type Open = {
     source: Promise<Source>
     users: number
-    timer?: number
+    timer?: ReturnType<typeof setTimeout>
     tf: Map<string, TfIndex>
     /** the file it opened (inode, size, mtime): a different file at the same path is opened afresh */
     identity: string

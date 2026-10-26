@@ -226,7 +226,7 @@ export class Drives {
     /** a drive that didn't answer is asked again after a growing pause (each ask that hangs holds a thread), or as soon
      * as a call that was given up on comes back */
     #retry = new Map<string, { at: number; pause: number }>()
-    #timer: number | undefined
+    #timer: ReturnType<typeof setInterval> | undefined
     #polling = false
     onChange: () => void = () => {}
     /** where drives might be mounted (tests swap in their own) */
