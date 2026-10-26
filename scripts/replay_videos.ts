@@ -35,7 +35,7 @@ async function caption(page: Page, text: string) {
             box.id = "video-caption"
             box.style.cssText =
                 "position:fixed;z-index:99998;left:50%;top:56px;transform:translateX(-50%);padding:6px 14px;" +
-                "font:500 13px Inter,system-ui;color:#ece8f0;background:rgba(5,7,13,.86);border:1px solid #7cc8ec;pointer-events:none"
+                "font:500 13px Inter,system-ui;color:#e6eaf2;background:rgba(5,7,13,.86);border:1px solid #7cc8ec;pointer-events:none"
             document.documentElement.appendChild(box)
         }
         box.textContent = text
@@ -127,7 +127,7 @@ const ANSI_COLOR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 /** Shows a terminal's output as a page (the end card of a video). */
 async function terminal(page: Page, title: string, text: string) {
     await page.setContent(
-        `<body style="margin:0;background:#05070d;color:#ece8f0;font:12.5px/1.45 'IBM Plex Mono',Menlo,monospace">` +
+        `<body style="margin:0;background:#05070d;color:#e6eaf2;font:12.5px/1.45 'IBM Plex Mono',Menlo,monospace">` +
             `<div style="padding:22px 28px"><div style="font:600 12px Inter,system-ui;letter-spacing:.12em;color:#7cc8ec;margin-bottom:12px">${title}</div>` +
             `<pre style="margin:0;white-space:pre-wrap">${
                 text.replace(ANSI_COLOR, "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -349,7 +349,7 @@ const scenarios: Record<string, () => Promise<[string, (page: Page) => Promise<v
                             box = document.createElement("div")
                             box.id = "rss-hud"
                             box.style.cssText = "position:fixed;z-index:99998;right:16px;top:58px;padding:10px 14px;" +
-                                "font:12px 'IBM Plex Mono',Menlo,monospace;color:#ece8f0;background:rgba(5,7,13,.9);border:1px solid #7cc8ec;pointer-events:none;white-space:pre"
+                                "font:12px 'IBM Plex Mono',Menlo,monospace;color:#e6eaf2;background:rgba(5,7,13,.9);border:1px solid #7cc8ec;pointer-events:none;white-space:pre"
                             document.documentElement.appendChild(box)
                         }
                         box.textContent = `recording   ${gb.toFixed(2)} GB on disk\nbackend RSS ${
