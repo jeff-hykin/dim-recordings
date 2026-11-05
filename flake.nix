@@ -21,8 +21,8 @@
             # frontendDeps' hash per system (see frontendDeps): aarch64-darwin and x86_64-darwin (Rosetta: `nix build
             # .#packages.x86_64-darwin.frontendDeps`) from a Mac, x86_64-linux and aarch64-linux from a Linux machine of that CPU
             frontendDepsHash = {
-                aarch64-darwin = "sha256-mHUw+vjWwVoY+d71HYtwiUuwSkM8/B4iLhuF13B9y64=";
-                x86_64-darwin = "sha256-83hUHkdBs6ndCrQC0CFicZkwlqKSqlruSQUl3IBP3i8=";
+                aarch64-darwin = "sha256-46Cf+Ds0G84fevkflH/2o/wNGja4s8HEYZAudyVNFHk=";
+                x86_64-darwin = "sha256-awOT+Rz/TByPfayHAgzLQvv6iVSIhSZxD8p52ygWI9U=";
                 x86_64-linux = "sha256-1pxjxVQjQI9dUjx/1ehk1mAyWhNX87LdYxfbJwNW0fw=";
                 aarch64-linux = "";
             };
