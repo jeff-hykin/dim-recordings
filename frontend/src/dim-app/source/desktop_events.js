@@ -2,7 +2,7 @@
 // its `type`: apps, endpoints, blueprints, runs, notification, notifications, ui-settings, recordings, job, error, …),
 // and the dimos server's on `<ns>/dimos/events/<type>`.
 //
-//     import { onDesktopEvent } from "https://esm.sh/gh/dimensionalOS/ddtk@v0.18.0/source/desktop_events.js"
+//     import { onDesktopEvent } from "./desktop_events.js"   // vendored from github.com/dimensionalOS/ddtk (tools/vendor.js)
 //     const off = onDesktopEvent("endpoints", (event) => refreshTools())   // or "*" for every event
 //     off()                                                                // unsubscribe
 //
