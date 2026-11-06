@@ -1,5 +1,5 @@
 title: Recordings
-version: "0.4.4"
+version: "0.4.5"
 spec-version: v1.5
 uses:
     "@dimos-gateway":
