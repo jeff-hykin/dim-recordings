@@ -269,6 +269,8 @@ function ReplayView({ overview, source, onReload }: {
             <div className={`rp-stage ${mainCamera ? "rp-camera-main" : ""}`}>
                 <Scene3D
                     className="rp-scene"
+                    // the CAD view cube, top right (a face: look from there), as in the Controller
+                    viewCube
                     tf={tf}
                     fixedFrame={settings.fixedFrame || undefined}
                     followFrame={robotFrame}
