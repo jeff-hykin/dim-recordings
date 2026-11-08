@@ -123,12 +123,6 @@ export function splitJpegs(bytes: Uint8Array): Uint8Array[] {
     return out
 }
 
-/** the last jpeg in a concatenated mjpeg stream */
-export function lastJpeg(bytes: Uint8Array): Uint8Array | null {
-    const all = splitJpegs(bytes)
-    return all.length ? all[all.length - 1] : null
-}
-
 /**
  * Turns a recorded video stream into pictures. One per subscription: it remembers the keyframe it last decoded from,
  * so playing forward inside a group of frames does not re-read the whole group from the recording every time.
@@ -154,10 +148,11 @@ export class VideoFrames {
 
     /** the picture for message `i`, as a jpeg ImageFrame, or null when it cannot be decoded */
     async frameAt(i: number, width = 0): Promise<ImageFrame | null> {
-        if (!(await this.#reach(i))) {
+        const at = await this.#reach(i)
+        if (at < 0) {
             return null
         }
-        const offset = i - this.#from
+        const offset = at - this.#from
         if (width !== this.#picturesWidth) {
             this.#pictures = []
             this.#picturesWidth = width
@@ -176,24 +171,33 @@ export class VideoFrames {
         return { kind: "image", frame: this.#frame, width: 0, height: 0, encoding: "jpeg", data }
     }
 
-    /** read whatever it takes to have every access unit from the group's keyframe through `i` */
-    async #reach(i: number): Promise<boolean> {
+    /**
+     * Read whatever it takes to have every access unit from the group's keyframe through `i`. Returns the message the
+     * picture will be of -- `i` itself, or the next keyframe when `i` is before the recording's first one -- or -1.
+     *
+     * A recorder subscribes whenever the user presses record, so a recording usually starts in the middle of a group:
+     * its first frames have no keyframe before them and cannot be decoded at all. Showing the next keyframe instead of
+     * nothing is what makes the start of such a stream, and its preview, appear.
+     */
+    async #reach(i: number): Promise<number> {
         if (i < 0) {
-            return false
+            return -1
         }
         // a seek backwards out of the group, or nothing read yet: find the keyframe at or before `i`
         if (this.#from < 0 || i < this.#from) {
-            const first = await this.#keyframeAtOrBefore(i)
+            const before = await this.#keyframeAtOrBefore(i)
+            const first = before >= 0 ? before : await this.#keyframeAfter(i)
             if (first < 0) {
-                return false
+                return -1
             }
             this.#startAt(first)
         }
         // then extend forward, one read per message; a keyframe along the way opens a new group
-        while (this.#next <= i) {
+        const want = Math.max(i, this.#from)
+        while (this.#next <= want) {
             const unit = await this.#unitAt(this.#next)
             if (!unit) {
-                return false
+                return -1
             }
             if (this.#next > this.#from && isKeyframe(unit.data, this.#h265())) {
                 this.#startAt(this.#next)
@@ -201,7 +205,7 @@ export class VideoFrames {
             this.#units[this.#next - this.#from] = unit.data
             this.#next++
         }
-        return this.#units.length > 0
+        return this.#units.length > 0 ? want : -1
     }
 
     #startAt(index: number) {
@@ -237,24 +241,19 @@ export class VideoFrames {
         }
         return -1
     }
-}
 
-/**
- * A preview picture from one recorded message, when that message happens to be a keyframe.
- *
- * The library's thumbnails only need *a* frame from somewhere in the recording, not the frame at an exact instant, so
- * they take the next keyframe instead of assembling a group: a keyframe decodes on its own, which keeps the preview
- * path a single message read, as it is for stills. Returns null for anything else, so the caller keeps looking.
- */
-export async function keyframeJpeg(meta: StreamMeta, raw: Uint8Array): Promise<Uint8Array | null> {
-    const unit = unitOf(meta, raw)
-    if (!unit) {
-        return null
+    /** scan forward from after `i` for the next keyframe, for frames with none before them (same bound) */
+    async #keyframeAfter(i: number): Promise<number> {
+        for (let at = Math.max(0, i) + 1; at - i <= MAX_GOP; at++) {
+            // past the end of the stream, which a read reports however the recording's format does
+            const unit = await this.#unitAt(at).catch(() => null)
+            if (!unit) {
+                return -1
+            }
+            if (isKeyframe(unit.data, this.#h265())) {
+                return at
+            }
+        }
+        return -1
     }
-    const h265 = unit.format.includes("265") || unit.format.includes("hevc")
-    if (!isKeyframe(unit.data, h265)) {
-        return null
-    }
-    const pictures = await decodeUnits([unit.data], unit.format)
-    return pictures.length ? pictures[pictures.length - 1] : null
 }

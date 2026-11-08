@@ -15,7 +15,16 @@ import { atOrBefore, isCameraType, openSource, type Source as ReplaySource } fro
 export const FRAMES = 15
 export const WIDTH = 320
 
+/**
+ * How a sprite was built. A sprite already on disk is kept as it is, so when the way frames are
+ * chosen changes, this is what tells the worker the old one is stale and has to be built again --
+ * the folder key is only the recording's format, size and mtime, which a code change does not move.
+ */
+export const THUMB_BUILD = 3
+
 export type ThumbMeta = {
+    /** THUMB_BUILD when it was made; missing on sprites from before this existed */
+    build?: number
     frames: number
     width: number
     height: number
@@ -106,6 +115,42 @@ function isImageStream(stream: StreamInfo) {
 }
 
 /**
+ * The candidate cameras of a recording: the streams whose frames this build can actually read.
+ *
+ * A stream is probed at more than one instant on purpose. Its first frame is the one most likely to be unreadable --
+ * one damaged message, or a video stream the recording caught mid-group -- and dropping the whole camera over that is
+ * what left a recording with no preview at all.
+ */
+async function cameraCandidates(
+    streams: StreamInfo[],
+    frameAt: (stream: string, time: number) => Promise<DecodedImage | null>,
+): Promise<Candidate[]> {
+    const out: Candidate[] = []
+    for (const stream of streams.filter(isImageStream)) {
+        const start = stream.start ?? 0
+        const span = Math.max(0, (stream.end ?? start) - start)
+        for (const time of [start, start + span / 2, start + span * 0.9]) {
+            try {
+                const first = await frameAt(stream.name, time)
+                if (first) {
+                    out.push({
+                        name: stream.name,
+                        encoding: first.encoding,
+                        width: first.width,
+                        height: first.height,
+                        count: stream.count,
+                    })
+                    break
+                }
+            } catch {
+                // a stream whose blobs aren't in this file, or a payload this decoder doesn't know
+            }
+        }
+    }
+    return out
+}
+
+/**
  * Preview frames for cameras recorded as video, through the Replayer's own decoder.
  *
  * Taking the next keyframe instead would be cheaper, but a camera sends one only every second or two, so the frames
@@ -150,7 +195,7 @@ class VideoFrameSource {
     }
 }
 
-async function dbSource(path: string, inspection: Inspection): Promise<Source> {
+export async function dbSource(path: string, inspection: Inspection): Promise<Source> {
     const db = await openDb(path)
     const decode = (blob: Uint8Array) => withSize(decodeLcmImage(unwrapBlob(new Uint8Array(blob))))
     const blobAt = (stream: string, id: number) =>
@@ -172,26 +217,7 @@ async function dbSource(path: string, inspection: Inspection): Promise<Source> {
         return Promise.resolve(data ? decode(data) : null)
     }
     return {
-        async candidates() {
-            const out: Candidate[] = []
-            for (const stream of inspection.streams.filter(isImageStream)) {
-                try {
-                    const first = await frameAt(stream.name, stream.start ?? 0)
-                    if (first) {
-                        out.push({
-                            name: stream.name,
-                            encoding: first.encoding,
-                            width: first.width,
-                            height: first.height,
-                            count: stream.count,
-                        })
-                    }
-                } catch {
-                    // a stream whose blobs aren't in this file, or a payload this decoder doesn't know
-                }
-            }
-            return out
-        },
+        candidates: () => cameraCandidates(inspection.streams, frameAt),
         frameAt,
         close: () => {
             video.close()
@@ -231,26 +257,7 @@ async function mcapSource(path: string, inspection: Inspection): Promise<Source>
         return null
     }
     return {
-        async candidates() {
-            const out: Candidate[] = []
-            for (const stream of inspection.streams.filter(isImageStream)) {
-                try {
-                    const first = await frameAt(stream.name, stream.start ?? 0)
-                    if (first) {
-                        out.push({
-                            name: stream.name,
-                            encoding: first.encoding,
-                            width: first.width,
-                            height: first.height,
-                            count: stream.count,
-                        })
-                    }
-                } catch {
-                    // undecodable channel
-                }
-            }
-            return out
-        },
+        candidates: () => cameraCandidates(inspection.streams, frameAt),
         frameAt,
         close: () => {
             video.close()
@@ -408,6 +415,7 @@ export async function buildThumbnail(
         }
         const cpu = process.cpuUsage(cpuBefore)
         const meta: ThumbMeta = {
+            build: THUMB_BUILD,
             frames: written,
             width: first.width,
             height: first.height,

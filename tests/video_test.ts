@@ -7,7 +7,8 @@
 import { assert, assertEquals } from "@std/assert"
 import { lcmCompressedVideo, tempDir, writeDb } from "./fixtures.ts"
 import { isCameraType, kindOf, openSource } from "../backend/replay/source.ts"
-import { isKeyframe, isVideoType, lastJpeg, splitJpegs, VideoFrames } from "../backend/replay/video.ts"
+import { THUMB_BUILD } from "../backend/recordings/thumbnails.ts"
+import { isKeyframe, isVideoType, splitJpegs, VideoFrames } from "../backend/replay/video.ts"
 
 const ffmpeg = await (async () => {
     try {
@@ -172,8 +173,6 @@ Deno.test("the pictures are split out of one mjpeg run, start marker to end mark
     const two = new Uint8Array([0xff, 0xd8, 9, 9, 9, 0xff, 0xd9])
     const both = new Uint8Array([...one, ...two])
     assertEquals(splitJpegs(both).map((p) => [...p]), [[...one], [...two]])
-    assertEquals([...lastJpeg(both)!], [...two])
-    assertEquals(lastJpeg(new Uint8Array([1, 2, 3])), null)
     // a picture whose end marker never arrived is cut off, so it is left out rather than shown half-drawn
     assertEquals(splitJpegs(new Uint8Array([...one, 0xff, 0xd8, 7, 7])).length, 1)
 })
@@ -243,9 +242,25 @@ Deno.test("a 'no preview' cached before video was understood is tried again", as
             Deno.writeTextFileSync(`${folder}.none.json`, JSON.stringify({ reason }))
             assertEquals((await worker.stateOf(file)).state, "pending", `${reason} should be retried`)
         }
-        // a verdict this build still stands behind is left alone, so it is not rebuilt for ever
-        Deno.writeTextFileSync(`${folder}.none.json`, JSON.stringify({ reason: "the file is corrupt" }))
+        // a verdict this build reached is left alone, so it is not rebuilt for ever
+        Deno.writeTextFileSync(
+            `${folder}.none.json`,
+            JSON.stringify({ build: THUMB_BUILD, reason: "the file is corrupt" }),
+        )
         assertEquals((await worker.stateOf(file)).state, "none")
+        // an odometry path drawn by an older build is reconsidered too: that is what the robot's recording came
+        // back as when its video stream read as unopenable
+        Deno.removeSync(`${folder}.none.json`)
+        Deno.writeTextFileSync(
+            `${folder}.path.json`,
+            JSON.stringify({ stream: "slam_odom", points: [], width: 1, height: 1, length: 1 }),
+        )
+        assertEquals((await worker.stateOf(file)).state, "pending", "a path from an older build should be retried")
+        Deno.writeTextFileSync(
+            `${folder}.path.json`,
+            JSON.stringify({ build: THUMB_BUILD, stream: "slam_odom", points: [], width: 1, height: 1, length: 1 }),
+        )
+        assertEquals((await worker.stateOf(file)).state, "path")
     } finally {
         Deno.removeSync(dir, { recursive: true })
     }
@@ -278,6 +293,96 @@ Deno.test({
             )
         } finally {
             source.close()
+            Deno.removeSync(dir, { recursive: true })
+        }
+    },
+})
+
+Deno.test("a sprite built by an older version is made again", async () => {
+    // The folder key is the recording's format, size and mtime, so a code change does not move it:
+    // without this, the preview built when frames were chosen badly would be served for ever.
+    const { Thumbnailer } = await import("../backend/recordings/thumb_worker.ts")
+    const dir = await tempDir()
+    try {
+        const worker = Object.create(Thumbnailer.prototype) as {
+            folder: (f: unknown) => Promise<string>
+            stateOf: (f: unknown) => Promise<{ state: string }>
+        }
+        const folder = `${dir}/preview`
+        Deno.mkdirSync(folder, { recursive: true })
+        worker.folder = () => Promise.resolve(folder)
+        const file = { format: "mcap" }
+        const meta = { frames: 15, width: 320, height: 180, stream: "/front_camera" }
+
+        Deno.writeTextFileSync(`${folder}/meta.json`, JSON.stringify(meta)) // no build: predates this
+        assertEquals((await worker.stateOf(file)).state, "pending")
+
+        Deno.writeTextFileSync(`${folder}/meta.json`, JSON.stringify({ ...meta, build: THUMB_BUILD - 1 }))
+        assertEquals((await worker.stateOf(file)).state, "pending")
+
+        Deno.writeTextFileSync(`${folder}/meta.json`, JSON.stringify({ ...meta, build: THUMB_BUILD }))
+        assertEquals((await worker.stateOf(file)).state, "ready")
+    } finally {
+        Deno.removeSync(dir, { recursive: true })
+    }
+})
+
+Deno.test({
+    name: "a stream that starts mid-group still shows its first frames",
+    ignore: !ffmpeg,
+    fn: async () => {
+        // Found on the robot: a recording is cut wherever the user pressed record, so its first messages are
+        // plain inter frames with no keyframe anywhere before them. Those frames cannot be decoded at all, and
+        // returning nothing for them took the whole camera out of the preview -- a 285 s recording of two
+        // cameras came back as "no camera, and it didn't move", retried on every pass for ever.
+        const units = (await encodedUnits(30, 10)).slice(4) // drops the opening keyframe: 0-5 now have none
+        assert(!isKeyframe(units[0], false), "the clip must not start on a keyframe, or the test proves nothing")
+        const { dir, path } = await videoRecording(units)
+        const source = await openSource(path)
+        try {
+            const meta = source.streams.find((s) => s.name === "/front_camera")!
+            const frames = new VideoFrames(source, meta)
+            const first = await frames.frameAt(0)
+            assert(first && first.data.length > 0, "the first frame of the recording showed nothing")
+            assertEquals([...first.data.slice(0, 3)], [0xff, 0xd8, 0xff], "not a jpeg")
+            // and the frames of the group that does have a keyframe are unaffected
+            const later = await frames.frameAt(9)
+            assert(later && later.data.length > 0, "frame 9 did not decode")
+        } finally {
+            source.close()
+            Deno.removeSync(dir, { recursive: true })
+        }
+    },
+})
+
+Deno.test({
+    name: "a camera whose first frame is unreadable is still found",
+    ignore: !ffmpeg,
+    fn: async () => {
+        // Same recording, one level up: the preview probes a stream before using it, and probing only the
+        // first instant meant one unreadable frame disqualified the camera.
+        const { pickMainCamera } = await import("../backend/recordings/thumbnails.ts")
+        const units = (await encodedUnits(30, 10)).slice(4)
+        const { dir, path } = await videoRecording(units)
+        try {
+            const { dbSource } = await import("../backend/recordings/thumbnails.ts")
+            const inspection = {
+                streams: [{
+                    name: "/front_camera",
+                    type: "foxglove_msgs.CompressedVideo",
+                    count: units.length,
+                    start: 1700000000,
+                    end: 1700000000 + (units.length - 1) * 0.1,
+                }],
+            }
+            // deno-lint-ignore no-explicit-any
+            const source = await dbSource(path, inspection as any)
+            try {
+                assert(pickMainCamera(await source.candidates()), "the camera was not found")
+            } finally {
+                source.close()
+            }
+        } finally {
             Deno.removeSync(dir, { recursive: true })
         }
     },

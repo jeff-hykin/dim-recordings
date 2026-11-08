@@ -7,19 +7,23 @@ import { inChild, JobCancelled, laneFor } from "./child_jobs.ts"
 import { isCameraType } from "../replay/source.ts"
 import type { PathPreview } from "./path_preview.ts"
 import type { FileEntry } from "./scan.ts"
-import { ffmpeg, type ThumbMeta } from "./thumbnails.ts"
+import { ffmpeg, THUMB_BUILD, type ThumbMeta } from "./thumbnails.ts"
 
-/** What a recording with no camera was marked before odometry paths: it's looked at again once. */
 /**
- * Reasons a past run wrote that this build no longer agrees with, so the recording is tried again
- * instead of keeping the cached "no preview". A recording whose only camera records video was judged
- * cameraless before this build learnt about video, and would otherwise stay that way for ever.
+ * Every preview result is stamped with the THUMB_BUILD that reached it, and a result from an older build is
+ * reconsidered once rather than kept.
+ *
+ * This is what makes a fix to the previews reach recordings that already have one. Each of the three results needs
+ * the stamp, not just the sprite: a recording whose only camera records video was judged cameraless before this app
+ * understood video, and the recording that showed up as an odometry path -- because its video stream was cut
+ * mid-group and read as unopenable -- would equally have stayed that way for ever.
  */
-const RETRY_REASONS = new Set([
-    "no camera stream",
-    "no camera, and it didn't move",
-    "no readable camera frames",
-])
+function current(result: { build?: number }): boolean {
+    return (result.build ?? 0) >= THUMB_BUILD
+}
+
+/** a stored result with the build that reached it */
+type Stamped<T> = T & { build?: number }
 
 export type ThumbState =
     | { state: "ready"; frames: number; width: number; height: number; stream: string }
@@ -60,17 +64,20 @@ export class Thumbnailer {
         const folder = await this.folder(file)
         try {
             const meta = JSON.parse(await Deno.readTextFile(join(folder, "meta.json"))) as ThumbMeta
+            if (!current(meta)) {
+                return { state: "pending" }
+            }
             return { state: "ready", frames: meta.frames, width: meta.width, height: meta.height, stream: meta.stream }
         } catch {
             try {
-                const path = JSON.parse(await Deno.readTextFile(`${folder}.path.json`)) as PathPreview
-                return { state: "path", ...path }
+                const path = JSON.parse(await Deno.readTextFile(`${folder}.path.json`)) as Stamped<PathPreview>
+                return current(path) ? { state: "path", ...path } : { state: "pending" }
             } catch {
                 // no path either
             }
             try {
-                const none = JSON.parse(await Deno.readTextFile(`${folder}.none.json`)) as { reason: string }
-                return RETRY_REASONS.has(none.reason) ? { state: "pending" } : { state: "none", reason: none.reason }
+                const none = JSON.parse(await Deno.readTextFile(`${folder}.none.json`)) as Stamped<{ reason: string }>
+                return current(none) ? { state: "none", reason: none.reason } : { state: "pending" }
             } catch {
                 return { state: "pending" }
             }
@@ -141,12 +148,22 @@ export class Thumbnailer {
                     : null
                 // no camera: the odometry path from above, when it has one
                 const path = meta ? null : await inChild("pathPreview", [file.path], job)
+                if (meta) {
+                    // whatever a past pass concluded instead of a sprite no longer holds
+                    await Deno.remove(`${folder}.path.json`).catch(() => {})
+                    await Deno.remove(`${folder}.none.json`).catch(() => {})
+                } else {
+                    // a sprite an older build left behind: it still answers `stateOf`, so dropping it is what stops
+                    // this recording coming back as pending on every pass
+                    await Deno.remove(folder, { recursive: true }).catch(() => {})
+                }
                 if (path) {
-                    await Deno.writeTextFile(`${folder}.path.json`, JSON.stringify(path))
+                    await Deno.writeTextFile(`${folder}.path.json`, JSON.stringify({ ...path, build: THUMB_BUILD }))
                 } else if (!meta) {
                     await Deno.writeTextFile(
                         `${folder}.none.json`,
                         JSON.stringify({
+                            build: THUMB_BUILD,
                             reason: cameras ? "no readable camera frames" : "no camera, and it didn't move",
                         }),
                     )
@@ -157,9 +174,11 @@ export class Thumbnailer {
                     continue // the file went away
                 }
                 const message = error instanceof Error ? error.message : String(error)
+                // same as above: a sprite from an older build would keep this recording pending for ever
+                await Deno.remove(folder, { recursive: true }).catch(() => {})
                 await Deno.writeTextFile(
                     `${folder}.none.json`,
-                    JSON.stringify({ reason: `preview failed: ${message}` }),
+                    JSON.stringify({ build: THUMB_BUILD, reason: `preview failed: ${message}` }),
                 )
                 this.#record(file.id, null, (performance.now() - started) / 1000, message)
             } finally {
