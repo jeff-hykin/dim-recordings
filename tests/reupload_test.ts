@@ -77,7 +77,7 @@ Deno.test("change detection: topics, counts and first/last times, not stream ord
 })
 
 /** Desktop's /gateways/dimos/cloud/uploads, finishing each upload at once; byPath's `changed` is size + mtime */
-function fakeDesktop() {
+function fakeDesktop({ accountHangs = false } = {}) {
     const uploads: { id: string; path: string; name: string; state: string }[] = []
     const byPath: Record<string, Omit<GatewayEntry, "changed">> = {}
     let next = 0
@@ -98,6 +98,13 @@ function fakeDesktop() {
     const server = Deno.serve({ hostname: "127.0.0.1", port: 0, onListen() {} }, async (request) => {
         const url = new URL(request.url)
         if (url.pathname === "/gateways/dimos/cloud/account") {
+            if (accountHangs) {
+                // never answers, as a wedged Desktop does -- but let go when the caller gives up, or shutting the
+                // server down at the end of the test would wait on this request for ever
+                return await new Promise<Response>((resolve) => {
+                    request.signal.addEventListener("abort", () => resolve(new Response(null, { status: 499 })))
+                })
+            }
             return Response.json({ loggedIn: true })
         }
         if (url.pathname !== "/gateways/dimos/cloud/uploads") {
@@ -205,6 +212,42 @@ Deno.test({
             appendTf(join(dir, "c.db"), [1_790_000_000])
             const c = (await call("GET", "api/recordings/c.db")).body.uploaded
             assertEquals([c.changed, c.changedBy], [true, "size+mtime"])
+        } finally {
+            await desktop.server.shutdown()
+        }
+    },
+})
+
+Deno.test({
+    name: "the tray still lists the uploads when Desktop never says who is logged in",
+    sanitizeOps: false,
+    sanitizeResources: false,
+    fn: async () => {
+        // Seen while uploading a 3 GB recording: Desktop's cloud/account stopped answering, and because the tray
+        // waited on it with no deadline the uploads page stayed empty -- no progress, no error, nothing to explain
+        // it -- while the upload ran fine underneath.
+        const desktop = fakeDesktop({ accountHangs: true })
+        const dir = await tempDir()
+        writeDb(join(dir, "a.db"), [tf(10)])
+        const routes = buildRoutes(makeServices({
+            recordingsDir: dir,
+            dataDir: await tempDir(),
+            desktopUrl: desktop.url,
+            appName: "dim-recordings",
+        }))
+        const call = async (method: string, path: string) => {
+            const response = await handle(new Request(`http://app/${path}`, { method }), routes, INFO)
+            return { status: response!.status, body: await response!.json() }
+        }
+        try {
+            assertEquals((await call("POST", "api/recordings/a.db/upload")).status, 200)
+            const started = performance.now()
+            const tray = await call("GET", "api/uploads")
+            const waited = (performance.now() - started) / 1000
+            assertEquals(tray.status, 200)
+            assertEquals(tray.body.uploads.length, 1, "the upload itself must still be listed")
+            assertEquals(tray.body.account.loggedIn, false, "an account that never answers reads as logged out")
+            assert(waited < 15, `the tray waited ${waited.toFixed(0)} s on a Desktop that never answers`)
         } finally {
             await desktop.server.shutdown()
         }

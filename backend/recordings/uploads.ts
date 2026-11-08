@@ -27,6 +27,15 @@ export type UploadStatus = GatewayEntry & Judgement & {
     nextName: string
 }
 
+/**
+ * How long to wait on Desktop before giving up on one of its answers.
+ *
+ * These calls are HTTP to a server on this machine, so a slow one is a wedged one. Without this the tray waited on it
+ * for ever: a Desktop whose cloud/account never answered left the uploads page blank while an upload was running
+ * underneath, with nothing to say why.
+ */
+const ASK_DESKTOP_FOR = 20_000
+
 export class Uploads {
     /** TEMPORARY: the console preview for finished .mcap uploads, which dimos's gateway doesn't send yet */
     previews: CloudPreviews
@@ -35,7 +44,7 @@ export class Uploads {
         this.previews = new CloudPreviews(config)
     }
 
-    async #call(method: string, path: string, body?: unknown) {
+    async #call(method: string, path: string, body?: unknown, timeoutMs = ASK_DESKTOP_FOR) {
         if (!this.config.desktopUrl) {
             throw new HttpError(503, "Uploads go through dimOS Desktop: open the Recordings app from Desktop to upload")
         }
@@ -45,6 +54,7 @@ export class Uploads {
                 method,
                 headers: body === undefined ? {} : { "content-type": "application/json" },
                 body: body === undefined ? undefined : JSON.stringify(body),
+                signal: AbortSignal.timeout(timeoutMs),
             })
         } catch (error) {
             throw new HttpError(502, `Desktop didn't answer: ${error instanceof Error ? error.message : error}`)
@@ -137,7 +147,9 @@ export class Uploads {
     async tray() {
         const [queue, account] = await Promise.all([
             this.#call("GET", "/gateways/dimos/cloud/uploads"),
-            this.#call("GET", "/gateways/dimos/cloud/account").catch((error) => ({
+            // who is logged in is the least of what the tray shows, so it waits least: the uploads and their
+            // progress still arrive when Desktop is slow to say
+            this.#call("GET", "/gateways/dimos/cloud/account", undefined, 5_000).catch((error) => ({
                 loggedIn: false,
                 error: error.message,
             })),
