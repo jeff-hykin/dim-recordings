@@ -250,3 +250,35 @@ Deno.test("a 'no preview' cached before video was understood is tried again", as
         Deno.removeSync(dir, { recursive: true })
     }
 })
+
+Deno.test({
+    name: "preview frames across a clip are different pictures, not one keyframe repeated",
+    ignore: !ffmpeg,
+    fn: async () => {
+        // The first version took the nearest keyframe. A camera sends one a second, so every frame a
+        // preview asked for across a short clip landed on the same one and the preview flickered
+        // between a handful of stills instead of showing the clip.
+        const units = await encodedUnits(30, 10) // 3 keyframes in 30 frames, like a 3 s clip
+        const { dir, path } = await videoRecording(units)
+        const source = await openSource(path)
+        try {
+            const meta = source.streams.find((s) => s.name === "/front_camera")!
+            const frames = new VideoFrames(source, meta)
+            const pictures: string[] = []
+            for (const i of [0, 4, 8, 12, 16, 20, 24, 28]) {
+                const frame = await frames.frameAt(i)
+                assert(frame, `frame ${i} did not decode`)
+                // the whole picture: jpegs of the same size share their first bytes, so a prefix compares equal
+                pictures.push(`${frame.data.length}:${[...frame.data].reduce((h, b) => (h * 31 + b) % 1e9, 7)}`)
+            }
+            const distinct = new Set(pictures).size
+            assert(
+                distinct >= pictures.length - 1,
+                `${distinct} distinct pictures out of ${pictures.length}: the preview is repeating frames`,
+            )
+        } finally {
+            source.close()
+            Deno.removeSync(dir, { recursive: true })
+        }
+    },
+})

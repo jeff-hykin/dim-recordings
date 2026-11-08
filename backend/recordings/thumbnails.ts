@@ -9,8 +9,8 @@ import { channelType, type Inspection, type StreamInfo } from "./inspect.ts"
 import { openMcap } from "./mcap.ts"
 import { decodeCdrImage, type DecodedImage, decodeLcmCompressedImage, decodeLcmImage, unwrapBlob } from "./messages.ts"
 import { which } from "./foxglove.ts"
-import { isVideoType, keyframeJpeg } from "../replay/video.ts"
-import { isCameraType, type StreamMeta } from "../replay/source.ts"
+import { isVideoType, VideoFrames } from "../replay/video.ts"
+import { atOrBefore, isCameraType, openSource, type Source as ReplaySource } from "../replay/source.ts"
 
 export const FRAMES = 15
 export const WIDTH = 320
@@ -106,29 +106,49 @@ function isImageStream(stream: StreamInfo) {
 }
 
 /**
- * A preview frame from a camera recorded as video. Unlike the Replayer, a thumbnail does not need the frame at an
- * exact instant, so it takes the next keyframe: that one decodes on its own, with no group to assemble. `next` reads
- * forward one message at a time and returns null when there are no more.
+ * Preview frames for cameras recorded as video, through the Replayer's own decoder.
+ *
+ * Taking the next keyframe instead would be cheaper, but a camera sends one only every second or two, so the frames
+ * a preview asks for across a short recording all land on the same one: a 4.9 s clip came back as the same picture
+ * repeated 14 times. This decodes the frame actually asked for -- from the keyframe before it, as playback does --
+ * so the preview shows the clip.
  */
-async function videoPreview(
-    meta: StreamMeta,
-    next: () => Promise<Uint8Array | null>,
-): Promise<DecodedImage | null> {
-    for (let tried = 0; tried < VIDEO_SCAN; tried++) {
-        const raw = await next()
-        if (!raw) {
+class VideoFrameSource {
+    #path: string
+    #source: ReplaySource | null = null
+    #frames = new Map<string, VideoFrames>()
+
+    constructor(path: string) {
+        this.#path = path
+    }
+
+    async frameAt(stream: string, time: number): Promise<DecodedImage | null> {
+        const source = this.#source ??= await openSource(this.#path)
+        const meta = source.streams.find((s) => s.name === stream)
+        if (!meta) {
             return null
         }
-        const jpeg = await keyframeJpeg(meta, raw)
-        if (jpeg) {
-            return withSize({ width: 0, height: 0, encoding: "jpeg", compressed: true, data: jpeg })
+        const { times, stride } = await source.index(stream)
+        const at = atOrBefore(times, time)
+        if (at < 0) {
+            return null
         }
+        let frames = this.#frames.get(stream)
+        if (!frames) {
+            frames = new VideoFrames(source, meta)
+            this.#frames.set(stream, frames)
+        }
+        // an index kept at a stride stands for every `stride` messages, so its entry i is message i * stride
+        const image = await frames.frameAt(at * stride)
+        return image ? withSize({ width: 0, height: 0, encoding: "jpeg", compressed: true, data: image.data }) : null
     }
-    return null
-}
 
-/** how many messages to read looking for a keyframe before giving up (cameras send one every second or two) */
-const VIDEO_SCAN = 300
+    close() {
+        this.#source?.close()
+        this.#source = null
+        this.#frames.clear()
+    }
+}
 
 async function dbSource(path: string, inspection: Inspection): Promise<Source> {
     const db = await openDb(path)
@@ -137,26 +157,16 @@ async function dbSource(path: string, inspection: Inspection): Promise<Source> {
         (db.prepare(`SELECT data FROM ${quoteName(`${stream}_blob`)} WHERE id = ?`).get(id) as
             | { data: Uint8Array }
             | undefined)?.data
+    const video = new VideoFrameSource(path)
     const frameAt = (stream: string, time: number) => {
+        const info = inspection.streams.find((s) => s.name === stream)
+        if (info && isVideoType(info.type)) {
+            return video.frameAt(stream, time)
+        }
         // the id by bisecting ids (a few rowid lookups): `WHERE ts >= ? ORDER BY ts` scans the table, ts has no index
         const id = idAtOrAfter(db, stream, time)
         if (id === null) {
             return Promise.resolve(null)
-        }
-        const info = inspection.streams.find((s) => s.name === stream)
-        if (info && isVideoType(info.type)) {
-            let at = id
-            const meta = {
-                name: stream,
-                type: info.type,
-                encoding: "lcm",
-                kind: "image",
-                count: info.count,
-            } as StreamMeta
-            return videoPreview(meta, () => {
-                const data = blobAt(stream, at++)
-                return Promise.resolve(data ? new Uint8Array(data) : null)
-            })
         }
         const data = blobAt(stream, id)
         return Promise.resolve(data ? decode(data) : null)
@@ -183,7 +193,10 @@ async function dbSource(path: string, inspection: Inspection): Promise<Source> {
             return out
         },
         frameAt,
-        close: () => db.close(),
+        close: () => {
+            video.close()
+            db.close()
+        },
     }
 }
 
@@ -201,27 +214,17 @@ async function mcapSource(path: string, inspection: Inspection): Promise<Source>
         const type = channelType(schema, channel.metadata)
         return withSize(/Compressed/.test(type) ? decodeLcmCompressedImage(data) : decodeLcmImage(data))
     }
+    const video = new VideoFrameSource(path)
     const frameAt = async (stream: string, time: number) => {
         const channel = channelOf(stream)
         if (!channel) {
             return null
         }
-        const messages = reader.readMessages({ topics: [channel.topic], startTime: BigInt(Math.round(time * 1e9)) })
         const info = inspection.streams.find((s) => s.name === stream)
         if (info && isVideoType(info.type)) {
-            const schema = reader.schemasById.get(channel.schemaId)
-            const meta = {
-                name: stream,
-                type: info.type,
-                encoding: channel.messageEncoding === "cdr" ? "cdr" : "lcm",
-                kind: "image",
-                count: info.count,
-                schemaName: schema?.name,
-                schemaText: schema ? new TextDecoder().decode(schema.data) : undefined,
-            } as StreamMeta
-            const iterator = messages[Symbol.asyncIterator]()
-            return await videoPreview(meta, async () => (await iterator.next()).value?.data ?? null)
+            return await video.frameAt(stream, time)
         }
+        const messages = reader.readMessages({ topics: [channel.topic], startTime: BigInt(Math.round(time * 1e9)) })
         for await (const message of messages) {
             return decode(stream, message.data)
         }
@@ -249,7 +252,10 @@ async function mcapSource(path: string, inspection: Inspection): Promise<Source>
             return out
         },
         frameAt,
-        close: () => mcap.close(),
+        close: () => {
+            video.close()
+            mcap.close()
+        },
     }
 }
 
