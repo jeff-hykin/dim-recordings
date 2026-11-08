@@ -7,7 +7,7 @@
 import { assert, assertEquals } from "@std/assert"
 import { lcmCompressedVideo, tempDir, writeDb } from "./fixtures.ts"
 import { openSource } from "../backend/replay/source.ts"
-import { isKeyframe, isVideoType, lastJpeg, VideoFrames } from "../backend/replay/video.ts"
+import { isKeyframe, isVideoType, lastJpeg, splitJpegs, VideoFrames } from "../backend/replay/video.ts"
 
 const ffmpeg = await (async () => {
     try {
@@ -167,10 +167,46 @@ Deno.test({
     },
 })
 
-Deno.test("lastJpeg takes the final picture out of a run of them", () => {
-    const one = new Uint8Array([0xff, 0xd8, 0xff, 1, 2])
-    const two = new Uint8Array([0xff, 0xd8, 0xff, 9, 9, 9])
+Deno.test("the pictures are split out of one mjpeg run, start marker to end marker", () => {
+    const one = new Uint8Array([0xff, 0xd8, 1, 2, 0xff, 0xd9])
+    const two = new Uint8Array([0xff, 0xd8, 9, 9, 9, 0xff, 0xd9])
     const both = new Uint8Array([...one, ...two])
+    assertEquals(splitJpegs(both).map((p) => [...p]), [[...one], [...two]])
     assertEquals([...lastJpeg(both)!], [...two])
     assertEquals(lastJpeg(new Uint8Array([1, 2, 3])), null)
+    // a picture whose end marker never arrived is cut off, so it is left out rather than shown half-drawn
+    assertEquals(splitJpegs(new Uint8Array([...one, 0xff, 0xd8, 7, 7])).length, 1)
+})
+
+Deno.test({
+    name: "playing forward through a group decodes it once, not once per frame",
+    ignore: !ffmpeg,
+    fn: async () => {
+        const units = await encodedUnits(20, 10)
+        const { dir, path } = await videoRecording(units)
+        const source = await openSource(path)
+        try {
+            const meta = source.streams.find((s) => s.name === "/front_camera")!
+            // count the reads the source is asked for: redecoding from the keyframe every frame would read the
+            // whole group again each time (1+2+3+... for the group), which is what this guards against
+            let reads = 0
+            const counting = {
+                ...source,
+                read: (stream: string, i: number) => {
+                    reads++
+                    return source.read(stream, i)
+                },
+            } as typeof source
+            const frames = new VideoFrames(counting, meta)
+            for (let i = 0; i < 10; i++) {
+                const frame = await frames.frameAt(i)
+                assert(frame && frame.data.length > 0, `frame ${i} did not decode`)
+            }
+            // the keyframe scan looks back from frame 0 (1 read), then each frame is read once as it is reached
+            assert(reads <= 20, `read the recording ${reads} times for 10 frames; the group is being redecoded`)
+        } finally {
+            source.close()
+            Deno.removeSync(dir, { recursive: true })
+        }
+    },
 })

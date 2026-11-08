@@ -47,7 +47,7 @@ function formatOf(message: Record<string, unknown> | null): string {
 }
 
 /** the access unit bytes of one message, or null when it is not a video message after all */
-function unitOf(meta: StreamMeta, raw: Uint8Array): { data: Uint8Array; format: string; frame: string } | null {
+export function unitOf(meta: StreamMeta, raw: Uint8Array): { data: Uint8Array; format: string; frame: string } | null {
     const message = decodeObject(meta, raw) as Record<string, unknown> | null
     const data = message?.data
     if (!data) {
@@ -64,10 +64,13 @@ function unitOf(meta: StreamMeta, raw: Uint8Array): { data: Uint8Array; format: 
 const demuxer = (format: string) => (format.includes("265") || format.includes("hevc") ? "hevc" : "h264")
 
 /**
- * Decode `units` (a keyframe first, then the frames after it) and return the LAST picture as a jpeg. ffmpeg reads the
- * access units on stdin and writes jpegs on stdout; we keep the final one, which is the frame that was asked for.
+ * Decode `units` (a keyframe first, then the frames after it) and return EVERY picture ffmpeg wrote, in order.
+ *
+ * Getting all of them matters: reaching frame N means decoding the whole group up to it anyway, and ffmpeg emits a
+ * picture per frame while doing so. Keeping them makes playing forward through the group free, instead of redecoding
+ * from the keyframe for each one (which is quadratic in the group's length).
  */
-async function decodeUnits(units: Uint8Array[], format: string, width: number): Promise<Uint8Array | null> {
+export async function decodeUnits(units: Uint8Array[], format: string, width = 0): Promise<Uint8Array[]> {
     const total = units.reduce((n, unit) => n + unit.length, 0)
     const stream = new Uint8Array(total)
     let at = 0
@@ -99,21 +102,31 @@ async function decodeUnits(units: Uint8Array[], format: string, width: number): 
     await writer.write(stream).catch(() => {})
     await writer.close().catch(() => {})
     const out = await child.output()
-    if (!out.stdout.length) {
-        return null
-    }
-    return lastJpeg(out.stdout)
+    return splitJpegs(out.stdout)
 }
 
-/** the last jpeg in a concatenated mjpeg stream (each starts FF D8 FF) */
-export function lastJpeg(bytes: Uint8Array): Uint8Array | null {
+/** every jpeg in a concatenated mjpeg stream: each runs from its start marker (FF D8) to its end marker (FF D9) */
+export function splitJpegs(bytes: Uint8Array): Uint8Array[] {
+    const out: Uint8Array[] = []
     let start = -1
-    for (let i = 0; i + 2 < bytes.length; i++) {
-        if (bytes[i] === 0xff && bytes[i + 1] === 0xd8 && bytes[i + 2] === 0xff) {
+    for (let i = 0; i + 1 < bytes.length; i++) {
+        if (bytes[i] !== 0xff) {
+            continue
+        }
+        if (bytes[i + 1] === 0xd8 && start < 0) {
             start = i
+        } else if (bytes[i + 1] === 0xd9 && start >= 0) {
+            out.push(bytes.slice(start, i + 2))
+            start = -1
         }
     }
-    return start < 0 ? null : bytes.slice(start)
+    return out
+}
+
+/** the last jpeg in a concatenated mjpeg stream */
+export function lastJpeg(bytes: Uint8Array): Uint8Array | null {
+    const all = splitJpegs(bytes)
+    return all.length ? all[all.length - 1] : null
 }
 
 /**
@@ -123,10 +136,16 @@ export function lastJpeg(bytes: Uint8Array): Uint8Array | null {
 export class VideoFrames {
     #source: Source
     #meta: StreamMeta
-    /** index of the keyframe at or before the frame decoded last, and the units read from it */
+    /** index of the keyframe the current group starts at (-1: nothing read yet) */
     #from = -1
+    /** the access units of that group, and the index after the last one read */
     #units: Uint8Array[] = []
+    #next = 0
     #format = "h264"
+    #frame = ""
+    /** the pictures decoded for this group so far, and the width they were decoded at */
+    #pictures: Uint8Array[] = []
+    #picturesWidth = -1
 
     constructor(source: Source, meta: StreamMeta) {
         this.#source = source
@@ -135,58 +154,107 @@ export class VideoFrames {
 
     /** the picture for message `i`, as a jpeg ImageFrame, or null when it cannot be decoded */
     async frameAt(i: number, width = 0): Promise<ImageFrame | null> {
-        const units = await this.#unitsTo(i)
-        if (!units) {
+        if (!(await this.#reach(i))) {
             return null
         }
-        const data = await decodeUnits(units.units, units.format, width)
+        const offset = i - this.#from
+        if (width !== this.#picturesWidth) {
+            this.#pictures = []
+            this.#picturesWidth = width
+        }
+        // playing forward inside a group: this picture came out of the decode done for an earlier frame
+        let data = this.#pictures[offset]
         if (!data) {
-            return null
-        }
-        return { kind: "image", frame: units.frame, width: 0, height: 0, encoding: "jpeg", data }
-    }
-
-    /** every access unit from the keyframe at or before `i` through `i` */
-    async #unitsTo(i: number): Promise<{ units: Uint8Array[]; format: string; frame: string } | null> {
-        const first = await this.#keyframeAtOrBefore(i)
-        if (first < 0) {
-            return null
-        }
-        // reuse what we already read when playing forward from the same keyframe
-        if (first !== this.#from) {
-            this.#from = first
-            this.#units = []
-        }
-        let frame = ""
-        for (let at = first; at <= i; at++) {
-            const have = this.#units[at - first]
-            if (have) {
-                continue
-            }
-            const unit = unitOf(this.#meta, await this.#source.read(this.#meta.name, at))
-            if (!unit) {
+            const pictures = await decodeUnits(this.#units.slice(0, offset + 1), this.#format, width)
+            if (!pictures.length) {
                 return null
             }
-            this.#units[at - first] = unit.data
-            this.#format = unit.format
-            frame = unit.frame
+            // ffmpeg writes one picture per frame it decoded, in order from the keyframe
+            this.#pictures = pictures
+            data = pictures[offset] ?? pictures[pictures.length - 1]
         }
-        return { units: this.#units.slice(0, i - first + 1), format: this.#format, frame }
+        return { kind: "image", frame: this.#frame, width: 0, height: 0, encoding: "jpeg", data }
     }
 
-    /** scan back from `i` for the newest keyframe (bounded: a stream with none would otherwise read the whole file) */
+    /** read whatever it takes to have every access unit from the group's keyframe through `i` */
+    async #reach(i: number): Promise<boolean> {
+        if (i < 0) {
+            return false
+        }
+        // a seek backwards out of the group, or nothing read yet: find the keyframe at or before `i`
+        if (this.#from < 0 || i < this.#from) {
+            const first = await this.#keyframeAtOrBefore(i)
+            if (first < 0) {
+                return false
+            }
+            this.#startAt(first)
+        }
+        // then extend forward, one read per message; a keyframe along the way opens a new group
+        while (this.#next <= i) {
+            const unit = await this.#unitAt(this.#next)
+            if (!unit) {
+                return false
+            }
+            if (this.#next > this.#from && isKeyframe(unit.data, this.#h265())) {
+                this.#startAt(this.#next)
+            }
+            this.#units[this.#next - this.#from] = unit.data
+            this.#next++
+        }
+        return this.#units.length > 0
+    }
+
+    #startAt(index: number) {
+        this.#from = index
+        this.#next = index
+        this.#units = []
+        this.#pictures = []
+    }
+
+    #h265() {
+        return this.#format.includes("265") || this.#format.includes("hevc")
+    }
+
+    async #unitAt(index: number) {
+        const unit = unitOf(this.#meta, await this.#source.read(this.#meta.name, index))
+        if (unit) {
+            this.#format = unit.format
+            this.#frame = unit.frame
+        }
+        return unit
+    }
+
+    /** scan back from `i` for the newest keyframe (bounded: a stream with none would read the whole file) */
     async #keyframeAtOrBefore(i: number): Promise<number> {
-        const h265 = this.#format.includes("265") || this.#format.includes("hevc")
         for (let at = i; at >= 0 && i - at < MAX_GOP; at--) {
-            const unit = unitOf(this.#meta, await this.#source.read(this.#meta.name, at))
+            const unit = await this.#unitAt(at)
             if (!unit) {
                 return -1
             }
-            this.#format = unit.format
-            if (isKeyframe(unit.data, h265 || unit.format.includes("265") || unit.format.includes("hevc"))) {
+            if (isKeyframe(unit.data, this.#h265())) {
                 return at
             }
         }
         return -1
     }
+}
+
+/**
+ * A preview picture from one recorded message, when that message happens to be a keyframe.
+ *
+ * The library's thumbnails only need *a* frame from somewhere in the recording, not the frame at an exact instant, so
+ * they take the next keyframe instead of assembling a group: a keyframe decodes on its own, which keeps the preview
+ * path a single message read, as it is for stills. Returns null for anything else, so the caller keeps looking.
+ */
+export async function keyframeJpeg(meta: StreamMeta, raw: Uint8Array): Promise<Uint8Array | null> {
+    const unit = unitOf(meta, raw)
+    if (!unit) {
+        return null
+    }
+    const h265 = unit.format.includes("265") || unit.format.includes("hevc")
+    if (!isKeyframe(unit.data, h265)) {
+        return null
+    }
+    const pictures = await decodeUnits([unit.data], unit.format)
+    return pictures.length ? pictures[pictures.length - 1] : null
 }
