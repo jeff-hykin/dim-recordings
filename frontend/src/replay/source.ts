@@ -193,7 +193,7 @@ export class ReplaySource {
         const topic = parseKey(key)
         const stream = topic ? topic.name.slice(1) : key
         const heavy = topic &&
-            /(Image|CompressedImage|PointCloud2)$/.test(topic.type)
+            /(Image|CompressedImage|CompressedVideo|PointCloud2)$/.test(topic.type)
         const encoding = options?.encoding ?? ""
         const as: As = encoding.endsWith("pointcloud2")
             ? "cloud"

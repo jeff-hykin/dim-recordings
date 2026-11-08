@@ -359,7 +359,12 @@ body {
 /* phone: the list or the inspector */
 @media (max-width: 760px) {
     .rec-library {
-        grid-template-columns: 1fr;
+        /* minmax(0, ...), not 1fr: a grid column's floor is its min-content, so one long recording
+           name made the list wider than the phone and the right edge was cut off */
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .rec-list {
+        min-width: 0;
     }
     .rec-library .rec-detail {
         display: none;

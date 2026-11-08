@@ -10,7 +10,7 @@ import { openMcap } from "./mcap.ts"
 import { decodeCdrImage, type DecodedImage, decodeLcmCompressedImage, decodeLcmImage, unwrapBlob } from "./messages.ts"
 import { which } from "./foxglove.ts"
 import { isVideoType, keyframeJpeg } from "../replay/video.ts"
-import type { StreamMeta } from "../replay/source.ts"
+import { isCameraType, type StreamMeta } from "../replay/source.ts"
 
 export const FRAMES = 15
 export const WIDTH = 320
@@ -102,7 +102,7 @@ function withSize(image: DecodedImage): DecodedImage {
 }
 
 function isImageStream(stream: StreamInfo) {
-    return /(^|\.)(Image|CompressedImage|CompressedVideo)$/.test(stream.type) && stream.count > 0
+    return isCameraType(stream.type) && stream.count > 0
 }
 
 /**

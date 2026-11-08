@@ -4,12 +4,22 @@
 import { join } from "node:path"
 import { Library } from "./library.ts"
 import { inChild, JobCancelled, laneFor } from "./child_jobs.ts"
+import { isCameraType } from "../replay/source.ts"
 import type { PathPreview } from "./path_preview.ts"
 import type { FileEntry } from "./scan.ts"
 import { ffmpeg, type ThumbMeta } from "./thumbnails.ts"
 
 /** What a recording with no camera was marked before odometry paths: it's looked at again once. */
-const OLD_NO_CAMERA = "no camera stream"
+/**
+ * Reasons a past run wrote that this build no longer agrees with, so the recording is tried again
+ * instead of keeping the cached "no preview". A recording whose only camera records video was judged
+ * cameraless before this build learnt about video, and would otherwise stay that way for ever.
+ */
+const RETRY_REASONS = new Set([
+    "no camera stream",
+    "no camera, and it didn't move",
+    "no readable camera frames",
+])
 
 export type ThumbState =
     | { state: "ready"; frames: number; width: number; height: number; stream: string }
@@ -60,7 +70,7 @@ export class Thumbnailer {
             }
             try {
                 const none = JSON.parse(await Deno.readTextFile(`${folder}.none.json`)) as { reason: string }
-                return none.reason === OLD_NO_CAMERA ? { state: "pending" } : { state: "none", reason: none.reason }
+                return RETRY_REASONS.has(none.reason) ? { state: "pending" } : { state: "none", reason: none.reason }
             } catch {
                 return { state: "pending" }
             }
@@ -121,7 +131,7 @@ export class Thumbnailer {
             const started = performance.now()
             try {
                 const inspection = await this.library.inspection(file)
-                const cameras = inspection.streams.some((s) => /(^|\.)(Image|CompressedImage)$/.test(s.type) && s.count)
+                const cameras = inspection.streams.some((s) => isCameraType(s.type) && s.count)
                 if (cameras && !ffmpeg()) {
                     continue // stays pending until there's an ffmpeg
                 }

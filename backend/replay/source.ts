@@ -56,10 +56,16 @@ export interface Source {
     close(): void
 }
 
+/**
+ * A camera stream: stills (Image, CompressedImage) or a recorded video stream (CompressedVideo, which the player
+ * decodes into pictures -- replay/video.ts). ONE definition on purpose: this test used to be copied into the
+ * previews, the Foxglove rule and the page, and a video-only recording was left without a preview because one of
+ * those copies had not learnt about video.
+ */
+export const isCameraType = (type: string) => /(^|\.)(Image|CompressedImage|CompressedVideo)$/.test(type)
+
 export function kindOf(type: string): Kind {
-    // CompressedVideo is a camera too: it is a recorded video stream rather than stills, and the player decodes it
-    // into pictures (replay/video.ts), so the rest of the Replayer can treat it as any other image stream.
-    if (/(^|\.)(Image|CompressedImage|CompressedVideo)$/.test(type)) {
+    if (isCameraType(type)) {
         return "image"
     }
     if (/PointCloud2$/.test(type)) {

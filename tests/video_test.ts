@@ -6,7 +6,7 @@
 // real stream rather than bytes shaped like one.
 import { assert, assertEquals } from "@std/assert"
 import { lcmCompressedVideo, tempDir, writeDb } from "./fixtures.ts"
-import { openSource } from "../backend/replay/source.ts"
+import { isCameraType, kindOf, openSource } from "../backend/replay/source.ts"
 import { isKeyframe, isVideoType, lastJpeg, splitJpegs, VideoFrames } from "../backend/replay/video.ts"
 
 const ffmpeg = await (async () => {
@@ -209,4 +209,44 @@ Deno.test({
             Deno.removeSync(dir, { recursive: true })
         }
     },
+})
+
+Deno.test("every camera test agrees that a recorded video stream is a camera", () => {
+    // This is the bug this test exists for: the check was copied into the previews, the Foxglove rule
+    // and the page, and a video-only recording came out with "no preview" because one copy had not
+    // learnt about video. One definition now, and these are the callers that must not drift again.
+    for (const type of ["foxglove_msgs.CompressedVideo", "sensor_msgs.Image", "sensor_msgs.CompressedImage"]) {
+        assert(isCameraType(type), `${type} should be a camera`)
+        assertEquals(kindOf(type), "image", `${type} should reach the image machinery`)
+    }
+    for (const type of ["sensor_msgs.PointCloud2", "nav_msgs.Odometry", "sensor_msgs.CameraInfo"]) {
+        assert(!isCameraType(type), `${type} is not a camera`)
+    }
+})
+
+Deno.test("a 'no preview' cached before video was understood is tried again", async () => {
+    // The worker skips anything that is not "pending", so the verdict written for this recording
+    // before the app knew about video would have kept it previewless for ever.
+    const { Thumbnailer } = await import("../backend/recordings/thumb_worker.ts")
+    const dir = await tempDir()
+    try {
+        const worker = Object.create(Thumbnailer.prototype) as {
+            folder: (f: unknown) => Promise<string>
+            stateOf: (f: unknown) => Promise<{ state: string; reason?: string }>
+        }
+        const folder = `${dir}/preview`
+        Deno.mkdirSync(folder, { recursive: true })
+        worker.folder = () => Promise.resolve(folder)
+        const file = { format: "mcap" }
+
+        for (const reason of ["no camera, and it didn't move", "no readable camera frames", "no camera stream"]) {
+            Deno.writeTextFileSync(`${folder}.none.json`, JSON.stringify({ reason }))
+            assertEquals((await worker.stateOf(file)).state, "pending", `${reason} should be retried`)
+        }
+        // a verdict this build still stands behind is left alone, so it is not rebuilt for ever
+        Deno.writeTextFileSync(`${folder}.none.json`, JSON.stringify({ reason: "the file is corrupt" }))
+        assertEquals((await worker.stateOf(file)).state, "none")
+    } finally {
+        Deno.removeSync(dir, { recursive: true })
+    }
 })

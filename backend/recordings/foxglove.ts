@@ -3,7 +3,7 @@
 // channels are all CDR with a schema. Tests: foxglove_test.ts.
 import type { Inspection } from "./inspect.ts"
 
-const DRAWN = /(PointCloud2|(^|\.)Image|CompressedImage|CameraInfo)$/
+const DRAWN = /(PointCloud2|(^|\.)Image|CompressedImage|CompressedVideo|CameraInfo)$/
 
 export type Verdict = { ok: boolean; reason: string }
 
