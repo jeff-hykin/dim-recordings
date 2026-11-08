@@ -126,7 +126,7 @@ export function gapStats(name: string, count: number, times: ArrayLike<number>) 
 }
 
 const KINDS: [RegExp, string, string][] = [
-    [/(^|\.)(Image|CompressedImage)$/, "camera", "cameras"],
+    [/(^|\.)(Image|CompressedImage|CompressedVideo)$/, "camera", "cameras"],
     [/PointCloud2$/, "point cloud", "point clouds"],
     [/(Odometry|PoseStamped)$/, "odometry", "odometry"],
     [/(LaserScan)$/, "laser scan", "laser scans"],

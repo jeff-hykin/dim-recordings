@@ -12,6 +12,7 @@ import {
     decodeObject,
     imagePacket,
     LOW_CLOUD_POINTS,
+    LOW_IMAGE_SIDE,
     packet,
     type Quality,
     shrinkImage,
@@ -20,6 +21,7 @@ import {
 import { encode as lcmEncode, schemas } from "./lcm.ts"
 import { atOrBefore, openSource, type Source, type StreamMeta } from "./source.ts"
 import type { Thumbs } from "./thumbs.ts"
+import { isVideoType, VideoFrames } from "./video.ts"
 import { reachable } from "../recordings/slow_fs.ts"
 
 export type Mode = "play" | "scrub" | "pause"
@@ -238,6 +240,8 @@ type Subscription = {
     lastSentT: number
     /** a tf jump sent before the index reached it: the whole tree follows when the index is read */
     tfPending?: boolean
+    /** a camera recorded as video decodes through this (it has to start from a keyframe, so it keeps state) */
+    video?: VideoFrames
 }
 
 const sessions = new Set<Session>()
@@ -302,6 +306,7 @@ export class Session {
                 last: -1,
                 lastQuality: "low",
                 lastSentT: -Infinity,
+                video: isVideoType(meta.type) ? new VideoFrames(this.source, meta) : undefined,
             }
             this.#subs.set(sub.id, sub)
             if (meta.kind === "tf" && sub.as === "lcm") {
@@ -502,10 +507,11 @@ export class Session {
                     return
                 }
             }
-            const image = decodeImage(
-                sub.meta,
-                await this.source.read(sub.meta.name, i),
-            )
+            // a camera recorded as video cannot be decoded one message at a time: VideoFrames starts from the
+            // keyframe before `i` (replay/video.ts) and hands back the picture as a jpeg, like any other frame
+            const image = sub.video
+                ? await sub.video.frameAt(i, quality === "low" ? LOW_IMAGE_SIDE : 0)
+                : decodeImage(sub.meta, await this.source.read(sub.meta.name, i))
             if (!image) {
                 return
             }

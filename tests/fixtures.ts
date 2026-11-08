@@ -2,6 +2,7 @@
 // .mcap (CDR or raw-LCM channels), written from scratch so tests need no data download.
 import { DatabaseSync } from "node:sqlite"
 import { McapWriter } from "../backend/deps.ts"
+import { fingerprint } from "../backend/replay/lcm.ts"
 
 export async function tempDir() {
     return await Deno.makeTempDir({ prefix: "dim_recordings_test_" })
@@ -54,6 +55,43 @@ export function lcmImage(width: number, height: number, encoding = "mono8", fill
     const out = new Uint8Array(parts.length + length)
     out.set(parts)
     out.fill(fill, parts.length)
+    return out
+}
+
+/**
+ * LCM foxglove_msgs/CompressedVideo: {data_length, timestamp{sec,nanosec}, frame_id, data[], format}.
+ * `data` is one access unit of a real encoded stream, so a test exercises a real decoder, not a stand-in.
+ */
+export function lcmCompressedVideo(data: Uint8Array, format = "h264", frameId = "camera"): Uint8Array {
+    const enc = new TextEncoder()
+    const parts: number[] = []
+    const int32 = (n: number) => parts.push((n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255)
+    const str = (text: string) => {
+        const bytes = enc.encode(text)
+        int32(bytes.length + 1)
+        parts.push(...bytes, 0)
+    }
+    // the real type fingerprint: the decoder checks these 8 bytes and refuses the message otherwise
+    parts.push(...fingerprint("foxglove_msgs.CompressedVideo"))
+    int32(data.length)
+    int32(0) // timestamp.sec
+    int32(0) // timestamp.nanosec
+    str(frameId)
+    const head = new Uint8Array(parts.length + data.length)
+    head.set(parts)
+    head.set(data, parts.length)
+    const tail: number[] = []
+    const bytes = enc.encode(format)
+    tail.push(
+        (bytes.length + 1) >>> 24 & 255,
+        (bytes.length + 1) >>> 16 & 255,
+        (bytes.length + 1) >>> 8 & 255,
+        (bytes.length + 1) & 255,
+    )
+    tail.push(...bytes, 0)
+    const out = new Uint8Array(head.length + tail.length)
+    out.set(head)
+    out.set(new Uint8Array(tail), head.length)
     return out
 }
 

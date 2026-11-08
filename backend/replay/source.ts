@@ -57,7 +57,9 @@ export interface Source {
 }
 
 export function kindOf(type: string): Kind {
-    if (/(^|\.)(Image|CompressedImage)$/.test(type)) {
+    // CompressedVideo is a camera too: it is a recorded video stream rather than stills, and the player decodes it
+    // into pictures (replay/video.ts), so the rest of the Replayer can treat it as any other image stream.
+    if (/(^|\.)(Image|CompressedImage|CompressedVideo)$/.test(type)) {
         return "image"
     }
     if (/PointCloud2$/.test(type)) {

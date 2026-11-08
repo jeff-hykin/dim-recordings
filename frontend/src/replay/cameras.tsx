@@ -34,7 +34,10 @@ export interface CameraState {
     seeded?: boolean
 }
 
-const isImage = (topic: Topic) => /^sensor_msgs\.(Image|CompressedImage)$/.test(topic.type)
+// A camera is either stills or a recorded video stream; the backend decodes the video into frames
+// (backend/replay/video.ts) and sends them as jpeg, so both arrive here the same way.
+const isImage = (topic: Topic) =>
+    /^sensor_msgs\.(Image|CompressedImage)$/.test(topic.type) || /(^|\.)CompressedVideo$/.test(topic.type)
 const PREFERRED = ["/color_image", "/camera/color", "/image"]
 
 function pickDefault(topics: Topic[]): Topic | null {
