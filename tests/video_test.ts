@@ -8,7 +8,7 @@ import { assert, assertEquals } from "@std/assert"
 import { lcmCompressedVideo, tempDir, writeDb } from "./fixtures.ts"
 import { isCameraType, kindOf, openSource } from "../backend/replay/source.ts"
 import { THUMB_BUILD } from "../backend/recordings/thumbnails.ts"
-import { isKeyframe, isVideoType, splitJpegs, VideoFrames } from "../backend/replay/video.ts"
+import { decodeUnits, isAv1, isKeyframe, isVideoType, splitJpegs, VideoFrames } from "../backend/replay/video.ts"
 
 const ffmpeg = await (async () => {
     try {
@@ -18,6 +18,73 @@ const ffmpeg = await (async () => {
         return false
     }
 })()
+
+/** whether this ffmpeg can encode AV1 at all (libsvtav1 is a build option, and the obu muxer is newer than h264's) */
+const svtAv1 = ffmpeg && await (async () => {
+    const out = await new Deno.Command("ffmpeg", { args: ["-hide_banner", "-encoders"], stdout: "piped", stderr: "null" }).output()
+    return new TextDecoder().decode(out.stdout).includes("libsvtav1")
+})()
+
+/** a real AV1 stream (low-overhead OBU), split into one temporal unit per frame */
+async function av1Units(frames: number, gop: number): Promise<Uint8Array[]> {
+    const dir = await tempDir()
+    const path = `${dir}/clip.obu`
+    const made = await new Deno.Command("ffmpeg", {
+        args: [
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            `testsrc=size=160x120:rate=10:duration=${frames / 10}`,
+            "-c:v",
+            "libsvtav1",
+            "-g",
+            String(gop),
+            "-svtav1-params",
+            "lp=1",
+            "-pix_fmt",
+            "yuv420p",
+            "-f",
+            "obu",
+            path,
+            "-y",
+        ],
+        stdout: "null",
+        stderr: "piped",
+    }).output()
+    assert(made.success, new TextDecoder().decode(made.stderr))
+    const bytes = Deno.readFileSync(path)
+    Deno.removeSync(dir, { recursive: true })
+    // split on the temporal delimiter OBU (type 2, no payload), which opens every temporal unit
+    const units: Uint8Array[] = []
+    let start = -1
+    let at = 0
+    while (at < bytes.length) {
+        const header = bytes[at]
+        const type = (header >> 3) & 0xf
+        let cursor = at + 1 + (((header >> 2) & 1) === 1 ? 1 : 0)
+        let size = 0
+        for (let shift = 0; shift < 56; shift += 7) {
+            const byte = bytes[cursor++]
+            size += (byte & 0x7f) * 2 ** shift
+            if ((byte & 0x80) === 0) {
+                break
+            }
+        }
+        if (type === 2) {
+            if (start >= 0) {
+                units.push(bytes.slice(start, at))
+            }
+            start = at
+        }
+        at = cursor + size
+    }
+    if (start >= 0) {
+        units.push(bytes.slice(start))
+    }
+    return units
+}
 
 /** a real H.264 stream, split into one access unit per frame (keyframe every `gop` frames) */
 async function encodedUnits(frames: number, gop: number): Promise<Uint8Array[]> {
@@ -111,7 +178,7 @@ Deno.test({
     ignore: !ffmpeg,
     fn: async () => {
         const units = await encodedUnits(20, 10)
-        const keys = units.map((unit, i) => (isKeyframe(unit, false) ? i : -1)).filter((i) => i >= 0)
+        const keys = units.map((unit, i) => (isKeyframe(unit, "h264") ? i : -1)).filter((i) => i >= 0)
         assertEquals(keys[0], 0, "the stream must open on a keyframe")
         assert(keys.length >= 2, `expected more than one keyframe, got ${keys.length}`)
         assert(keys.length < units.length, "not every frame can be a keyframe, or the test proves nothing")
@@ -336,7 +403,7 @@ Deno.test({
         // returning nothing for them took the whole camera out of the preview -- a 285 s recording of two
         // cameras came back as "no camera, and it didn't move", retried on every pass for ever.
         const units = (await encodedUnits(30, 10)).slice(4) // drops the opening keyframe: 0-5 now have none
-        assert(!isKeyframe(units[0], false), "the clip must not start on a keyframe, or the test proves nothing")
+        assert(!isKeyframe(units[0], "h264"), "the clip must not start on a keyframe, or the test proves nothing")
         const { dir, path } = await videoRecording(units)
         const source = await openSource(path)
         try {
@@ -386,4 +453,29 @@ Deno.test({
             Deno.removeSync(dir, { recursive: true })
         }
     },
+})
+
+Deno.test({
+    name: "an AV1 stream: keyframes are found by OBU, and a group decodes through ffmpeg's obu demuxer",
+    ignore: !svtAv1,
+    fn: async () => {
+        const units = await av1Units(20, 10)
+        assert(units.length >= 11, `expected at least 11 temporal units, got ${units.length}`)
+        const keys = units.map((unit, i) => (isKeyframe(unit, "av1") ? i : -1)).filter((i) => i >= 0)
+        assertEquals(keys[0], 0, "the stream must open on a keyframe")
+        assert(keys.includes(10), `a keyframe every 10 frames: ${keys}`)
+        assert(!isKeyframe(units[1], "av1"), "the frame after a keyframe is predicted")
+        // the H.264 reader must not claim an AV1 unit, and vice versa
+        assert(!isKeyframe(units[0], "h264"), "an AV1 unit has no Annex-B keyframe in it")
+        const pictures = await decodeUnits(units.slice(0, 10), "av1")
+        assert(pictures.length > 0, "ffmpeg decoded no picture from the AV1 group")
+        assertEquals([...pictures[0].slice(0, 3)], [0xff, 0xd8, 0xff], "not a jpeg")
+    },
+})
+
+Deno.test("the AV1 format names foxglove and ffmpeg write are both recognised", () => {
+    assert(isAv1("av1"))
+    assert(isAv1("av01"))
+    assert(!isAv1("h264"))
+    assert(!isAv1("hevc"))
 })

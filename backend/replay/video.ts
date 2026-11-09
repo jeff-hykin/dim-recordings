@@ -1,4 +1,5 @@
-// Camera streams recorded as video (foxglove_msgs.CompressedVideo: H.264/H.265 access units) rather than as stills.
+// Camera streams recorded as video (foxglove_msgs.CompressedVideo: H.264/H.265 access units, or AV1 temporal units)
+// rather than as stills.
 //
 // A video frame is not a picture on its own. Only a keyframe decodes by itself; every frame after it is stored as the
 // difference from the ones before, so handing ffmpeg the single message the playhead lands on renders NOTHING (it
@@ -36,8 +37,66 @@ function nalTypes(bytes: Uint8Array, h265: boolean): number[] {
     return types
 }
 
-/** H.264: IDR is 5. H.265: the IRAP types (BLA/IDR/CRA) are 16-23. */
-export function isKeyframe(bytes: Uint8Array, h265: boolean): boolean {
+/**
+ * AV1 has no start codes to scan for: a temporal unit is a run of OBUs that each carry their own size, so walking one
+ * is exact. Returns [obu_type, first payload byte] per OBU; the payload byte is where a frame header keeps the fields
+ * that say whether it is a key frame.
+ */
+function obus(bytes: Uint8Array): [number, number][] {
+    const out: [number, number][] = []
+    let at = 0
+    while (at < bytes.length) {
+        const header = bytes[at++]
+        // forbidden bit set, or no size field: not a low-overhead OBU stream, so stop rather than invent units
+        if ((header & 0x80) !== 0 || ((header >> 1) & 1) !== 1) {
+            return out
+        }
+        const type = (header >> 3) & 0xf
+        if (((header >> 2) & 1) === 1) {
+            at++ // extension header
+        }
+        let size = 0
+        for (let shift = 0; shift < 56; shift += 7) {
+            const byte = bytes[at++]
+            if (byte === undefined) {
+                return out
+            }
+            size += (byte & 0x7f) * 2 ** shift
+            if ((byte & 0x80) === 0) {
+                break
+            }
+        }
+        if (at + size > bytes.length) {
+            return out
+        }
+        out.push([type, bytes[at]])
+        at += size
+    }
+    return out
+}
+
+/** OBU_FRAME (6) or OBU_FRAME_HEADER (3) whose header says show_existing_frame=0, frame_type=KEY_FRAME, show_frame=1 */
+function isAv1Keyframe(bytes: Uint8Array): boolean {
+    return obus(bytes).some(([type, first]) => (type === 6 || type === 3) && first !== undefined && (first >> 7) === 0 && ((first >> 5) & 3) === 0 && ((first >> 4) & 1) === 1)
+}
+
+/** whether `format` is one of the Annex-B codecs, and if so whether it is the H.265 of the pair */
+const annexB = (format: string) => (isAv1(format) ? null : format.includes("265") || format.includes("hevc"))
+
+/** the `format` field of an AV1 stream ("av1"; ffmpeg and foxglove both also write "av01") */
+export const isAv1 = (format: string) => format.includes("av1") || format.includes("av01")
+
+/**
+ * H.264: IDR is 5. H.265: the IRAP types (BLA/IDR/CRA) are 16-23. AV1: a shown key frame OBU.
+ *
+ * This takes the message's `format` rather than a boolean, because there are now three bitstreams to tell apart and
+ * only one of them has NAL units at all.
+ */
+export function isKeyframe(bytes: Uint8Array, format: string): boolean {
+    const h265 = annexB(format)
+    if (h265 === null) {
+        return isAv1Keyframe(bytes)
+    }
     return nalTypes(bytes, h265).some((type) => h265 ? (type >= 16 && type <= 23) : type === 5)
 }
 
@@ -60,8 +119,8 @@ export function unitOf(meta: StreamMeta, raw: Uint8Array): { data: Uint8Array; f
     }
 }
 
-/** ffmpeg's name for a bare stream of access units */
-const demuxer = (format: string) => (format.includes("265") || format.includes("hevc") ? "hevc" : "h264")
+/** ffmpeg's name for a bare stream of access units (AV1's is the low-overhead OBU stream this records) */
+const demuxer = (format: string) => (isAv1(format) ? "obu" : format.includes("265") || format.includes("hevc") ? "hevc" : "h264")
 
 /**
  * Decode `units` (a keyframe first, then the frames after it) and return EVERY picture ffmpeg wrote, in order.
@@ -199,7 +258,7 @@ export class VideoFrames {
             if (!unit) {
                 return -1
             }
-            if (this.#next > this.#from && isKeyframe(unit.data, this.#h265())) {
+            if (this.#next > this.#from && isKeyframe(unit.data, this.#format)) {
                 this.#startAt(this.#next)
             }
             this.#units[this.#next - this.#from] = unit.data
@@ -213,10 +272,6 @@ export class VideoFrames {
         this.#next = index
         this.#units = []
         this.#pictures = []
-    }
-
-    #h265() {
-        return this.#format.includes("265") || this.#format.includes("hevc")
     }
 
     async #unitAt(index: number) {
@@ -235,7 +290,7 @@ export class VideoFrames {
             if (!unit) {
                 return -1
             }
-            if (isKeyframe(unit.data, this.#h265())) {
+            if (isKeyframe(unit.data, this.#format)) {
                 return at
             }
         }
@@ -250,7 +305,7 @@ export class VideoFrames {
             if (!unit) {
                 return -1
             }
-            if (isKeyframe(unit.data, this.#h265())) {
+            if (isKeyframe(unit.data, this.#format)) {
                 return at
             }
         }
