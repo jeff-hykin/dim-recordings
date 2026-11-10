@@ -21,7 +21,11 @@ const ffmpeg = await (async () => {
 
 /** whether this ffmpeg can encode AV1 at all (libsvtav1 is a build option, and the obu muxer is newer than h264's) */
 const svtAv1 = ffmpeg && await (async () => {
-    const out = await new Deno.Command("ffmpeg", { args: ["-hide_banner", "-encoders"], stdout: "piped", stderr: "null" }).output()
+    const out = await new Deno.Command("ffmpeg", {
+        args: ["-hide_banner", "-encoders"],
+        stdout: "piped",
+        stderr: "null",
+    }).output()
     return new TextDecoder().decode(out.stdout).includes("libsvtav1")
 })()
 

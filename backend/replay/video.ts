@@ -77,7 +77,10 @@ function obus(bytes: Uint8Array): [number, number][] {
 
 /** OBU_FRAME (6) or OBU_FRAME_HEADER (3) whose header says show_existing_frame=0, frame_type=KEY_FRAME, show_frame=1 */
 function isAv1Keyframe(bytes: Uint8Array): boolean {
-    return obus(bytes).some(([type, first]) => (type === 6 || type === 3) && first !== undefined && (first >> 7) === 0 && ((first >> 5) & 3) === 0 && ((first >> 4) & 1) === 1)
+    return obus(bytes).some(([type, first]) =>
+        (type === 6 || type === 3) && first !== undefined && (first >> 7) === 0 && ((first >> 5) & 3) === 0 &&
+        ((first >> 4) & 1) === 1
+    )
 }
 
 /** whether `format` is one of the Annex-B codecs, and if so whether it is the H.265 of the pair */
@@ -120,7 +123,9 @@ export function unitOf(meta: StreamMeta, raw: Uint8Array): { data: Uint8Array; f
 }
 
 /** ffmpeg's name for a bare stream of access units (AV1's is the low-overhead OBU stream this records) */
-const demuxer = (format: string) => (isAv1(format) ? "obu" : format.includes("265") || format.includes("hevc") ? "hevc" : "h264")
+const demuxer = (
+    format: string,
+) => (isAv1(format) ? "obu" : format.includes("265") || format.includes("hevc") ? "hevc" : "h264")
 
 /**
  * Decode `units` (a keyframe first, then the frames after it) and return EVERY picture ffmpeg wrote, in order.
