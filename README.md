@@ -38,7 +38,7 @@ dimos-desktop install https://github.com/jeff-hykin/dim-recordings
   "changed since" and Re-upload sends it as `name.v2.mcap` (then v3, ...; a `name.v2` goes up as v3) through a symlink
   by that name, leaving the earlier upload. An unchanged one re-uploads from ⋯ after a confirm.
 
-- **Replayer** (`#/replay/<id>`): [dimos-react](https://github.com/jeff-hykin/dimos-react)'s 3D view (the Controller's:
+- **Replayer** (`#/replay/<id>`): [dimos-react](https://github.com/dimensionalOS/dimos-react)'s 3D view (the Controller's:
   3D with point clouds, poses and the odometry route, camera panels, the tf tree, layers) playing the recording, with no
   drive / WASD / arm controls. Like the Controller it draws the robot from its URDF (`robot_description`, meshes from
   `file_info` and every topic under it, which dim-controller's recorder asks for while it records; older recordings'
