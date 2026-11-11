@@ -22,9 +22,9 @@
             # .#packages.x86_64-darwin.frontendDeps`) from a Mac, x86_64-linux and aarch64-linux from a Linux machine of that CPU
             frontendDepsHash = {
                 aarch64-darwin = "sha256-VSqBCvG8jVVtvm64lMIXEMeyqxUGPE9LybhMWvQY/Fk=";
-                x86_64-darwin = "sha256-LPY9BMkEhVMqzIcB9CMgKhQLeYu0JinxMMDxja4FZos=";
-                x86_64-linux = "sha256-eFPpWrQEqp7CP3biaaKUIo1mbOKYlxMEio04ilQQ7uA=";
-                aarch64-linux = "sha256-DAI7JAFqT4O4Kh3GnqVfEUIdXPF9la56qmZFgNLLXg0=";
+                x86_64-darwin = "sha256-IFuyZtLTY62EQseXhBhTVfLeV13eSLfi5HSyxVpHr5U=";
+                x86_64-linux = "sha256-er5lpB19jmtOPJL7qdWdcpPsGJQbbalpbHcGHS/ochI=";
+                aarch64-linux = "sha256-EKM67pWVOdpknFVwovKlzXpSbxHTUfUKlWxhTUuURpw=";
             };
             # bin/dimos-app-server for <arch> Linux, written on any machine: its bash, deno and ffmpeg are the target's (cache.nixos.org downloads, nothing built)
             linuxApp = pkgs: arch: backend: frontend:
