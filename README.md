@@ -9,7 +9,7 @@ lands. `DIMOS_APP`'s `recordingsDir` is the fallback when the gateway can't be r
 or looks inside it: an app is told what it needs in `DIMOS_APP` and asks Desktop's HTTP API for the rest.
 
 ```sh
-dimos-desktop install https://github.com/jeff-hykin/dim-recordings
+dimos-desktop install https://github.com/dimensionalOS/dim-recordings
 ```
 
 ## What it does
