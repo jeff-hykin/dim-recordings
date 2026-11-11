@@ -1,5 +1,7 @@
 import react from "@vitejs/plugin-react"
+import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import process from "node:process"
 import { defineConfig, type Plugin } from "vite"
 
@@ -10,7 +12,13 @@ function httpsFromVendor(): Plugin {
     const remote = Object.entries(config.imports as Record<string, string>).filter(([, target]) =>
         target.startsWith("https://")
     )
-    const local = (url: string) => new URL(`./vendor/${url.replace(/^https:\/\//, "")}`, import.meta.url).pathname
+    // deno names a path segment with capitals `#<lowercased>_<first 5 hex of its sha256>` (dimensionalOS -> #dimensionalos_2a8d1)
+    const segment = (part: string) =>
+        /[A-Z]/.test(part)
+            ? `#${part.toLowerCase()}_${createHash("sha256").update(part).digest("hex").slice(0, 5)}`
+            : part
+    const local = (url: string) =>
+        join(new URL("./vendor", import.meta.url).pathname, ...url.replace(/^https:\/\//, "").split("/").map(segment))
     return {
         name: "https-from-vendor",
         enforce: "pre",
