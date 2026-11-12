@@ -17,7 +17,13 @@ export type Route = { view: "library"; transfer?: boolean } | {
 export function parseRoute(hash: string): Route {
     const match = hash.match(/^#\/replay\/(.+)$/)
     if (match) {
-        return { view: "replay", id: decodeURIComponent(match[1]) }
+        let id = match[1]
+        try {
+            id = decodeURIComponent(id)
+        } catch {
+            // not percent-encoding (a link cut short): the id as written, which the Replayer says it can't open
+        }
+        return { view: "replay", id }
     }
     return /^#\/transfer\/?$/.test(hash) ? { view: "library", transfer: true } : { view: "library" }
 }
