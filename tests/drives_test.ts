@@ -205,6 +205,21 @@ Deno.test("transfer: copy keeps the mtime, never overwrites, move deletes the so
     await assertRejects(() => transferFile(source, folder, { mode: "move", cancel: () => true }), Error, "cancelled")
     assert(Deno.statSync(source).isFile)
     assertEquals([...Deno.readDirSync(folder)].filter((e) => e.name.startsWith(".")), [])
+
+    // so does one that comes after the last byte, while the copy is flushed: nothing lands, and a move keeps its source
+    let late = false
+    await assertRejects(
+        () =>
+            transferFile(source, folder, {
+                mode: "move",
+                cancel: () => late,
+                onProgress: ({ done, total }) => done === total && queueMicrotask(() => late = true),
+            }),
+        Error,
+        "cancelled",
+    )
+    assert(Deno.statSync(source).isFile)
+    assertEquals(await uniqueTarget(folder, "walk.mcap"), join(folder, "walk 3.mcap"))
 })
 
 Deno.test("df: free and total from the POSIX output, on macOS and Linux", () => {
