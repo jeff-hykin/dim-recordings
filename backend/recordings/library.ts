@@ -218,7 +218,8 @@ export class Library {
         return this.#notes!
     }
     setNote(id: string, text: string) {
-        const notes = this.notes()
+        // a copy: what's read changes only once the file holds it (a refused save was shown, and written by the next)
+        const notes = { ...this.notes() }
         if (text.trim()) {
             notes[id] = text
         } else {
@@ -227,6 +228,7 @@ export class Library {
         const temporary = `${this.#notesFile()}.partial`
         Deno.writeTextFileSync(temporary, JSON.stringify(notes, null, 4))
         Deno.renameSync(temporary, this.#notesFile())
+        this.#notes = notes
     }
     moveNote(from: string, to: string) {
         const text = this.notes()[from]
