@@ -197,6 +197,18 @@ Deno.test("transfer: copy keeps the mtime, never overwrites, move deletes the so
     await assertRejects(() => Deno.stat(`${db}-wal`))
     assert(Deno.statSync(source).isFile) // copies leave it
 
+    // a part that can't be put in place (a folder took its name meanwhile) takes the whole import back, so no .db
+    // lists without its sidecars; a move keeps its source
+    for (const suffix of ["", "-wal", "-shm"]) {
+        await Deno.writeTextFile(db + suffix, `drive.db${suffix}`)
+    }
+    const inTheWay = join(folder, "drive.db-wal")
+    await assertRejects(() =>
+        transferFile(db, folder, { mode: "move", onProgress: () => Deno.mkdirSync(inTheWay, { recursive: true }) })
+    )
+    await Deno.remove(inTheWay)
+    assert(Deno.statSync(db).isFile)
+
     // nothing half-written is left behind, and nothing hidden lists
     assertEquals([...Deno.readDirSync(folder)].map((e) => e.name).sort(), [
         "renamed.db",
