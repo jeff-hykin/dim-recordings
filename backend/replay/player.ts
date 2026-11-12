@@ -264,11 +264,19 @@ export class Session {
         readonly send: (data: Uint8Array | string) => void,
     ) {
         sessions.add(this)
+        this.source.onDamaged?.add(this.#damaged)
+        if (this.source.damaged) {
+            this.#damaged(this.source.damaged)
+        }
     }
+
+    /** the page warns before playing on (op "damaged") */
+    #damaged = (why: string) => this.send(JSON.stringify({ op: "damaged", error: why }))
 
     close() {
         this.#closed = true
         sessions.delete(this)
+        this.source.onDamaged?.delete(this.#damaged)
     }
 
     /** the file is about to change: the page reconnects (and re-reads the stream list) */

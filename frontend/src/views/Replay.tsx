@@ -185,6 +185,8 @@ function ReplayView({ overview, source, onReload }: {
     const tf = useMemo(() => new TfTree(), [source])
     const head = useStore(source.playhead)
     const waiting = useStore(source.waiting)
+    const { damaged } = useStore(source.status)
+    const [goOnDamaged, setGoOnDamaged] = useState(false)
     const mobile = useMobile()
     const [tab, setTab] = useState<SideTab | null>(() => (matchMedia("(max-width: 720px)").matches ? null : "layers"))
     const [expanded, setExpanded] = usePersistentState("replay.timeline.expanded", false)
@@ -267,6 +269,22 @@ function ReplayView({ overview, source, onReload }: {
                 </Text>
             </TopBar>
             <div className={`rp-stage ${mainCamera ? "rp-camera-main" : ""}`}>
+                {damaged && !goOnDamaged && (
+                    <EmptyState
+                        layer
+                        icon="warn"
+                        tone="warn"
+                        title="This recording is damaged"
+                        message={`${damaged}, so what plays from there on may be wrong.`}
+                        actions={
+                            <>
+                                <Button variant="primary" onClick={() => setGoOnDamaged(true)}>Continue anyway</Button>
+                                <Button onClick={() => go({ view: "library" })}>Back to the recordings</Button>
+                            </>
+                        }
+                        data-testid="replay-damaged"
+                    />
+                )}
                 <Scene3D
                     className="rp-scene"
                     // the CAD view cube, top right (a face: look from there), as in the Controller

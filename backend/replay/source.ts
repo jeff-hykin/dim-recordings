@@ -10,6 +10,7 @@ import { shares } from "../recordings/budget.ts"
 import { idRange, openDb, pagesOfIds, quoteName } from "../recordings/sqlite.ts"
 import { channelType, formatOf, shortType } from "../recordings/inspect.ts"
 import type { DatabaseSync } from "node:sqlite"
+import { crc32 } from "node:zlib"
 
 export type Kind = "image" | "cloud" | "tf" | "pose" | "info" | "other"
 
@@ -53,6 +54,10 @@ export interface Source {
     index(stream: string): Promise<StreamIndex>
     /** the stored payload of message `i` (in time order) */
     read(stream: string, i: number): Promise<Uint8Array>
+    /** why part of the file can't be trusted (an .mcap chunk that fails its checksum), once one is read; it still plays */
+    damaged?: string | null
+    /** told the first time a damaged part is read */
+    readonly onDamaged?: Set<(why: string) => void>
     close(): void
 }
 
@@ -268,6 +273,8 @@ class McapSource implements Source {
     #cache = new Map<number, Uint8Array>()
     #cacheBytes = 0
     #indexed: Promise<void> | null = null
+    damaged: string | null = null
+    readonly onDamaged = new Set<(why: string) => void>()
 
     private constructor(
         readonly path: string,
@@ -453,6 +460,7 @@ class McapSource implements Source {
         // opcode u8, length u64, start u64, end u64, uncompressed size u64, crc u32, compression string, records u64 + bytes
         let at = 1 + 8 + 8 + 8
         const uncompressedSize = Number(view.getBigUint64(at, true))
+        const crc = view.getUint32(at + 8, true)
         at += 8 + 4
         const compressionLength = view.getUint32(at, true)
         at += 4 + compressionLength
@@ -468,6 +476,12 @@ class McapSource implements Source {
             records = new Uint8Array(lz4.decompress(body))
         } else {
             throw new Error(`unsupported chunk compression ${chunk.compression}`)
+        }
+        // its writer's checksum of the records (0: written without one, as this app's own edits are): a chunk that
+        // doesn't match still plays, but the page is told so it can warn before going on
+        if (crc !== 0 && !this.damaged && crc32(records) !== crc) {
+            this.damaged = `Part of this .mcap (chunk ${c}) doesn't match the checksum it was written with`
+            this.onDamaged.forEach((listener) => listener(this.damaged!))
         }
         this.#cache.set(c, records)
         this.#cacheBytes += records.byteLength

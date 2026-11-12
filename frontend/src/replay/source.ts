@@ -76,7 +76,8 @@ export class ReplaySource {
     readonly replay = true
     readonly playhead: TypedStore<Playhead>
     readonly topics: Topic[]
-    readonly status = new Store<{ state: ConnectionState; error: string | null }>(
+    /** damaged: why part of the recording can't be trusted (the backend's op "damaged"), for the page to warn */
+    readonly status = new Store<{ state: ConnectionState; error: string | null; damaged?: string | null }>(
         {
             state: "connecting",
             error: null,
@@ -253,7 +254,7 @@ export class ReplaySource {
         ws.binaryType = "arraybuffer"
         this.#ws = ws
         ws.onopen = () => {
-            this.status.set({ state: "connected", error: null })
+            this.status.update({ state: "connected", error: null })
             for (const sub of this.#subs.values()) {
                 this.#sendSub(sub)
             }
@@ -287,6 +288,10 @@ export class ReplaySource {
             this.onReload?.()
         } else if (message.op === "error") {
             this.status.update({ error: String(message.error) })
+        } else if (message.op === "damaged") {
+            // held still until the page has said so and been told to go on
+            this.pause()
+            this.status.update({ damaged: String(message.error) })
         }
     }
 
