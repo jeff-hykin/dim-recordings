@@ -73,7 +73,7 @@ Deno.test("inspect: a .db's streams, rates, gaps, tf tree; an .mcap's channels a
     assertEquals(mcap.streams.find((s) => s.name === "lidar")!.type, "sensor_msgs.PointCloud2")
 })
 
-Deno.test("library: recorded = first message time, notes survive a rename, cached inspections", async () => {
+Deno.test("library: recorded = first message time, notes survive a rename and a refused save, cached inspections", async () => {
     const dir = await folder()
     const data = await tempDir()
     const library = new Library({ recordingsDir: dir, dataDir: data, desktopUrl: "", appName: "dim-recordings" })
@@ -83,6 +83,13 @@ Deno.test("library: recorded = first message time, notes survive a rename, cache
     library.setNote("walk.db", "stairs, twice")
     await renameRecording(walk.path, "stairs")
     library.moveNote("walk.db", "stairs.db")
+    // a save the filesystem refuses (its temporary file can't be written) changes nothing: not what's shown, and
+    // not what the next recording's save writes
+    await Deno.mkdir(join(data, "notes.json.partial"))
+    assertThrows(() => library.setNote("stairs.db", "never stored"))
+    assertEquals(library.notes()["stairs.db"], "stairs, twice")
+    await Deno.remove(join(data, "notes.json.partial"))
+    library.setNote("drive.mcap", "the lot")
     // a new Library (a restart) reads the notes back from the data dir
     const again = new Library({ recordingsDir: dir, dataDir: data, desktopUrl: "", appName: "dim-recordings" })
     const list = await again.list()
