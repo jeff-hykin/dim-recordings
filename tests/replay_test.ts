@@ -402,6 +402,21 @@ Deno.test("player: a newer playhead cuts short the one being answered (a scrub g
     }
 })
 
+Deno.test("player: JSON that isn't a command (null, a field that is an object) is ignored, and the page is still answered", async () => {
+    const { path } = await sampleDb()
+    const p = await session(path)
+    try {
+        p.player.onText(JSON.stringify({ op: "sub", id: 2, stream: "odom", as: "lcm" }))
+        // each of these threw out of onText (the websocket's message handler), and the server exited
+        p.player.onText("null")
+        p.player.onText('{"op":"at","t":{"toString":0}}')
+        await p.at(T0 + 5, "pause")
+        assertEquals(p.take().map((m) => Math.round(((m.header.t as number) - T0) * 10)), [50])
+    } finally {
+        p.close()
+    }
+})
+
 Deno.test("edit .db in place: rename, duplicate, delete a stream; the file reads back right", async () => {
     const { dir, path } = await sampleDb()
     const before = await inspect(path)
