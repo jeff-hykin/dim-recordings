@@ -181,6 +181,10 @@ Deno.test("transfer: copy keeps the mtime, never overwrites, move deletes the so
     const second = await transferFile(source, folder, { mode: "copy" })
     assertEquals(second, join(folder, "walk 2.mcap"))
     assertEquals(await uniqueTarget(folder, "walk.mcap"), join(folder, "walk 3.mcap"))
+    // a name with a SQLite sidecar left under it is taken too: SQLite would read it as the new file's
+    await Deno.writeTextFile(join(folder, "left.db-wal"), "")
+    assertEquals(await uniqueTarget(folder, "left.db"), join(folder, "left 2.db"))
+    await Deno.remove(join(folder, "left.db-wal"))
 
     // move: the copy, then the source goes; a .db's -wal comes along
     const db = join(stick, "drive.db")

@@ -150,11 +150,17 @@ for (const name of ["walk.db", "drive.mcap"]) {
         await assertRejects(() => renameRecording(renamed, "../escape"))
         await Deno.writeTextFile(join(dir, `taken${extension}`), "")
         await assertRejects(() => renameRecording(renamed, `taken${extension}`), Error, "already exists")
+        // a name with a SQLite sidecar left under it is taken too: SQLite would read it as the renamed file's
+        await Deno.writeTextFile(join(dir, `left${extension}-wal`), "")
+        await assertRejects(() => renameRecording(renamed, "left"), Error, "-wal already exists")
+        await assertRejects(() => duplicateRecording(renamed, "left"), Error, "-wal already exists")
 
         const copy = await duplicateRecording(renamed)
         assertEquals(copy, join(dir, `renamed copy${extension}`))
         assertEquals((await Deno.stat(copy)).size, (await Deno.stat(renamed)).size)
         assertEquals(await duplicateRecording(renamed), join(dir, `renamed copy 2${extension}`))
+        await Deno.writeTextFile(join(dir, `renamed copy 3${extension}-wal`), "")
+        assertEquals(await duplicateRecording(renamed), join(dir, `renamed copy 4${extension}`))
         assertEquals((await inspect(copy)).messages, (await inspect(renamed)).messages)
 
         await deleteRecording(renamed)

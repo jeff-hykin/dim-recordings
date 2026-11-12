@@ -3,6 +3,7 @@
 // when complete, so a half-copied recording never lists; the copy keeps the source's modified time, so its preview and
 // inspection (cached by format + size + mtime) come along. A .db's SQLite sidecars travel with it.
 import { basename, join } from "node:path"
+import { takenBy } from "./actions.ts"
 import { stem } from "./scan.ts"
 import { exists, fs, reachable } from "./slow_fs.ts"
 
@@ -13,7 +14,7 @@ const CHUNK = 8 << 20
 export async function uniqueTarget(dir: string, name: string): Promise<string> {
     const extension = name.includes(".") ? name.slice(name.lastIndexOf(".")) : ""
     let candidate = join(dir, name)
-    for (let n = 2; await exists(candidate); n++) {
+    for (let n = 2; await takenBy(candidate); n++) {
         candidate = join(dir, `${stem(name)} ${n}${extension}`)
     }
     return candidate
@@ -128,7 +129,7 @@ export async function transferFile(
             }
         }
         // the name was free when picked; take it now only if it still is
-        if (await exists(target)) {
+        if (await takenBy(target)) {
             throw new Error(`${basename(target)} appeared meanwhile`)
         }
         for (const part of parts) {
