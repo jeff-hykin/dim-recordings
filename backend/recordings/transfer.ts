@@ -115,6 +115,8 @@ export async function transferFile(
     const temporary = (part: string) => join(dir, `.${basename(target)}${part.slice(source.length)}.transferring`)
     let done = 0
     const cancel = options.cancel ?? (() => false)
+    /** what this import has put in place, to take back if a later part fails */
+    const published: string[] = []
     try {
         for (const part of parts) {
             await copyOne(part, temporary(part), (n) => {
@@ -131,12 +133,15 @@ export async function transferFile(
         if (await exists(target)) {
             throw new Error(`${basename(target)} appeared meanwhile`)
         }
-        for (const part of parts) {
-            await Deno.rename(temporary(part), target + part.slice(source.length))
+        // sidecars first, the .db last: it never lists (or is opened) without them
+        for (const part of [...parts].reverse()) {
+            const to = target + part.slice(source.length)
+            await Deno.rename(temporary(part), to)
+            published.push(to)
         }
     } catch (error) {
-        for (const part of parts) {
-            await Deno.remove(temporary(part)).catch(() => {})
+        for (const path of [...parts.map(temporary), ...published]) {
+            await Deno.remove(path).catch(() => {})
         }
         throw error
     }
