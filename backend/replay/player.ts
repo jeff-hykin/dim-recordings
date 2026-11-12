@@ -286,6 +286,11 @@ export class Session {
         } catch {
             return
         }
+        // JSON that isn't a command is ignored the same way: null, or a field that is an object (Number() and
+        // String() throw on one whose toString isn't a function, and an uncaught throw here ends the server)
+        if (!message || Object.values(message).some((value) => value && typeof value === "object")) {
+            return
+        }
         if (message.op === "sub") {
             const meta = this.source.streams.find((s) => s.name === message.stream)
             if (!meta) {
