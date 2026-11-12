@@ -295,8 +295,14 @@ export function replayRoutes({ library }: Services): Route[] {
                 set.add(session)
                 sessionsById.set(recording.id, set)
                 socket.onmessage = (event) => {
-                    if (typeof event.data === "string") {
+                    if (typeof event.data !== "string") {
+                        return
+                    }
+                    // a message this session can't take is dropped: thrown out of here, it would end the whole server
+                    try {
                         session.onText(event.data)
+                    } catch (error) {
+                        console.warn("replay websocket: dropped a message", error)
                     }
                 }
                 socket.onclose = () => {

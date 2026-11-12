@@ -642,9 +642,11 @@ export function Inspector(
     const [error, setError] = useState<string | null>(null)
     const [tab, setTab] = useState<Tab>("streams")
     const [note, setNote] = useState(recording.note)
-    /** "saved", "saving…", or why the last save failed */
+    /** "saved", "saving…", or "failed – waiting for reconnect" */
     const [saved, setSaved] = useState<string | null>(null)
     const noteTimer = useRef<number | undefined>(undefined)
+    // a retry still waiting stops with the Inspector
+    useEffect(() => () => clearTimeout(noteTimer.current), [])
     const narrow = useMediaQuery("(max-width: 1100px)")
     const phone = useMediaQuery("(max-width: 760px)")
 
@@ -681,15 +683,21 @@ export function Inspector(
         }
     }, [recording.note])
 
-    const saveNote = (text: string) => {
+    // a save that fails is tried again until it lands, unless a newer edit replaces it first
+    const saveNote = (text: string, wait = 500) => {
         clearTimeout(noteTimer.current)
-        setSaved("saving…")
+        if (wait === 500) {
+            setSaved("saving…")
+        }
         noteTimer.current = setTimeout(() => {
             api.setNote(recording.id, text).then(
                 () => setSaved("saved"),
-                (e) => setSaved(`not saved: ${e.message ?? e}`),
+                () => {
+                    setSaved("failed – waiting for reconnect")
+                    saveNote(text, 3000)
+                },
             )
-        }, 500)
+        }, wait)
     }
 
     const busy = upload?.state === "queued" || upload?.state === "uploading"
