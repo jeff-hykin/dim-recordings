@@ -18,6 +18,17 @@ export function cleanName(name: string): string {
     return trimmed
 }
 
+/** What has the name `path` already: a file, or a SQLite sidecar left there without its .db (SQLite would read it as
+ * the new file's); null when the name is free. */
+export async function takenBy(path: string): Promise<string | null> {
+    for (const suffix of ["", ...SIDECARS]) {
+        if (await exists(path + suffix)) {
+            return path + suffix
+        }
+    }
+    return null
+}
+
 /** The new name keeps the recording's extension: "stairs" or "stairs.db" for stairs_old.db → stairs.db. */
 export function withExtension(newName: string, oldName: string): string {
     const extension = oldName.slice(oldName.lastIndexOf("."))
@@ -34,8 +45,9 @@ export async function renameRecording(path: string, newName: string): Promise<st
     if (target === path) {
         return path
     }
-    if (await exists(target)) {
-        throw new Error(`${name} already exists`)
+    const taken = await takenBy(target)
+    if (taken) {
+        throw new Error(`${taken.slice(folder.length + 1)} already exists`)
     }
     const moves: [string, string][] = [[path, target]]
     for (const suffix of SIDECARS) {
@@ -77,7 +89,7 @@ export async function copyName(folder: string, name: string): Promise<string> {
     const base = stem(name).replace(/ copy( \d+)?$/, "")
     for (let n = 1;; n++) {
         const candidate = `${base} copy${n === 1 ? "" : ` ${n}`}${extension}`
-        if (!(await exists(join(folder, candidate)))) {
+        if (!(await takenBy(join(folder, candidate)))) {
             return candidate
         }
     }
@@ -88,8 +100,9 @@ export async function duplicateRecording(path: string, name?: string): Promise<s
     const folder = dirname(path)
     const oldName = path.slice(folder.length + 1)
     const target = join(folder, name ? withExtension(name, oldName) : await copyName(folder, oldName))
-    if (await exists(target)) {
-        throw new Error(`${target.slice(folder.length + 1)} already exists`)
+    const taken = await takenBy(target)
+    if (taken) {
+        throw new Error(`${taken.slice(folder.length + 1)} already exists`)
     }
     const partial = `${folder}/.${target.slice(folder.length + 1)}.partial`
     await Deno.copyFile(path, partial)
