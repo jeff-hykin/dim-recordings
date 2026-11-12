@@ -642,7 +642,8 @@ export function Inspector(
     const [error, setError] = useState<string | null>(null)
     const [tab, setTab] = useState<Tab>("streams")
     const [note, setNote] = useState(recording.note)
-    const [saved, setSaved] = useState<"saved" | "saving…" | null>(null)
+    /** "saved", "saving…", or why the last save failed */
+    const [saved, setSaved] = useState<string | null>(null)
     const noteTimer = useRef<number | undefined>(undefined)
     const narrow = useMediaQuery("(max-width: 1100px)")
     const phone = useMediaQuery("(max-width: 760px)")
@@ -686,7 +687,7 @@ export function Inspector(
         noteTimer.current = setTimeout(() => {
             api.setNote(recording.id, text).then(
                 () => setSaved("saved"),
-                (e) => setError(String(e.message ?? e)),
+                (e) => setSaved(`not saved: ${e.message ?? e}`),
             )
         }, 500)
     }
