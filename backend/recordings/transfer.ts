@@ -127,6 +127,10 @@ export async function transferFile(
                 throw new Error(`${basename(part)} copied short`)
             }
         }
+        // a cancel that came after the last chunk (the flush can take a while) still counts: nothing is published yet
+        if (cancel()) {
+            throw new Error("cancelled")
+        }
         // the name was free when picked; take it now only if it still is
         if (await exists(target)) {
             throw new Error(`${basename(target)} appeared meanwhile`)
